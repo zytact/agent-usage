@@ -2,6 +2,8 @@ import { mkdtemp } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+import select from "@inquirer/select";
+
 import type { CliOptions } from "./args.js";
 import { defaultDiscoveryRoots, discoverSessionFiles } from "./discovery.js";
 import type { ParsedSession } from "./domain.js";
@@ -28,7 +30,7 @@ export type RuntimeDeps = {
 
 export function defaultRuntimeDeps(): RuntimeDeps {
   return {
-    chooseAction: gumChoose,
+    chooseAction: promptChoose,
     clearScreen: () => {
       process.stdout.write("\x1bc");
     },
@@ -135,36 +137,20 @@ async function resolveHtmlPath(path?: string): Promise<string> {
   return join(dir, "report.html");
 }
 
-async function gumChoose(items: string[], header: string): Promise<string | undefined> {
-  const { spawn } = await import("node:child_process");
-  return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn("gum", ["choose", "--header", header, ...items], {
-      stdio: ["inherit", "pipe", "inherit"],
+async function promptChoose(items: string[], header: string): Promise<string | undefined> {
+  try {
+    return await select({
+      choices: items.map((item) => ({ name: item, value: item })),
+      message: header,
     });
-    let output = "";
-    child.stdout.on("data", (chunk: Buffer) => {
-      output += chunk.toString("utf8");
-    });
-    child.on("error", rejectPromise);
-    child.on("close", (code) => {
-      if (code !== 0) {
-        resolvePromise(undefined);
-        return;
-      }
-      resolvePromise(output.trim() || undefined);
-    });
-  });
+  } catch (error) {
+    if (error instanceof Error && error.name === "ExitPromptError") {
+      return undefined;
+    }
+    throw error;
+  }
 }
 
 async function openPath(path: string): Promise<void> {
-  const { spawn } = await import("node:child_process");
-  await new Promise<void>((resolvePromise) => {
-    const child = spawn("xdg-open", [path], {
-      detached: true,
-      stdio: "ignore",
-    });
-    child.on("error", () => resolvePromise());
-    child.unref();
-    resolvePromise();
-  });
+  void path;
 }

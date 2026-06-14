@@ -209,6 +209,176 @@ h1 {
   background: var(--primary);
   opacity: 0.95;
 }
+.chart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--grid-gap);
+  margin-top: 1px;
+  border: 1px solid var(--line);
+  border-top: 0;
+  background: var(--line);
+}
+.chart-panel {
+  min-width: 0;
+  padding: 22px 24px;
+  background: var(--surface);
+}
+.chart-panel h2,
+.chart-panel h3 {
+  margin: 0 0 14px;
+  font-size: 1rem;
+}
+.big-ring {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+}
+.ring {
+  display: grid;
+  width: 150px;
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ring);
+}
+.ring::after {
+  width: 58%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--surface);
+  content: "";
+}
+.bar-list,
+.token-stack-list,
+.dist-grid,
+.daily-card-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.bar-list li,
+.token-stack-list li,
+.daily-card {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.bar-list li:first-child,
+.token-stack-list li:first-child,
+.daily-card:first-child { border-top: 0; padding-top: 0; }
+.bar-head,
+.dist-head,
+.stack-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+}
+.bar-head span,
+.dist-head span,
+.stack-head span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bar-track,
+.dist-track,
+.stack-track {
+  height: 8px;
+  overflow: hidden;
+  background: var(--track);
+}
+.bar-track i,
+.dist-track i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: var(--bar-tone, var(--tone, var(--primary)));
+}
+.stack-track {
+  display: flex;
+}
+.stack-track i {
+  display: block;
+  min-width: 2px;
+  height: 100%;
+}
+.stack-input { background: var(--input); }
+.stack-cached { background: var(--cache); }
+.stack-output { background: var(--output); }
+.stack-reasoning { background: var(--accent); }
+.dist-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.dist-card {
+  min-width: 0;
+  padding: 14px;
+  background: var(--surface-2);
+}
+.dist-card h3 {
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+.dist-values {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 10px;
+  background: var(--line);
+}
+.dist-values div {
+  min-width: 0;
+  padding: 8px;
+  background: var(--surface);
+}
+.dist-values dt {
+  color: var(--soft);
+  font-size: 0.68rem;
+}
+.dist-values dd {
+  margin: 1px 0 0;
+  overflow: hidden;
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.daily-viz {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
+  gap: 1px;
+  margin-top: 14px;
+  background: var(--line);
+}
+.daily-viz > section {
+  min-width: 0;
+  padding: 18px;
+  background: var(--surface-2);
+}
+.daily-card strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.daily-card small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+}
+details.raw-details {
+  margin-top: 14px;
+}
+details.raw-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 750;
+}
 .data-panel { padding: 22px 24px; }
 .request-grid { grid-template-columns: repeat(4, minmax(140px, 1fr)); }
 .request-grid .metric { background: var(--surface-2); }
@@ -357,7 +527,10 @@ h1 {
 @media (max-width: 980px) {
   .hero,
   .activity-strip,
-  .source-head { grid-template-columns: 1fr; }
+  .source-head,
+  .chart-grid,
+  .big-ring,
+  .daily-viz { grid-template-columns: 1fr; }
   .summary-grid,
   .request-grid,
   .source-head dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -372,7 +545,9 @@ h1 {
   .request-grid,
   .source-head dl,
   .model-metrics,
-  .detail-grid { grid-template-columns: 1fr; }
+  .detail-grid,
+  .dist-grid,
+  .dist-values { grid-template-columns: 1fr; }
   .token-row { grid-template-columns: 74px minmax(0, 1fr) 62px; gap: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -401,6 +576,7 @@ h1 {
     ${htmlMetric("Estimated cost", formatUsd(combinedCost), "models.dev rate card when available")}
   </dl>
   ${noData}
+  ${renderOverviewCharts(report, pricing)}
   ${renderDailyStrip(report)}
   ${renderRequestSummary("Combined request summary", report.requestSummarySessions, report.combined.stats, pricing)}
   ${renderRequestSummary("GPT-only request summary", report.gptOnly.sessions, report.gptOnly.stats, pricing)}
@@ -476,6 +652,67 @@ function renderSourceSection(section: SourceSection, pricing: Record<string, Pri
 </section>`;
 }
 
+function renderOverviewCharts(report: BuiltReport, pricing: Record<string, PricingInfo>): string {
+  const sourceRows = report.sections
+    .filter((section) => ["Codex", "opencode", "Claude Code", "Pi"].includes(section.title))
+    .map((section) => ({
+      label: section.title,
+      tone: section.tone,
+      value: section.stats.activeSeconds,
+      valueLabel: humanSeconds(section.stats.activeSeconds),
+    }))
+    .filter((row) => row.value > 0);
+  const modelMix = modelRows(report.combined.stats, pricing, 6).map((row) => ({
+    label: row.key,
+    tone: "var(--primary)",
+    value: row.pct,
+    valueLabel: `${row.pct.toFixed(0)}%`,
+  }));
+  const costRows = report.sections
+    .filter((section) => ["Codex", "opencode", "Claude Code", "Pi"].includes(section.title))
+    .map((section) => ({
+      label: section.title,
+      tone: section.tone,
+      value: estimateStatsTotalCost(section.stats, pricing) ?? 0,
+      valueLabel: formatUsd(estimateStatsTotalCost(section.stats, pricing)),
+    }))
+    .filter((row) => row.value > 0);
+  const tokenRows = [
+    { label: "Fresh input", tone: "var(--input)", value: report.combined.stats.tokens.input },
+    { label: "Cached", tone: "var(--cache)", value: report.combined.stats.tokens.cached },
+    {
+      label: "Cache write",
+      tone: "var(--primary)",
+      value: report.combined.stats.tokens.cacheWrite,
+    },
+    { label: "Output", tone: "var(--output)", value: report.combined.stats.tokens.output },
+    {
+      label: "Reasoning",
+      tone: "var(--accent)",
+      value: report.combined.stats.tokens.reasoning,
+    },
+  ].filter((row) => row.value > 0);
+
+  return `<section class="chart-grid" aria-label="Glanceable usage overview">
+  <section class="chart-panel">
+    <h2>Source share</h2>
+    ${renderRingChart(sourceRows, report.combined.stats.activeSeconds, "active time")}
+  </section>
+  <section class="chart-panel">
+    <h2>Token composition</h2>
+    ${renderTokenStackList(tokenRows)}
+  </section>
+  <section class="chart-panel">
+    <h2>Model request mix</h2>
+    ${renderBarList(modelMix, 100, "No model markers")}
+  </section>
+  <section class="chart-panel">
+    <h2>Estimated cost by source</h2>
+    ${renderBarList(costRows, Math.max(...costRows.map((row) => row.value), 1), "No priced usage")}
+  </section>
+</section>`;
+}
+
 function renderRequestSummary(
   title: string,
   sessions: BuiltReport["requestSummarySessions"],
@@ -516,15 +753,19 @@ function renderRequestSummary(
     ${htmlMetric("Cache read ratio", cache.cacheReadRatio === undefined ? "n/a" : `${(cache.cacheReadRatio * 100).toFixed(1)}%`)}
     ${htmlMetric("Weighted input eq/req", formatFloat(cache.weightedInputEqPerRequest))}
   </div>
-  <table class="data-table">
-    <thead><tr><th>Metric</th><th>Median</th><th>Mean</th><th>P75</th><th>P90</th><th>Max</th></tr></thead>
-    <tbody>${distRows
-      .map(
-        ({ label, summary }) =>
-          `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(formatFloat(summary.median))}</td><td>${escapeHtml(formatFloat(summary.mean))}</td><td>${escapeHtml(formatFloat(summary.p75))}</td><td>${escapeHtml(formatFloat(summary.p90))}</td><td>${escapeHtml(formatFloat(summary.max))}</td></tr>`,
-      )
-      .join("")}</tbody>
-  </table>
+  ${renderDistributionCards(distRows)}
+  <details class="raw-details">
+    <summary>Raw percentile table</summary>
+    <table class="data-table">
+      <thead><tr><th>Metric</th><th>Median</th><th>Mean</th><th>P75</th><th>P90</th><th>Max</th></tr></thead>
+      <tbody>${distRows
+        .map(
+          ({ label, summary }) =>
+            `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(formatFloat(summary.median))}</td><td>${escapeHtml(formatFloat(summary.mean))}</td><td>${escapeHtml(formatFloat(summary.p75))}</td><td>${escapeHtml(formatFloat(summary.p90))}</td><td>${escapeHtml(formatFloat(summary.max))}</td></tr>`,
+        )
+        .join("")}</tbody>
+    </table>
+  </details>
 </section>`;
 }
 
@@ -537,19 +778,23 @@ function renderDailyBreakdown(rows: DailyBreakdownRow[]): string {
   return `<section class="data-panel">
   <h2>Per-day / per-harness / per-model</h2>
   ${note}
-  <table class="data-table dense">
-    <thead><tr><th>Date</th><th>Harness</th><th>Sub</th><th>Model</th><th>Effort</th><th>Active</th><th>Sessions</th><th>Req</th><th>Fresh</th><th>Cached</th><th>Output</th><th>Reason</th></tr></thead>
-    <tbody>${
-      limited.length === 0
-        ? '<tr><td colspan="12" class="empty">No rows</td></tr>'
-        : limited
-            .map(
-              (row) =>
-                `<tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(row.harness)}</td><td>${escapeHtml(row.subharness)}</td><td>${escapeHtml(row.model)}</td><td>${escapeHtml(row.effort)}</td><td>${escapeHtml(humanSeconds(row.activeSeconds))}</td><td>${row.sessions}</td><td>${row.requests}</td><td>${escapeHtml(compactTokens(row.input))}</td><td>${escapeHtml(compactTokens(row.cached))}</td><td>${escapeHtml(compactTokens(row.output))}</td><td>${escapeHtml(compactTokens(row.reasoning))}</td></tr>`,
-            )
-            .join("")
-    }</tbody>
-  </table>
+  ${renderDailyVisuals(limited)}
+  <details class="raw-details">
+    <summary>Raw daily rows</summary>
+    <table class="data-table dense">
+      <thead><tr><th>Date</th><th>Harness</th><th>Sub</th><th>Model</th><th>Effort</th><th>Active</th><th>Sessions</th><th>Req</th><th>Fresh</th><th>Cached</th><th>Output</th><th>Reason</th></tr></thead>
+      <tbody>${
+        limited.length === 0
+          ? '<tr><td colspan="12" class="empty">No rows</td></tr>'
+          : limited
+              .map(
+                (row) =>
+                  `<tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(row.harness)}</td><td>${escapeHtml(row.subharness)}</td><td>${escapeHtml(row.model)}</td><td>${escapeHtml(row.effort)}</td><td>${escapeHtml(humanSeconds(row.activeSeconds))}</td><td>${row.sessions}</td><td>${row.requests}</td><td>${escapeHtml(compactTokens(row.input))}</td><td>${escapeHtml(compactTokens(row.cached))}</td><td>${escapeHtml(compactTokens(row.output))}</td><td>${escapeHtml(compactTokens(row.reasoning))}</td></tr>`,
+              )
+              .join("")
+      }</tbody>
+    </table>
+  </details>
 </section>`;
 }
 
@@ -578,6 +823,158 @@ function renderDailyStrip(report: BuiltReport): string {
     )
     .join("")}</div>
 </section>`;
+}
+
+function renderRingChart(
+  rows: ReadonlyArray<{ label: string; tone: string; value: number; valueLabel: string }>,
+  total: number,
+  caption: string,
+): string {
+  if (rows.length === 0 || total <= 0) {
+    return '<p class="empty">No activity</p>';
+  }
+
+  let cursor = 0;
+  const stops = rows.map((row) => {
+    const start = cursor;
+    cursor += (row.value / total) * 100;
+    return `${row.tone} ${start.toFixed(2)}% ${cursor.toFixed(2)}%`;
+  });
+  const ring = `conic-gradient(${stops.join(", ")})`;
+
+  return `<div class="big-ring">
+  <div class="ring" style="--ring:${escapeHtml(ring)}" aria-hidden="true"></div>
+  <div>
+    <p class="panel-copy">${escapeHtml(caption)} split across local stores.</p>
+    ${renderBarList(rows, total, "No activity")}
+  </div>
+</div>`;
+}
+
+function renderBarList(
+  rows: ReadonlyArray<{ label: string; tone: string; value: number; valueLabel: string }>,
+  maxValue: number,
+  emptyLabel: string,
+): string {
+  if (rows.length === 0) {
+    return `<p class="empty">${escapeHtml(emptyLabel)}</p>`;
+  }
+
+  const max = Math.max(maxValue, 1);
+  return `<ul class="bar-list">${rows
+    .map((row) => {
+      const width = Math.max(2, Math.min(100, (row.value / max) * 100));
+      return `<li><div class="bar-head"><span title="${escapeHtml(row.label)}">${escapeHtml(row.label)}</span><b>${escapeHtml(row.valueLabel)}</b></div><div class="bar-track"><i style="--bar-tone:${escapeHtml(row.tone)};width:${width.toFixed(1)}%"></i></div></li>`;
+    })
+    .join("")}</ul>`;
+}
+
+function renderTokenStackList(
+  rows: ReadonlyArray<{ label: string; tone: string; value: number }>,
+): string {
+  const total = rows.reduce((sum, row) => sum + row.value, 0);
+  if (rows.length === 0 || total <= 0) {
+    return '<p class="empty">No token usage</p>';
+  }
+
+  const stack = rows
+    .map((row) => {
+      const width = stackPct(row.value, total);
+      return `<i style="background:${escapeHtml(row.tone)};width:${width.toFixed(1)}%" title="${escapeHtml(`${row.label}: ${compactTokens(row.value)}`)}"></i>`;
+    })
+    .join("");
+  const legend = rows
+    .map(
+      (row) =>
+        `<li><div class="bar-head"><span>${escapeHtml(row.label)}</span><b>${escapeHtml(compactTokens(row.value))}</b></div><div class="bar-track"><i style="--bar-tone:${escapeHtml(row.tone)};width:${pct(row.value, total)}%"></i></div></li>`,
+    )
+    .join("");
+
+  return `<div class="stack-track" title="${escapeHtml(`Total: ${compactTokens(total)}`)}">${stack}</div><ul class="token-stack-list">${legend}</ul>`;
+}
+
+function renderDistributionCards(
+  rows: ReadonlyArray<{
+    label: string;
+    summary: ReturnType<typeof summarizeDistribution>;
+  }>,
+): string {
+  return `<div class="dist-grid">${rows
+    .map(({ label, summary }) => {
+      const max = Math.max(summary.max ?? 0, 1);
+      const median = pct(summary.median, max);
+      const p75 = pct(summary.p75, max);
+      const p90 = pct(summary.p90, max);
+      return `<section class="dist-card">
+  <h3>${escapeHtml(label)}</h3>
+  <div class="dist-head"><span>Median</span><b>${escapeHtml(formatFloat(summary.median))}</b></div>
+  <div class="dist-track"><i style="width:${median}%"></i></div>
+  <div class="dist-head"><span>P75</span><b>${escapeHtml(formatFloat(summary.p75))}</b></div>
+  <div class="dist-track"><i style="width:${p75}%"></i></div>
+  <div class="dist-head"><span>P90</span><b>${escapeHtml(formatFloat(summary.p90))}</b></div>
+  <div class="dist-track"><i style="width:${p90}%"></i></div>
+  <dl class="dist-values">
+    <div><dt>Mean</dt><dd>${escapeHtml(formatFloat(summary.mean))}</dd></div>
+    <div><dt>Median</dt><dd>${escapeHtml(formatFloat(summary.median))}</dd></div>
+    <div><dt>P90</dt><dd>${escapeHtml(formatFloat(summary.p90))}</dd></div>
+    <div><dt>Max</dt><dd>${escapeHtml(formatFloat(summary.max))}</dd></div>
+  </dl>
+</section>`;
+    })
+    .join("")}</div>`;
+}
+
+function renderDailyVisuals(rows: DailyBreakdownRow[]): string {
+  if (rows.length === 0) {
+    return '<p class="empty">No request-level rows in this range.</p>';
+  }
+
+  const activeMax = Math.max(...rows.map((row) => row.activeSeconds), 1);
+  const sourceTotals = new Map<string, { tone: string; value: number }>();
+  for (const row of rows) {
+    const current = sourceTotals.get(row.harness) ?? {
+      tone: sourceTone(row.harness),
+      value: 0,
+    };
+    current.value += row.activeSeconds;
+    sourceTotals.set(row.harness, current);
+  }
+  const sourceRows = [...sourceTotals.entries()]
+    .map(([label, value]) => ({
+      label,
+      tone: value.tone,
+      value: value.value,
+      valueLabel: humanSeconds(value.value),
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  return `<div class="daily-viz">
+  <section>
+    <h3>Daily model rows</h3>
+    <ul class="daily-card-list">${rows
+      .slice(0, 12)
+      .map((row) => {
+        const activeWidth = pct(row.activeSeconds, activeMax);
+        const total = row.input + row.cached + row.output + row.reasoning;
+        return `<li class="daily-card">
+  <strong title="${escapeHtml(`${row.date} · ${row.harness} · ${row.model}`)}">${escapeHtml(row.date)} · ${escapeHtml(row.harness)} · ${escapeHtml(row.model)}</strong>
+  <small>${escapeHtml(row.subharness)} · ${escapeHtml(row.effort)} · ${row.requests} req · ${humanSeconds(row.activeSeconds)}</small>
+  <div class="bar-track"><i style="--bar-tone:${escapeHtml(sourceTone(row.harness))};width:${activeWidth}%"></i></div>
+  <div class="stack-track" title="${escapeHtml(`Fresh ${compactTokens(row.input)} · cached ${compactTokens(row.cached)} · output ${compactTokens(row.output)} · reasoning ${compactTokens(row.reasoning)}`)}">
+    <i class="stack-input" style="width:${stackPct(row.input, total).toFixed(1)}%"></i>
+    <i class="stack-cached" style="width:${stackPct(row.cached, total).toFixed(1)}%"></i>
+    <i class="stack-output" style="width:${stackPct(row.output, total).toFixed(1)}%"></i>
+    <i class="stack-reasoning" style="width:${stackPct(row.reasoning, total).toFixed(1)}%"></i>
+  </div>
+</li>`;
+      })
+      .join("")}</ul>
+  </section>
+  <section>
+    <h3>Harness active split</h3>
+    ${renderBarList(sourceRows, Math.max(...sourceRows.map((row) => row.value), 1), "No activity")}
+  </section>
+</div>`;
 }
 
 function renderSimpleList(title: string, rows: ReadonlyArray<readonly [string, string]>): string {
@@ -632,6 +1029,36 @@ function htmlMetric(label: string, value: string, note?: string): string {
 function htmlTokenBar(label: string, value: number, maxValue: number, cls: string): string {
   const width = maxValue <= 0 ? 0 : Math.max(2, Math.min(100, (value / maxValue) * 100));
   return `<div class="token-row ${escapeHtml(cls)}"><span>${escapeHtml(label)}</span><div class="track"><i style="width:${width.toFixed(1)}%"></i></div><b>${escapeHtml(compactTokens(value))}</b></div>`;
+}
+
+function pct(value: number | undefined, maxValue: number): string {
+  if (value === undefined || maxValue <= 0) {
+    return "0.0";
+  }
+  return Math.max(2, Math.min(100, (value / maxValue) * 100)).toFixed(1);
+}
+
+function stackPct(value: number, total: number): number {
+  if (value <= 0 || total <= 0) {
+    return 0;
+  }
+  return Math.max(2, (value / total) * 100);
+}
+
+function sourceTone(source: string): string {
+  if (source === "codex") {
+    return "var(--primary)";
+  }
+  if (source === "opencode") {
+    return "var(--input)";
+  }
+  if (source === "claude") {
+    return "oklch(0.72 0.1 50)";
+  }
+  if (source === "pi") {
+    return "oklch(0.7 0.11 150)";
+  }
+  return "var(--cache)";
 }
 
 function formatTimestamp(value: Date): string {

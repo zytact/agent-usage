@@ -41,11 +41,47 @@ describe("renderers", () => {
 
   it("renders terminal dashboard text", async () => {
     const report = await makeReport();
-    const output = renderTerminalReport(report, {});
+    const output = renderTerminalReport(report, {
+      "anthropic/claude-sonnet-4.6": {
+        cacheRead: 0.0000003,
+        cacheWrite: 0.000003,
+        completion: 0.000015,
+        prompt: 0.000003,
+      },
+      "openai/gpt-5": {
+        cacheRead: 0.000000125,
+        cacheWrite: 0.00000125,
+        completion: 0.00001,
+        prompt: 0.00000125,
+      },
+      "openai/gpt-5-mini": {
+        cacheRead: 0.000000025,
+        cacheWrite: 0.00000025,
+        completion: 0.000002,
+        prompt: 0.00000025,
+      },
+    });
 
     expect(output).toContain("AGENT USAGE DASHBOARD");
+    expect(output).toContain("Legend: input=fresh prompt");
+    expect(output).toContain("COMBINED REQUEST SUMMARY");
+    expect(output).toContain("DAILY MODEL BREAKDOWN");
     expect(output).toContain("COMBINED");
     expect(output).toContain("GPT-ONLY");
+    expect(output).toContain("Weighted input eq/req");
+    expect(output).toContain("est $");
     expect(output).toContain("HIGHLIGHTS");
+  });
+
+  it("renders terminal empty-state text", () => {
+    const report = buildReport([], "today", false, new Date("2026-06-14T18:45:00+05:30"));
+    const output = renderTerminalReport(report, {});
+
+    expect(output).toContain("COMBINED REQUEST SUMMARY");
+    expect(output).toContain("Model requests  0");
+    expect(output).toContain("Weighted input eq/req  n/a");
+    expect(output).toContain("DAILY MODEL BREAKDOWN");
+    expect(output).toContain("No request-level rows in this range.");
+    expect(output).toContain("No sessions found in this range.");
   });
 });
