@@ -38,7 +38,7 @@ export function renderTerminalReport(
     lines.push(
       ...renderRequestSummary(
         "Combined request summary",
-        report.requestSummarySessions,
+        report.requestSummary,
         report.combined.stats,
         pricing,
         true,
@@ -48,7 +48,7 @@ export function renderTerminalReport(
     lines.push(
       ...renderRequestSummary(
         "GPT-only request summary",
-        report.gptOnly.sessions,
+        report.gptOnlyRequestSummary,
         report.gptOnly.stats,
         pricing,
         true,
@@ -97,7 +97,7 @@ function renderSummary(report: BuiltReport, pricing: Record<string, PricingInfo>
   const lines = [
     ...renderRequestSummary(
       "Summary",
-      report.requestSummarySessions,
+      report.requestSummary,
       report.combined.stats,
       pricing,
       false,
@@ -214,12 +214,12 @@ function renderModelList(rows: ReturnType<typeof modelRows>): string[] {
 
 function renderRequestSummary(
   title: string,
-  sessions: BuiltReport["requestSummarySessions"],
+  source: BuiltReport["requestSummary"],
   stats: ReportStats,
   pricing: Record<string, PricingInfo>,
   full: boolean,
 ): string[] {
-  const data = buildRequestSummaryData(sessions, stats, pricing);
+  const data = buildRequestSummaryData(source, stats, pricing);
   const lines = [
     title.toUpperCase(),
     `  Model requests  ${data.requests.length}`,

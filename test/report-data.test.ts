@@ -49,6 +49,13 @@ describe("buildReport", () => {
     });
   });
 
+  it("formats last-day scope as rolling 24 hours", async () => {
+    const sessions = await loadFixtureSessions();
+    const report = buildReport(sessions, "1d", true, new Date("2026-06-14T18:45:00+05:30"));
+
+    expect(report.scopeTitle).toBe("Last 24 Hours · since 2026-06-13 13:15 UTC");
+  });
+
   it("estimates cost when rates exist", async () => {
     const sessions = await loadFixtureSessions();
     const report = buildReport(sessions, "30d", true, new Date("2026-06-14T18:45:00+05:30"));

@@ -43,11 +43,12 @@ type OpencodeMessageRow = {
   time_updated?: number | string | null;
 };
 
-export async function parseOpencodeDb(path: string): Promise<ParsedSession[]> {
+export async function parseOpencodeDb(path: string, scopeStart?: Date): Promise<ParsedSession[]> {
   if (!existsSync(path)) {
     return [];
   }
 
+  const cutoffMs = scopeStart?.getTime();
   const [sessionRows, messageRows] = await Promise.all([
     queryJson<OpencodeSessionRow>(
       path,
@@ -56,15 +57,19 @@ export async function parseOpencodeDb(path: string): Promise<ParsedSession[]> {
         "       tokens_input, tokens_output, tokens_reasoning,",
         "       tokens_cache_read, tokens_cache_write",
         "from session",
+        cutoffMs ? "where time_updated >= ?" : "",
       ].join(" "),
+      cutoffMs === undefined ? [] : [cutoffMs],
     ),
     queryJson<OpencodeMessageRow>(
       path,
       [
         "select session_id, time_created, time_updated, data",
         "from message",
+        cutoffMs ? "where session_id in (select id from session where time_updated >= ?)" : "",
         "order by session_id, time_created, id",
       ].join(" "),
+      cutoffMs === undefined ? [] : [cutoffMs],
     ),
   ]);
 
@@ -346,12 +351,15 @@ async function parseSessionRow(
   };
 }
 
-async function queryJson<T>(dbPath: string, query: string): Promise<T[]> {
+async function queryJson<T>(dbPath: string, query: string, params: unknown[] = []): Promise<T[]> {
   const SQL = (sqlJsPromise ??= initSqlJs());
   const db = new (await SQL).Database(await readFile(dbPath));
 
   try {
     const statement = db.prepare(query);
+    if (params.length > 0) {
+      statement.bind(params as any);
+    }
     const rows: T[] = [];
 
     while (statement.step()) {

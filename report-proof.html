@@ -1,0 +1,1708 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent usage report · Last 7 Days · since 2026-06-08</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: oklch(0.075 0 0);
+        --surface: oklch(0.135 0.01 258);
+        --surface-2: oklch(0.175 0.014 258);
+        --line: oklch(0.285 0.02 258);
+        --ink: oklch(0.94 0.01 258);
+        --muted: oklch(0.72 0.018 258);
+        --soft: oklch(0.56 0.03 258);
+        --primary: oklch(0.681 0.132 258.4);
+        --accent: oklch(0.76 0.15 70);
+        --input: oklch(0.69 0.13 300);
+        --cache: oklch(0.76 0.115 205);
+        --output: oklch(0.78 0.145 82);
+        --total: oklch(0.681 0.132 258.4);
+        --track: oklch(0.205 0.018 258);
+        --notice-bg: color-mix(in oklch, var(--surface), var(--accent) 11%);
+        --grid-gap: 1px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        background: var(--bg);
+      }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(
+            circle at 100% -8%,
+            color-mix(in oklch, var(--primary), transparent 76%),
+            transparent 26rem
+          ),
+          radial-gradient(
+            circle at 0% 0%,
+            color-mix(in oklch, var(--accent), transparent 90%),
+            transparent 18rem
+          ),
+          var(--bg);
+        color: var(--ink);
+        font:
+          500 15px/1.55 ui-sans-serif,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+      main {
+        width: min(1380px, calc(100% - 28px));
+        margin: 0 auto;
+        padding: 24px 0 44px;
+      }
+      code {
+        font: inherit;
+      }
+      .hero,
+      .summary-grid,
+      .activity-strip,
+      .data-panel,
+      .source-block,
+      .footer {
+        border: 1px solid var(--line);
+      }
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+        gap: var(--grid-gap);
+        background: var(--line);
+      }
+      .hero-main,
+      .hero-side {
+        background: var(--surface);
+      }
+      .hero-main {
+        padding: 30px;
+      }
+      .hero-side {
+        display: grid;
+        gap: var(--grid-gap);
+        padding: 0;
+        background: var(--line);
+      }
+      .hero-side div {
+        background: var(--surface);
+        padding: 18px;
+      }
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--accent);
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+      h1 {
+        margin: 0;
+        font-size: 2.75rem;
+        line-height: 1.02;
+        letter-spacing: -0.025em;
+        text-wrap: balance;
+      }
+      .hero-copy {
+        max-width: 72ch;
+        margin: 14px 0 0;
+        color: var(--muted);
+      }
+      .hero-side p,
+      .panel-copy,
+      .footer p,
+      .activity-strip p,
+      .token-panel p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .hero-side b,
+      .metric dd,
+      .source-head h2,
+      .model-metrics dd {
+        font-variant-numeric: tabular-nums;
+      }
+      .hero-side b {
+        display: block;
+        margin-top: 5px;
+        color: var(--ink);
+        font-size: 1rem;
+      }
+      .summary-grid,
+      .source-head dl,
+      .request-grid,
+      .detail-grid,
+      .model-metrics {
+        display: grid;
+        gap: var(--grid-gap);
+        background: var(--line);
+      }
+      .summary-grid {
+        grid-template-columns: repeat(4, minmax(140px, 1fr));
+        margin-top: var(--grid-gap);
+      }
+      .metric {
+        margin: 0;
+        padding: 18px;
+        background: var(--surface);
+      }
+      .metric dt {
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 700;
+      }
+      .metric dd {
+        margin: 4px 0 0;
+        color: var(--ink);
+        font-size: 1.45rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      .metric span {
+        display: block;
+        margin-top: 4px;
+        color: var(--soft);
+        font-size: 0.76rem;
+      }
+      .notice {
+        margin: 18px 0 0;
+        padding: 14px 16px;
+        border: 1px solid color-mix(in oklch, var(--accent), var(--line) 60%);
+        background: var(--notice-bg);
+      }
+      .activity-strip,
+      .data-panel,
+      .source-block,
+      .footer {
+        margin-top: 24px;
+        background: var(--surface);
+      }
+      .activity-strip {
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+        gap: 24px;
+        align-items: end;
+        padding: 22px 24px;
+      }
+      .activity-strip h2,
+      .data-panel h2,
+      .source-head h3,
+      .token-panel h3 {
+        margin: 0 0 4px;
+        font-size: 1rem;
+      }
+      .bars {
+        display: flex;
+        align-items: end;
+        gap: 4px;
+        height: 96px;
+      }
+      .bars span {
+        flex: 1;
+        min-width: 3px;
+        background: var(--primary);
+        opacity: 0.95;
+      }
+      .chart-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--grid-gap);
+        margin-top: 1px;
+        border: 1px solid var(--line);
+        border-top: 0;
+        background: var(--line);
+      }
+      .chart-panel {
+        min-width: 0;
+        padding: 22px 24px;
+        background: var(--surface);
+      }
+      .chart-panel h2,
+      .chart-panel h3 {
+        margin: 0 0 14px;
+        font-size: 1rem;
+      }
+      .big-ring {
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr);
+        gap: 20px;
+        align-items: center;
+      }
+      .ring {
+        display: grid;
+        width: 150px;
+        aspect-ratio: 1;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--ring);
+      }
+      .ring::after {
+        width: 58%;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        background: var(--surface);
+        content: "";
+      }
+      .bar-list,
+      .token-stack-list,
+      .dist-grid,
+      .daily-card-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .bar-list li,
+      .token-stack-list li,
+      .daily-card {
+        padding: 10px 0;
+        border-top: 1px solid var(--line);
+      }
+      .bar-list li:first-child,
+      .token-stack-list li:first-child,
+      .daily-card:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+      .bar-head,
+      .dist-head,
+      .stack-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 7px;
+      }
+      .bar-head span,
+      .dist-head span,
+      .stack-head span {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--muted);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .bar-track,
+      .dist-track,
+      .stack-track {
+        height: 8px;
+        overflow: hidden;
+        background: var(--track);
+      }
+      .bar-track i,
+      .dist-track i {
+        display: block;
+        height: 100%;
+        min-width: 2px;
+        background: var(--bar-tone, var(--tone, var(--primary)));
+      }
+      .stack-track {
+        display: flex;
+      }
+      .stack-track i {
+        display: block;
+        min-width: 2px;
+        height: 100%;
+      }
+      .stack-input {
+        background: var(--input);
+      }
+      .stack-cached {
+        background: var(--cache);
+      }
+      .stack-output {
+        background: var(--output);
+      }
+      .stack-reasoning {
+        background: var(--accent);
+      }
+      .dist-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .dist-card {
+        min-width: 0;
+        padding: 14px;
+        background: var(--surface-2);
+      }
+      .dist-card h3 {
+        margin-bottom: 10px;
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+      .dist-values {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 1px;
+        margin-top: 10px;
+        background: var(--line);
+      }
+      .dist-values div {
+        min-width: 0;
+        padding: 8px;
+        background: var(--surface);
+      }
+      .dist-values dt {
+        color: var(--soft);
+        font-size: 0.68rem;
+      }
+      .dist-values dd {
+        margin: 1px 0 0;
+        overflow: hidden;
+        font-size: 0.86rem;
+        font-weight: 800;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .daily-viz {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
+        gap: 1px;
+        margin-top: 14px;
+        background: var(--line);
+      }
+      .daily-viz > section {
+        min-width: 0;
+        padding: 18px;
+        background: var(--surface-2);
+      }
+      .daily-card strong {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .daily-card small {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+      }
+      details.raw-details {
+        margin-top: 14px;
+      }
+      details.raw-details summary {
+        cursor: pointer;
+        color: var(--muted);
+        font-weight: 750;
+      }
+      .data-panel {
+        padding: 22px 24px;
+      }
+      .request-grid {
+        grid-template-columns: repeat(4, minmax(140px, 1fr));
+      }
+      .request-grid .metric {
+        background: var(--surface-2);
+      }
+      .data-table {
+        width: 100%;
+        margin-top: 14px;
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+      }
+      .data-table th,
+      .data-table td {
+        padding: 9px 10px;
+        border-top: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+      .data-table thead th {
+        color: var(--muted);
+        font-size: 0.8rem;
+        font-weight: 700;
+      }
+      .data-table tbody th {
+        font-weight: 700;
+      }
+      .data-table.dense th,
+      .data-table.dense td {
+        font-size: 0.88rem;
+        padding: 7px 8px;
+      }
+      .source-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 0.8fr);
+        background: var(--line);
+      }
+      .source-head > div,
+      .source-head dl {
+        background: color-mix(in oklch, var(--surface), var(--tone) 8%);
+      }
+      .source-head > div {
+        padding: 24px;
+      }
+      .source-head h2 {
+        margin: 0;
+        font-size: 2rem;
+        line-height: 1.05;
+        letter-spacing: -0.025em;
+      }
+      .source-head h3 {
+        color: var(--tone);
+        font-size: 0.82rem;
+        font-weight: 700;
+      }
+      .source-head dl {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin: 0;
+      }
+      .source-head .metric {
+        background: transparent;
+      }
+      .token-panel {
+        padding: 22px 24px;
+        border-top: 1px solid var(--line);
+      }
+      .token-row {
+        display: grid;
+        grid-template-columns: 92px minmax(0, 1fr) 78px;
+        gap: 14px;
+        align-items: center;
+        margin-top: 10px;
+      }
+      .token-row span {
+        color: var(--muted);
+      }
+      .token-row b {
+        text-align: right;
+      }
+      .track {
+        height: 10px;
+        overflow: hidden;
+        background: var(--track);
+      }
+      .track i {
+        display: block;
+        height: 100%;
+        min-width: 2px;
+        background: var(--tone);
+      }
+      .token-row.input i {
+        background: var(--input);
+      }
+      .token-row.cached i {
+        background: var(--cache);
+      }
+      .token-row.output i {
+        background: var(--output);
+      }
+      .token-row.total i {
+        background: var(--total);
+      }
+      .token-row.reasoning i {
+        background: var(--accent);
+      }
+      .detail-grid {
+        margin-top: 1px;
+      }
+      .detail-grid-summary {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .detail-grid-full {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+      .panel,
+      .panel-wide {
+        min-width: 0;
+        padding: 18px;
+        background: var(--surface-2);
+      }
+      .panel h4,
+      .panel-wide h4 {
+        margin: 0 0 12px;
+        font-size: 0.92rem;
+      }
+      .detail-grid-summary .model-panel,
+      .detail-grid-summary .daily-panel,
+      .detail-grid-full .model-panel,
+      .detail-grid-full .language-panel,
+      .detail-grid-full .daily-panel {
+        grid-column: span 2;
+      }
+      .rank-list,
+      .share-list,
+      .model-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .rank-list li,
+      .share-list li,
+      .model-row {
+        padding: 9px 0;
+        border-top: 1px solid var(--line);
+      }
+      .rank-list li:first-child,
+      .share-list li:first-child,
+      .model-row:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+      .rank-list li {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+      }
+      .rank-list span,
+      .share-head span,
+      .model-top span,
+      .model-metrics small {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .rank-list span,
+      .share-head span,
+      .model-top span {
+        color: var(--muted);
+      }
+      .rank-list b,
+      .share-head b,
+      .model-top b {
+        font-weight: 750;
+      }
+      .share-head,
+      .model-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+      .share-list .track {
+        height: 6px;
+      }
+      .model-panel {
+        background: color-mix(in oklch, var(--surface-2), var(--tone) 8%);
+      }
+      .model-list .track {
+        height: 7px;
+        margin-bottom: 10px;
+      }
+      .model-metrics {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+      }
+      .model-metrics div {
+        padding: 9px 10px;
+        background: var(--surface);
+      }
+      .model-metrics dt {
+        margin: 0;
+        color: var(--soft);
+        font-size: 0.72rem;
+      }
+      .model-metrics dd {
+        margin: 2px 0 0;
+        font-weight: 800;
+      }
+      .model-metrics small {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 0.7rem;
+      }
+      .empty {
+        color: var(--soft);
+      }
+      .footer {
+        padding: 18px 24px;
+      }
+      .footer p + p {
+        margin-top: 8px;
+      }
+      @media (max-width: 980px) {
+        .hero,
+        .activity-strip,
+        .source-head,
+        .chart-grid,
+        .big-ring,
+        .daily-viz {
+          grid-template-columns: 1fr;
+        }
+        .summary-grid,
+        .request-grid,
+        .source-head dl {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .detail-grid,
+        .detail-grid-summary,
+        .detail-grid-full {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .detail-grid-summary .model-panel,
+        .detail-grid-summary .daily-panel,
+        .detail-grid-full .model-panel,
+        .detail-grid-full .language-panel,
+        .detail-grid-full .daily-panel {
+          grid-column: span 1;
+        }
+      }
+      @media (max-width: 760px) {
+        main {
+          width: min(100% - 20px, 1380px);
+          padding-top: 10px;
+        }
+        h1 {
+          font-size: 2rem;
+        }
+        .summary-grid,
+        .request-grid,
+        .source-head dl,
+        .model-metrics,
+        .detail-grid,
+        .detail-grid-summary,
+        .detail-grid-full,
+        .dist-grid,
+        .dist-values {
+          grid-template-columns: 1fr;
+        }
+        .token-row {
+          grid-template-columns: 74px minmax(0, 1fr) 62px;
+          gap: 10px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          scroll-behavior: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="hero">
+        <section class="hero-main">
+          <p class="eyebrow">Local usage dossier</p>
+          <h1>Agent usage report</h1>
+          <p class="hero-copy">
+            A standalone readout for local Codex, opencode, Pi, and optional Claude Code session
+            history. Built for fast audit: time, tokens, model mix, costs, repositories, languages,
+            and recent activity.
+          </p>
+        </section>
+        <aside class="hero-side" aria-label="Report context">
+          <div>
+            <p>Range</p>
+            <b>Last 7 Days · since 2026-06-08</b>
+          </div>
+          <div>
+            <p>Generated</p>
+            <b>Jun 15, 2026, 12:47 AM</b>
+          </div>
+          <div>
+            <p>Sources</p>
+            <b>3 local stores</b>
+          </div>
+          <div>
+            <p>Mode</p>
+            <b>Summary</b>
+          </div>
+        </aside>
+      </header>
+      <dl class="summary-grid" aria-label="Combined summary">
+        <div class="metric">
+          <dt>Active time</dt>
+          <dd>16h 6m</dd>
+        </div>
+        <div class="metric">
+          <dt>Sessions</dt>
+          <dd>118</dd>
+        </div>
+        <div class="metric">
+          <dt>Tokens</dt>
+          <dd>102.98M</dd>
+          <span>provider total when present</span>
+        </div>
+        <div class="metric">
+          <dt>Estimated cost</dt>
+          <dd>$76.70</dd>
+          <span>models.dev rate card when available</span>
+        </div>
+      </dl>
+
+      <section class="chart-grid" aria-label="Glanceable usage overview">
+        <section class="chart-panel">
+          <h2>Source share</h2>
+          <div class="big-ring">
+            <div
+              class="ring"
+              style="
+                --ring: conic-gradient(
+                  oklch(0.681 0.132 258.4) 0% 33.01%,
+                  oklch(0.64 0.13 300) 33.01% 34.29%,
+                  oklch(0.7 0.11 150) 34.29% 100%
+                );
+              "
+              aria-hidden="true"
+            ></div>
+            <div>
+              <p class="panel-copy">active time split across local stores.</p>
+              <ul class="bar-list">
+                <li>
+                  <div class="bar-head"><span title="Codex">Codex</span><b>5h 18m</b></div>
+                  <div class="bar-track">
+                    <i style="--bar-tone: oklch(0.681 0.132 258.4); width: 33%"></i>
+                  </div>
+                </li>
+                <li>
+                  <div class="bar-head"><span title="opencode">opencode</span><b>12m</b></div>
+                  <div class="bar-track">
+                    <i style="--bar-tone: oklch(0.64 0.13 300); width: 2%"></i>
+                  </div>
+                </li>
+                <li>
+                  <div class="bar-head"><span title="Pi">Pi</span><b>10h 34m</b></div>
+                  <div class="bar-track">
+                    <i style="--bar-tone: oklch(0.7 0.11 150); width: 65.7%"></i>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
+        <section class="chart-panel">
+          <h2>Token composition</h2>
+          <div class="stack-track" title="Total: 103.03M">
+            <i style="background: var(--input); width: 8.9%" title="Fresh input: 9.16M"></i
+            ><i style="background: var(--cache); width: 90.3%" title="Cached: 93.05M"></i
+            ><i style="background: var(--output); width: 2%" title="Output: 765.0k"></i
+            ><i style="background: var(--accent); width: 2%" title="Reasoning: 56.0k"></i>
+          </div>
+          <ul class="token-stack-list">
+            <li>
+              <div class="bar-head"><span>Fresh input</span><b>9.16M</b></div>
+              <div class="bar-track"><i style="--bar-tone: var(--input); width: 8.9%"></i></div>
+            </li>
+            <li>
+              <div class="bar-head"><span>Cached</span><b>93.05M</b></div>
+              <div class="bar-track"><i style="--bar-tone: var(--cache); width: 90.3%"></i></div>
+            </li>
+            <li>
+              <div class="bar-head"><span>Output</span><b>765.0k</b></div>
+              <div class="bar-track"><i style="--bar-tone: var(--output); width: 2%"></i></div>
+            </li>
+            <li>
+              <div class="bar-head"><span>Reasoning</span><b>56.0k</b></div>
+              <div class="bar-track"><i style="--bar-tone: var(--accent); width: 2%"></i></div>
+            </li>
+          </ul>
+        </section>
+        <section class="chart-panel">
+          <h2>Model request mix</h2>
+          <ul class="bar-list">
+            <li>
+              <div class="bar-head"><span title="gpt-5.5">gpt-5.5</span><b>60%</b></div>
+              <div class="bar-track"><i style="--bar-tone: var(--primary); width: 59.7%"></i></div>
+            </li>
+            <li>
+              <div class="bar-head"><span title="gpt-5.4">gpt-5.4</span><b>23%</b></div>
+              <div class="bar-track"><i style="--bar-tone: var(--primary); width: 22.7%"></i></div>
+            </li>
+            <li>
+              <div class="bar-head">
+                <span title="deepseek-v4-flash-free">deepseek-v4-flash-free</span><b>17%</b>
+              </div>
+              <div class="bar-track"><i style="--bar-tone: var(--primary); width: 17.2%"></i></div>
+            </li>
+            <li>
+              <div class="bar-head">
+                <span title="gpt-5.3-codex-spark">gpt-5.3-codex-spark</span><b>0%</b>
+              </div>
+              <div class="bar-track"><i style="--bar-tone: var(--primary); width: 2%"></i></div>
+            </li>
+            <li>
+              <div class="bar-head"><span title="gpt-5.5-pro">gpt-5.5-pro</span><b>0%</b></div>
+              <div class="bar-track"><i style="--bar-tone: var(--primary); width: 2%"></i></div>
+            </li>
+            <li>
+              <div class="bar-head"><span title="big-pickle">big-pickle</span><b>0%</b></div>
+              <div class="bar-track"><i style="--bar-tone: var(--primary); width: 2%"></i></div>
+            </li>
+          </ul>
+        </section>
+        <section class="chart-panel">
+          <h2>Estimated cost by source</h2>
+          <ul class="bar-list">
+            <li>
+              <div class="bar-head"><span title="Codex">Codex</span><b>$27.14</b></div>
+              <div class="bar-track">
+                <i style="--bar-tone: oklch(0.681 0.132 258.4); width: 56.2%"></i>
+              </div>
+            </li>
+            <li>
+              <div class="bar-head"><span title="opencode">opencode</span><b>$1.28</b></div>
+              <div class="bar-track">
+                <i style="--bar-tone: oklch(0.64 0.13 300); width: 2.7%"></i>
+              </div>
+            </li>
+            <li>
+              <div class="bar-head"><span title="Pi">Pi</span><b>$48.28</b></div>
+              <div class="bar-track">
+                <i style="--bar-tone: oklch(0.7 0.11 150); width: 100%"></i>
+              </div>
+            </li>
+          </ul>
+        </section>
+      </section>
+      <section class="activity-strip" aria-label="Daily active time">
+        <div>
+          <h2>Daily active trace</h2>
+          <p>Rolling range, scaled to the busiest day in this report.</p>
+        </div>
+        <div class="bars">
+          <span title="2026-06-08: 0m" style="height: 4%"></span
+          ><span title="2026-06-09: 40m" style="height: 16.756004176818657%"></span
+          ><span title="2026-06-10: 3h 28m" style="height: 87.19805081796032%"></span
+          ><span title="2026-06-11: 3h 5m" style="height: 77.38252697528716%"></span
+          ><span title="2026-06-12: 3h 47m" style="height: 94.83466759484858%"></span
+          ><span title="2026-06-13: 1h 5m" style="height: 27.379046293073444%"></span
+          ><span title="2026-06-14: 3h 59m" style="height: 100%"></span>
+        </div>
+      </section>
+      <section class="data-panel">
+        <h2>Combined request summary</h2>
+        <div class="request-grid">
+          <div class="metric">
+            <dt>Model requests</dt>
+            <dd>2277</dd>
+          </div>
+          <div class="metric">
+            <dt>User turns</dt>
+            <dd>285</dd>
+          </div>
+          <div class="metric">
+            <dt>Assistant turns</dt>
+            <dd>1999</dd>
+          </div>
+          <div class="metric">
+            <dt>Requests / active hour</dt>
+            <dd>141.4</dd>
+          </div>
+          <div class="metric">
+            <dt>Tokens / request</dt>
+            <dd>45225</dd>
+          </div>
+          <div class="metric">
+            <dt>Output / request</dt>
+            <dd>336.0</dd>
+          </div>
+          <div class="metric">
+            <dt>Avg context</dt>
+            <dd>44.9k</dd>
+          </div>
+          <div class="metric">
+            <dt>Median context</dt>
+            <dd>37.1k</dd>
+          </div>
+          <div class="metric">
+            <dt>Peak context</dt>
+            <dd>172.4k</dd>
+          </div>
+          <div class="metric">
+            <dt>Context growth</dt>
+            <dd>30.6k</dd>
+          </div>
+          <div class="metric">
+            <dt>Cache read ratio</dt>
+            <dd>83.0%</dd>
+          </div>
+          <div class="metric">
+            <dt>Tokens / active min</dt>
+            <dd>77930 med · 225203 p90</dd>
+          </div>
+        </div>
+        <div class="dist-grid">
+          <article class="dist-card">
+            <h3>Tokens / active minute</h3>
+            <div class="dist-values">
+              <div>
+                <dt>Median</dt>
+                <dd>77930</dd>
+              </div>
+              <div>
+                <dt>P90</dt>
+                <dd>225203</dd>
+              </div>
+              <div>
+                <dt>Mean</dt>
+                <dd>98479</dd>
+              </div>
+              <div>
+                <dt>Max</dt>
+                <dd>422417</dd>
+              </div>
+            </div>
+          </article>
+          <article class="dist-card">
+            <h3>Context size / request</h3>
+            <div class="dist-values">
+              <div>
+                <dt>Median</dt>
+                <dd>37060</dd>
+              </div>
+              <div>
+                <dt>P90</dt>
+                <dd>93338</dd>
+              </div>
+              <div>
+                <dt>Mean</dt>
+                <dd>44911</dd>
+              </div>
+              <div>
+                <dt>Max</dt>
+                <dd>172443</dd>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="source-block" style="--tone: oklch(0.681 0.132 258.4)">
+        <header class="source-head">
+          <div>
+            <h3>Codex</h3>
+            <h2>5h 18m</h2>
+            <p class="panel-copy">
+              Dense local activity, split by model, repo, language, and request shape.
+            </p>
+          </div>
+          <dl>
+            <div class="metric">
+              <dt>Sessions</dt>
+              <dd>44</dd>
+            </div>
+            <div class="metric">
+              <dt>Requests</dt>
+              <dd>719</dd>
+            </div>
+            <div class="metric">
+              <dt>Tokens</dt>
+              <dd>41.21M</dd>
+            </div>
+            <div class="metric">
+              <dt>Est cost</dt>
+              <dd>$27.14</dd>
+            </div>
+          </dl>
+        </header>
+        <section class="token-panel">
+          <h3>Token intensity</h3>
+          <p>
+            Total uses provider total when present, else input plus cached plus cache write plus
+            output plus reasoning.
+          </p>
+          <div class="token-row input">
+            <span>Input</span>
+            <div class="track"><i style="width: 8.3%"></i></div>
+            <b>3.43M</b>
+          </div>
+          <div class="token-row cached">
+            <span>Cached</span>
+            <div class="track"><i style="width: 90.9%"></i></div>
+            <b>37.46M</b>
+          </div>
+          <div class="token-row cache-write">
+            <span>Cache write</span>
+            <div class="track"><i style="width: 2%"></i></div>
+            <b>0</b>
+          </div>
+          <div class="token-row output">
+            <span>Output</span>
+            <div class="track"><i style="width: 2%"></i></div>
+            <b>319.9k</b>
+          </div>
+          <div class="token-row reasoning">
+            <span>Reasoning</span>
+            <div class="track"><i style="width: 2%"></i></div>
+            <b>52.4k</b>
+          </div>
+          <div class="token-row total">
+            <span>Total</span>
+            <div class="track"><i style="width: 100%"></i></div>
+            <b>41.21M</b>
+          </div>
+        </section>
+        <div class="detail-grid detail-grid-summary">
+          <section class="panel-wide model-panel">
+            <h4>Models</h4>
+            <ul class="model-list">
+              <li class="model-row">
+                <div class="model-top"><span title="gpt-5.4">gpt-5.4</span><b>80%</b></div>
+                <div class="track"><i style="width: 79.7%"></i></div>
+                <dl class="model-metrics">
+                  <div>
+                    <dt>Input</dt>
+                    <dd>2.64M</dd>
+                    <small>$2.50/M</small>
+                  </div>
+                  <div>
+                    <dt>Cached</dt>
+                    <dd>30.68M</dd>
+                    <small>cache read</small>
+                  </div>
+                  <div>
+                    <dt>Write</dt>
+                    <dd>0</dd>
+                    <small>cache create</small>
+                  </div>
+                  <div>
+                    <dt>Output</dt>
+                    <dd>268.3k</dd>
+                    <small>$15.00/M</small>
+                  </div>
+                  <div>
+                    <dt>Reason</dt>
+                    <dd>42.7k</dd>
+                    <small>thinking</small>
+                  </div>
+                  <div>
+                    <dt>Est cost</dt>
+                    <dd>$18.28</dd>
+                    <small>range total</small>
+                  </div>
+                </dl>
+              </li>
+              <li class="model-row">
+                <div class="model-top"><span title="gpt-5.5">gpt-5.5</span><b>19%</b></div>
+                <div class="track"><i style="width: 18.8%"></i></div>
+                <dl class="model-metrics">
+                  <div>
+                    <dt>Input</dt>
+                    <dd>783.0k</dd>
+                    <small>$5.00/M</small>
+                  </div>
+                  <div>
+                    <dt>Cached</dt>
+                    <dd>6.77M</dd>
+                    <small>cache read</small>
+                  </div>
+                  <div>
+                    <dt>Write</dt>
+                    <dd>0</dd>
+                    <small>cache create</small>
+                  </div>
+                  <div>
+                    <dt>Output</dt>
+                    <dd>51.5k</dd>
+                    <small>$30.00/M</small>
+                  </div>
+                  <div>
+                    <dt>Reason</dt>
+                    <dd>9.7k</dd>
+                    <small>thinking</small>
+                  </div>
+                  <div>
+                    <dt>Est cost</dt>
+                    <dd>$8.85</dd>
+                    <small>range total</small>
+                  </div>
+                </dl>
+              </li>
+              <li class="model-row">
+                <div class="model-top"><span title="gpt-5.4-mini">gpt-5.4-mini</span><b>1%</b></div>
+                <div class="track"><i style="width: 2%"></i></div>
+                <dl class="model-metrics">
+                  <div>
+                    <dt>Input</dt>
+                    <dd>9.6k</dd>
+                    <small>$0.750/M</small>
+                  </div>
+                  <div>
+                    <dt>Cached</dt>
+                    <dd>4.5k</dd>
+                    <small>cache read</small>
+                  </div>
+                  <div>
+                    <dt>Write</dt>
+                    <dd>0</dd>
+                    <small>cache create</small>
+                  </div>
+                  <div>
+                    <dt>Output</dt>
+                    <dd>25</dd>
+                    <small>$4.50/M</small>
+                  </div>
+                  <div>
+                    <dt>Reason</dt>
+                    <dd>17</dd>
+                    <small>thinking</small>
+                  </div>
+                  <div>
+                    <dt>Est cost</dt>
+                    <dd>$0.0076</dd>
+                    <small>range total</small>
+                  </div>
+                </dl>
+              </li>
+            </ul>
+          </section>
+          <section class="panel">
+            <h4>Reasoning effort</h4>
+            <ul class="share-list">
+              <li>
+                <div class="share-head"><span>medium</span><b>78%</b></div>
+                <div class="track"><i style="width: 78.3%"></i></div>
+              </li>
+              <li>
+                <div class="share-head"><span>low</span><b>22%</b></div>
+                <div class="track"><i style="width: 21.7%"></i></div>
+              </li>
+            </ul>
+          </section>
+          <section class="panel">
+            <h4>Top repos</h4>
+            <ul class="rank-list">
+              <li><span title="agent-usage">agent-usage</span><b>3h 39m</b></li>
+              <li><span title="scripts">scripts</span><b>57m</b></li>
+              <li><span title="codex-desktop-linux">codex-desktop-linux</span><b>30m</b></li>
+              <li><span title="dotfiles">dotfiles</span><b>5m</b></li>
+              <li><span title="geostamp-cli">geostamp-cli</span><b>4m</b></li>
+            </ul>
+          </section>
+
+          <section class="panel daily-panel">
+            <h4>Daily active</h4>
+            <ul class="rank-list">
+              <li><span title="06-14">06-14</span><b>3h 46m</b></li>
+              <li><span title="06-13">06-13</span><b>36m</b></li>
+              <li><span title="06-12">06-12</span><b>50m</b></li>
+              <li><span title="06-11">06-11</span><b>4m</b></li>
+            </ul>
+          </section>
+        </div>
+      </section>
+      <section class="source-block" style="--tone: oklch(0.64 0.13 300)">
+        <header class="source-head">
+          <div>
+            <h3>opencode</h3>
+            <h2>12m</h2>
+            <p class="panel-copy">
+              Dense local activity, split by model, repo, language, and request shape.
+            </p>
+          </div>
+          <dl>
+            <div class="metric">
+              <dt>Sessions</dt>
+              <dd>13</dd>
+            </div>
+            <div class="metric">
+              <dt>Requests</dt>
+              <dd>45</dd>
+            </div>
+            <div class="metric">
+              <dt>Tokens</dt>
+              <dd>1.24M</dd>
+            </div>
+            <div class="metric">
+              <dt>Est cost</dt>
+              <dd>$1.28</dd>
+            </div>
+          </dl>
+        </header>
+        <section class="token-panel">
+          <h3>Token intensity</h3>
+          <p>
+            Total uses provider total when present, else input plus cached plus cache write plus
+            output plus reasoning.
+          </p>
+          <div class="token-row input">
+            <span>Input</span>
+            <div class="track"><i style="width: 18.9%"></i></div>
+            <b>234.8k</b>
+          </div>
+          <div class="token-row cached">
+            <span>Cached</span>
+            <div class="track"><i style="width: 79.9%"></i></div>
+            <b>990.8k</b>
+          </div>
+          <div class="token-row cache-write">
+            <span>Cache write</span>
+            <div class="track"><i style="width: 2%"></i></div>
+            <b>0</b>
+          </div>
+          <div class="token-row output">
+            <span>Output</span>
+            <div class="track"><i style="width: 2%"></i></div>
+            <b>11.1k</b>
+          </div>
+          <div class="token-row reasoning">
+            <span>Reasoning</span>
+            <div class="track"><i style="width: 2%"></i></div>
+            <b>3.6k</b>
+          </div>
+          <div class="token-row total">
+            <span>Total</span>
+            <div class="track"><i style="width: 100%"></i></div>
+            <b>1.24M</b>
+          </div>
+        </section>
+        <div class="detail-grid detail-grid-summary">
+          <section class="panel-wide model-panel">
+            <h4>Models</h4>
+            <ul class="model-list">
+              <li class="model-row">
+                <div class="model-top"><span title="gpt-5.5">gpt-5.5</span><b>53%</b></div>
+                <div class="track"><i style="width: 53.1%"></i></div>
+                <dl class="model-metrics">
+                  <div>
+                    <dt>Input</dt>
+                    <dd>129.8k</dd>
+                    <small>$5.00/M</small>
+                  </div>
+                  <div>
+                    <dt>Cached</dt>
+                    <dd>789.5k</dd>
+                    <small>cache read</small>
+                  </div>
+                  <div>
+                    <dt>Write</dt>
+                    <dd>0</dd>
+                    <small>cache create</small>
+                  </div>
+                  <div>
+                    <dt>Output</dt>
+                    <dd>6.5k</dd>
+                    <small>$30.00/M</small>
+                  </div>
+                  <div>
+                    <dt>Reason</dt>
+                    <dd>1.5k</dd>
+                    <small>thinking</small>
+                  </div>
+                  <div>
+                    <dt>Est cost</dt>
+                    <dd>$1.28</dd>
+                    <small>range total</small>
+                  </div>
+                </dl>
+              </li>
+              <li class="model-row">
+                <div class="model-top">
+                  <span title="deepseek-v4-flash-free">deepseek-v4-flash-free</span><b>33%</b>
+                </div>
+                <div class="track"><i style="width: 32.7%"></i></div>
+                <dl class="model-metrics">
+                  <div>
+                    <dt>Input</dt>
+                    <dd>94.6k</dd>
+                    <small>$0/M</small>
+                  </div>
+                  <div>
+                    <dt>Cached</dt>
+                    <dd>201.3k</dd>
+                    <small>cache read</small>
+                  </div>
+                  <div>
+                    <dt>Write</dt>
+                    <dd>0</dd>
+                    <small>cache create</small>
+                  </div>
+                  <div>
+                    <dt>Output</dt>
+                    <dd>4.6k</dd>
+                    <small>$0/M</small>
+                  </div>
+                  <div>
+                    <dt>Reason</dt>
+                    <dd>2.1k</dd>
+                    <small>thinking</small>
+                  </div>
+                  <div>
+                    <dt>Est cost</dt>
+                    <dd>$0.00</dd>
+                    <small>range total</small>
+                  </div>
+                </dl>
+              </li>
+              <li class="model-row">
+                <div class="model-top">
+                  <span title="gpt-5.3-codex-spark">gpt-5.3-codex-spark</span><b>4%</b>
+                </div>
+                <div class="track"><i style="width: 4.1%"></i></div>
+                <dl class="model-metrics">
+                  <div>
+                    <dt>Input</dt>
+                    <dd>0</dd>
+                    <small>n/a</small>
+                  </div>
+                  <div>
+                    <dt>Cached</dt>
+                    <dd>0</dd>
+                    <small>cache read</small>
+                  </div>
+                  <div>
+                    <dt>Write</dt>
+                    <dd>0</dd>
+                    <small>cache create</small>
+                  </div>
+                  <div>
+                    <dt>Output</dt>
+                    <dd>0</dd>
+                    <small>n/a</small>
+                  </div>
+                  <div>
+                    <dt>Reason</dt>
+                    <dd>0</dd>
+                    <small>thinking</small>
+                  </div>
+                  <div>
+                    <dt>Est cost</dt>
+                    <dd>n/a</dd>
+                    <small>range total</small>
+                  </div>
+                </dl>
+              </li>
+              <li class="model-row">
+                <div class="model-top"><span title="gpt-5.5-pro">gpt-5.5-pro</span><b>4%</b></div>
+                <div class="track"><i style="width: 4.1%"></i></div>
+                <dl class="model-metrics">
+                  <div>
+                    <dt>Input</dt>
+                    <dd>0</dd>
+                    <small>n/a</small>
+                  </div>
+                  <div>
+                    <dt>Cached</dt>
+                    <dd>0</dd>
+                    <small>cache read</small>
+                  </div>
+                  <div>
+                    <dt>Write</dt>
+                    <dd>0</dd>
+                    <small>cache create</small>
+                  </div>
+                  <div>
+                    <dt>Output</dt>
+                    <dd>0</dd>
+                    <small>n/a</small>
+                  </div>
+                  <div>
+                    <dt>Reason</dt>
+                    <dd>0</dd>
+                    <small>thinking</small>
+                  </div>
+                  <div>
+                    <dt>Est cost</dt>
+                    <dd>n/a</dd>
+                    <small>range total</small>
+                  </div>
+                </dl>
+              </li>
+              <li class="model-row">
+                <div class="model-top"><span title="big-pickle">big-pickle</span><b>2%</b></div>
+                <div class="track"><i style="width: 2%"></i></div>
+                <dl class="model-metrics">
+                  <div>
+                    <dt>Input</dt>
+                    <dd>10.3k</dd>
+                    <small>n/a</small>
+                  </div>
+                  <div>
+                    <dt>Cached</dt>
+                    <dd>0</dd>
+                    <small>cache read</small>
+                  </div>
+                  <div>
+                    <dt>Write</dt>
+                    <dd>0</dd>
+                    <small>cache create</small>
+                  </div>
+                  <div>
+                    <dt>Output</dt>
+                    <dd>10</dd>
+                    <small>n/a</small>
+                  </div>
+                  <div>
+                    <dt>Reason</dt>
+                    <dd>14</dd>
+                    <small>thinking</small>
+                  </div>
+                  <div>
+                    <dt>Est cost</dt>
+                    <dd>n/a</dd>
+                    <small>range total</small>
+                  </div>
+                </dl>
+              </li>
+            </ul>
+          </section>
+          <section class="panel">
+            <h4>Reasoning effort</h4>
+            <ul class="share-list">
+              <li>
+                <div class="share-head"><span>medium</span><b>96%</b></div>
+                <div class="track"><i style="width: 95.8%"></i></div>
+              </li>
+              <li>
+                <div class="share-head"><span>default</span><b>2%</b></div>
+                <div class="track"><i style="width: 2.1%"></i></div>
+              </li>
+              <li>
+                <div class="share-head"><span>high</span><b>2%</b></div>
+                <div class="track"><i style="width: 2.1%"></i></div>
+              </li>
+            </ul>
+          </section>
+          <section class="panel">
+            <h4>Top repos</h4>
+            <ul class="rank-list">
+              <li><span title="scripts">scripts</span><b>10m</b></li>
+              <li><span title="agent-usage">agent-usage</span><b>1m</b></li>
+              <li><span title="GramGrab">GramGrab</span><b>1m</b></li>
+            </ul>
+          </section>
+
+          <section class="panel daily-panel">
+            <h4>Daily active</h4>
+            <ul class="rank-list">
+              <li><span title="06-14">06-14</span><b>1m</b></li>
+              <li><span title="06-13">06-13</span><b>1m</b></li>
+              <li><span title="06-12">06-12</span><b>9m</b></li>
+            </ul>
+          </section>
+        </div>
+      </section>
+      <section class="source-block" style="--tone: oklch(0.7 0.11 150)">
+        <header class="source-head">
+          <div>
+            <h3>Pi</h3>
+            <h2>10h 34m</h2>
+            <p class="panel-copy">
+              Dense local activity, split by model, repo, language, and request shape.
+            </p>
+          </div>
+          <dl>
+            <div class="metric">
+              <dt>Sessions</dt>
+              <dd>61</dd>
+            </div>
+            <div class="metric">
+              <dt>Requests</dt>
+              <dd>1513</dd>
+            </div>
+            <div class="metric">
+              <dt>Tokens</dt>
+              <dd>60.53M</dd>
+            </div>
+            <div class="metric">
+              <dt>Est cost</dt>
+              <dd>$48.28</dd>
+            </div>
+          </dl>
+        </header>
+        <section class="token-panel">
+          <h3>Token intensity</h3>
+          <p>
+            Total uses provider total when present, else input plus cached plus cache write plus
+            output plus reasoning.
+          </p>
+          <div class="token-row input">
+            <span>Input</span>
+            <div class="track"><i style="width: 9.1%"></i></div>
+            <b>5.49M</b>
+          </div>
+          <div class="token-row cached">
+            <span>Cached</span>
+            <div class="track"><i style="width: 90.2%"></i></div>
+            <b>54.60M</b>
+          </div>
+          <div class="token-row cache-write">
+            <span>Cache write</span>
+            <div class="track"><i style="width: 2%"></i></div>
+            <b>0</b>
+          </div>
+          <div class="token-row output">
+            <span>Output</span>
+            <div class="track"><i style="width: 2%"></i></div>
+            <b>434.0k</b>
+          </div>
+          <div class="token-row reasoning">
+            <span>Reasoning</span>
+            <div class="track"><i style="width: 2%"></i></div>
+            <b>0</b>
+          </div>
+          <div class="token-row total">
+            <span>Total</span>
+            <div class="track"><i style="width: 100%"></i></div>
+            <b>60.53M</b>
+          </div>
+        </section>
+        <div class="detail-grid detail-grid-summary">
+          <section class="panel-wide model-panel">
+            <h4>Models</h4>
+            <ul class="model-list">
+              <li class="model-row">
+                <div class="model-top"><span title="gpt-5.5">gpt-5.5</span><b>62%</b></div>
+                <div class="track"><i style="width: 61.6%"></i></div>
+                <dl class="model-metrics">
+                  <div>
+                    <dt>Input</dt>
+                    <dd>3.75M</dd>
+                    <small>$5.00/M</small>
+                  </div>
+                  <div>
+                    <dt>Cached</dt>
+                    <dd>30.27M</dd>
+                    <small>cache read</small>
+                  </div>
+                  <div>
+                    <dt>Write</dt>
+                    <dd>0</dd>
+                    <small>cache create</small>
+                  </div>
+                  <div>
+                    <dt>Output</dt>
+                    <dd>254.9k</dd>
+                    <small>$30.00/M</small>
+                  </div>
+                  <div>
+                    <dt>Reason</dt>
+                    <dd>0</dd>
+                    <small>thinking</small>
+                  </div>
+                  <div>
+                    <dt>Est cost</dt>
+                    <dd>$41.52</dd>
+                    <small>range total</small>
+                  </div>
+                </dl>
+              </li>
+              <li class="model-row">
+                <div class="model-top"><span title="gpt-5.4">gpt-5.4</span><b>21%</b></div>
+                <div class="track"><i style="width: 20.9%"></i></div>
+                <dl class="model-metrics">
+                  <div>
+                    <dt>Input</dt>
+                    <dd>1.22M</dd>
+                    <small>$2.50/M</small>
+                  </div>
+                  <div>
+                    <dt>Cached</dt>
+                    <dd>8.17M</dd>
+                    <small>cache read</small>
+                  </div>
+                  <div>
+                    <dt>Write</dt>
+                    <dd>0</dd>
+                    <small>cache create</small>
+                  </div>
+                  <div>
+                    <dt>Output</dt>
+                    <dd>110.7k</dd>
+                    <small>$15.00/M</small>
+                  </div>
+                  <div>
+                    <dt>Reason</dt>
+                    <dd>0</dd>
+                    <small>thinking</small>
+                  </div>
+                  <div>
+                    <dt>Est cost</dt>
+                    <dd>$6.76</dd>
+                    <small>range total</small>
+                  </div>
+                </dl>
+              </li>
+              <li class="model-row">
+                <div class="model-top">
+                  <span title="deepseek-v4-flash-free">deepseek-v4-flash-free</span><b>17%</b>
+                </div>
+                <div class="track"><i style="width: 17.4%"></i></div>
+                <dl class="model-metrics">
+                  <div>
+                    <dt>Input</dt>
+                    <dd>524.1k</dd>
+                    <small>$0/M</small>
+                  </div>
+                  <div>
+                    <dt>Cached</dt>
+                    <dd>16.17M</dd>
+                    <small>cache read</small>
+                  </div>
+                  <div>
+                    <dt>Write</dt>
+                    <dd>0</dd>
+                    <small>cache create</small>
+                  </div>
+                  <div>
+                    <dt>Output</dt>
+                    <dd>68.4k</dd>
+                    <small>$0/M</small>
+                  </div>
+                  <div>
+                    <dt>Reason</dt>
+                    <dd>0</dd>
+                    <small>thinking</small>
+                  </div>
+                  <div>
+                    <dt>Est cost</dt>
+                    <dd>$0.00</dd>
+                    <small>range total</small>
+                  </div>
+                </dl>
+              </li>
+            </ul>
+          </section>
+          <section class="panel">
+            <h4>Reasoning effort</h4>
+            <ul class="share-list">
+              <li>
+                <div class="share-head"><span>medium</span><b>72%</b></div>
+                <div class="track"><i style="width: 71.8%"></i></div>
+              </li>
+              <li>
+                <div class="share-head"><span>high</span><b>27%</b></div>
+                <div class="track"><i style="width: 26.9%"></i></div>
+              </li>
+              <li>
+                <div class="share-head"><span>low</span><b>1%</b></div>
+                <div class="track"><i style="width: 2%"></i></div>
+              </li>
+            </ul>
+          </section>
+          <section class="panel">
+            <h4>Top repos</h4>
+            <ul class="rank-list">
+              <li><span title="geostamp-cli">geostamp-cli</span><b>4h 18m</b></li>
+              <li><span title="scripts">scripts</span><b>2h 24m</b></li>
+              <li><span title="cmux-linux">cmux-linux</span><b>1h 2m</b></li>
+              <li><span title="sandbox">sandbox</span><b>52m</b></li>
+              <li>
+                <span title="semester_project_report">semester_project_report</span><b>40m</b>
+              </li>
+            </ul>
+          </section>
+
+          <section class="panel daily-panel">
+            <h4>Daily active</h4>
+            <ul class="rank-list">
+              <li><span title="06-14">06-14</span><b>11m</b></li>
+              <li><span title="06-13">06-13</span><b>27m</b></li>
+              <li><span title="06-12">06-12</span><b>2h 46m</b></li>
+              <li><span title="06-11">06-11</span><b>3h 0m</b></li>
+              <li><span title="06-10">06-10</span><b>3h 28m</b></li>
+            </ul>
+          </section>
+        </div>
+      </section>
+      <footer class="footer">
+        <p>
+          <strong>Data sources:</strong> Codex: ~/.codex/sessions · opencode:
+          ~/.local/share/opencode/opencode.db · Pi: ~/.pi/agent/sessions
+        </p>
+        <p>
+          T3 Code sessions are detected from Codex session metadata:
+          <code>originator=t3code_desktop</code>, and from opencode session titles starting
+          <code>T3 Code</code>.
+        </p>
+
+        <p>
+          Cost is an estimate. Missing pricing data appears as n/a. This file is self-contained and
+          reads no network resources.
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

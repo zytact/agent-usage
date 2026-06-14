@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
-import { readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { readdir, stat } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
 
-import type { SessionDiscovery } from "./domain.js";
+import type { DiscoveredSessionFile, SessionDiscovery } from "./domain.js";
 
 type DiscoveryRoots = {
   claudeDir: string;
@@ -22,37 +22,100 @@ export function defaultDiscoveryRoots(homeDir: string): DiscoveryRoots {
   };
 }
 
-export async function discoverSessionFiles(roots: DiscoveryRoots): Promise<SessionDiscovery> {
+export async function discoverSessionFiles(
+  roots: DiscoveryRoots,
+  scopeStart?: Date,
+): Promise<SessionDiscovery> {
+  const cutoffMs = scopeStart?.getTime();
+  const [claudeFiles, codexFiles, piFiles] = await Promise.all([
+    collectFiles(roots.claudeDir, ".jsonl", cutoffMs),
+    collectFiles(roots.codexDir, ".jsonl", cutoffMs),
+    collectFiles(roots.piDir, ".jsonl", cutoffMs),
+  ]);
+
   return {
-    claudeFiles: await collectFiles(roots.claudeDir, ".jsonl"),
-    codexFiles: await collectFiles(roots.codexDir, ".jsonl"),
+    claudeFiles,
+    codexFiles,
     opencodeDbPath: join(roots.opencodeDir, "opencode.db"),
-    piFiles: await collectFiles(roots.piDir, ".jsonl"),
+    piFiles,
   };
 }
 
-async function collectFiles(root: string, suffix: string): Promise<string[]> {
+async function collectFiles(
+  root: string,
+  suffix: string,
+  cutoffMs?: number,
+): Promise<DiscoveredSessionFile[]> {
   if (!existsSync(root)) {
     return [];
   }
 
-  const files: string[] = [];
-  await walk(root, suffix, files);
-  files.sort();
+  const files: DiscoveredSessionFile[] = [];
+  await walk(root, root, suffix, files, cutoffMs);
+  files.sort((a, b) => a.path.localeCompare(b.path));
   return files;
 }
 
-async function walk(root: string, suffix: string, files: string[]): Promise<void> {
+async function walk(
+  root: string,
+  walkRoot: string,
+  suffix: string,
+  files: DiscoveredSessionFile[],
+  cutoffMs?: number,
+): Promise<void> {
+  if (cutoffMs && definitelyBeforeScope(root, walkRoot, cutoffMs)) {
+    return;
+  }
+
   const entries = await readdir(root, { withFileTypes: true });
 
   for (const entry of entries) {
     const fullPath = join(root, entry.name);
     if (entry.isDirectory()) {
-      await walk(fullPath, suffix, files);
+      await walk(fullPath, walkRoot, suffix, files, cutoffMs);
       continue;
     }
-    if (entry.isFile() && entry.name.endsWith(suffix)) {
-      files.push(fullPath);
+    if (!entry.isFile() || !entry.name.endsWith(suffix)) {
+      continue;
+    }
+    if (cutoffMs && definitelyBeforeScope(fullPath, walkRoot, cutoffMs)) {
+      continue;
+    }
+
+    const fileStat = await stat(fullPath);
+    if (cutoffMs && fileStat.mtimeMs < cutoffMs) {
+      continue;
+    }
+
+    files.push({
+      mtimeMs: fileStat.mtimeMs,
+      path: fullPath,
+      size: fileStat.size,
+    });
+  }
+}
+
+function definitelyBeforeScope(fullPath: string, root: string, cutoffMs: number): boolean {
+  const hinted = dateHintFromPath(relative(root, fullPath));
+  return hinted ? hinted.getTime() < cutoffMs : false;
+}
+
+function dateHintFromPath(relativePath: string): Date | undefined {
+  const parts = relativePath.split(sep).filter(Boolean);
+  if (parts.length >= 3) {
+    const year = Number(parts[0]);
+    const month = Number(parts[1]);
+    const day = Number(parts[2]);
+    if (Number.isInteger(year) && Number.isInteger(month) && Number.isInteger(day)) {
+      return new Date(Date.UTC(year, month - 1, day + 1));
     }
   }
+
+  const match = (parts.at(-1) ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) {
+    return undefined;
+  }
+
+  const [, year, month, day] = match;
+  return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day) + 1));
 }

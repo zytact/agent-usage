@@ -1,6 +1,6 @@
 export const ACTIVE_GAP_SECONDS = 15 * 60;
 
-export type Scope = "today" | "7d" | "30d";
+export type Scope = "today" | "1d" | "7d" | "30d";
 
 export type EventMark = {
   effort?: string;
@@ -46,6 +46,9 @@ export function scopeStart(scope: Scope, now: Date): Date {
 
   if (scope === "today") {
     return new Date(year, month, day, 0, 0, 0, 0);
+  }
+  if (scope === "1d") {
+    return new Date(now.getTime() - 24 * 60 * 60 * 1000);
   }
 
   const days = scope === "7d" ? 6 : 29;
