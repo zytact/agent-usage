@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, type Dirent } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 
@@ -63,7 +63,7 @@ async function walk(
   files: DiscoveredSessionFile[],
   cutoffMs?: number,
 ): Promise<void> {
-  if (cutoffMs && definitelyBeforeScope(root, walkRoot, cutoffMs)) {
+  if (shouldSkipByPath(root, walkRoot, cutoffMs)) {
     return;
   }
 
@@ -75,24 +75,39 @@ async function walk(
       await walk(fullPath, walkRoot, suffix, files, cutoffMs);
       continue;
     }
-    if (!entry.isFile() || !entry.name.endsWith(suffix)) {
+    if (!isMatchingFileEntry(entry, suffix)) {
       continue;
     }
-    if (cutoffMs && definitelyBeforeScope(fullPath, walkRoot, cutoffMs)) {
+    if (shouldSkipByPath(fullPath, walkRoot, cutoffMs)) {
       continue;
     }
-
-    const fileStat = await stat(fullPath);
-    if (cutoffMs && fileStat.mtimeMs < cutoffMs) {
-      continue;
-    }
-
-    files.push({
-      mtimeMs: fileStat.mtimeMs,
-      path: fullPath,
-      size: fileStat.size,
-    });
+    await addDiscoveredFile(fullPath, files, cutoffMs);
   }
+}
+
+async function addDiscoveredFile(
+  fullPath: string,
+  files: DiscoveredSessionFile[],
+  cutoffMs?: number,
+): Promise<void> {
+  const fileStat = await stat(fullPath);
+  if (cutoffMs && fileStat.mtimeMs < cutoffMs) {
+    return;
+  }
+
+  files.push({
+    mtimeMs: fileStat.mtimeMs,
+    path: fullPath,
+    size: fileStat.size,
+  });
+}
+
+function isMatchingFileEntry(entry: Dirent, suffix: string): boolean {
+  return entry.isFile() && entry.name.endsWith(suffix);
+}
+
+function shouldSkipByPath(fullPath: string, root: string, cutoffMs?: number): boolean {
+  return cutoffMs ? definitelyBeforeScope(fullPath, root, cutoffMs) : false;
 }
 
 function definitelyBeforeScope(fullPath: string, root: string, cutoffMs: number): boolean {

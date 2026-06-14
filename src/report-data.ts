@@ -161,35 +161,8 @@ export function aggregateSessions(sessions: ParsedSession[]): ReportStats {
     mergeCounts(stats.modelUsage, session.models);
     mergeCounts(stats.modelActiveSeconds, session.modelActiveSeconds);
     mergeTokens(stats.tokens, session.tokens);
-
-    for (const [model, usage] of Object.entries(session.modelTokens)) {
-      const bucket = (stats.modelTokens[model] ??= {
-        billableOutput: 0,
-        cacheWrite: 0,
-        cached: 0,
-        input: 0,
-        output: 0,
-        reasoning: 0,
-        total: 0,
-      });
-      bucket.billableOutput += usage.billableOutput;
-      bucket.cacheWrite += usage.cacheWrite;
-      bucket.cached += usage.cached;
-      bucket.input += usage.input;
-      bucket.output += usage.output;
-      bucket.reasoning += usage.reasoning;
-      bucket.total += usage.total;
-    }
-
-    const dayKey = session.start.toISOString().slice(0, 10);
-    const day = (stats.days[dayKey] ??= {
-      activeSeconds: 0,
-      requestCount: 0,
-      sessionCount: 0,
-    });
-    day.activeSeconds += session.activeSeconds;
-    day.requestCount += session.requestCount;
-    day.sessionCount += 1;
+    mergeModelTokens(stats.modelTokens, session.modelTokens);
+    mergeDayStats(stats.days, session.start, session.activeSeconds, session.requestCount);
   }
 
   return stats;
@@ -432,17 +405,16 @@ function mergeFilteredSessionStats(
   mergeCounts(stats.modelUsage, filtered.models);
   mergeCounts(stats.modelActiveSeconds, filtered.modelActiveSeconds);
   mergeTokens(stats.tokens, filtered.tokens);
+  mergeModelTokens(stats.modelTokens, filtered.modelTokens);
+  mergeDayStats(stats.days, session.start, filtered.activeSeconds, filtered.requests.length);
+}
 
-  for (const [model, usage] of Object.entries(filtered.modelTokens)) {
-    const bucket = (stats.modelTokens[model] ??= {
-      billableOutput: 0,
-      cacheWrite: 0,
-      cached: 0,
-      input: 0,
-      output: 0,
-      reasoning: 0,
-      total: 0,
-    });
+function mergeModelTokens(
+  target: Record<string, ModelTokenUsage>,
+  source: Record<string, ModelTokenUsage>,
+): void {
+  for (const [model, usage] of Object.entries(source)) {
+    const bucket = (target[model] ??= { ...zeroTokens(), billableOutput: 0 });
     bucket.billableOutput += usage.billableOutput;
     bucket.cacheWrite += usage.cacheWrite;
     bucket.cached += usage.cached;
@@ -451,15 +423,22 @@ function mergeFilteredSessionStats(
     bucket.reasoning += usage.reasoning;
     bucket.total += usage.total;
   }
+}
 
-  const dayKey = session.start.toISOString().slice(0, 10);
-  const day = (stats.days[dayKey] ??= {
+function mergeDayStats(
+  days: ReportStats["days"],
+  start: Date,
+  activeSeconds: number,
+  requestCount: number,
+): void {
+  const dayKey = start.toISOString().slice(0, 10);
+  const day = (days[dayKey] ??= {
     activeSeconds: 0,
     requestCount: 0,
     sessionCount: 0,
   });
-  day.activeSeconds += filtered.activeSeconds;
-  day.requestCount += filtered.requests.length;
+  day.activeSeconds += activeSeconds;
+  day.requestCount += requestCount;
   day.sessionCount += 1;
 }
 
