@@ -14,7 +14,8 @@
     "check": "vp check",
     "test": "vp test run",
     "prepare": "vp config",
-    "fallow": "fallow"
+    "fallow": "fallow",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@inquirer/select": "^5.2.1",

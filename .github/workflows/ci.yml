@@ -24,7 +24,7 @@ jobs:
           node-version: "22"
           cache: true
       - run: vp install
-      - run: vp run lint
+      - run: vp lint
 
   test:
     runs-on: ubuntu-latest
