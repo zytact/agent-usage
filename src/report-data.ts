@@ -78,6 +78,12 @@ export type RequestSummaryData = {
   rows: RequestDistributionRow[];
 };
 
+export type RequestSummarySource = {
+  requests: SessionRequest[];
+  sessions?: ParsedSession[];
+  distributions?: ReturnType<typeof sessionDistributions>;
+};
+
 export type SourceSection = {
   sessions: ParsedSession[];
   stats: ReportStats;
@@ -96,7 +102,9 @@ export type BuiltReport = {
   dailyRows: DailyBreakdownRow[];
   generatedAt: Date;
   gptOnly: SourceSection;
+  gptOnlyRequestSummary: RequestSummarySource;
   includeClaude: boolean;
+  requestSummary: RequestSummarySource;
   requestSummarySessions: ParsedSession[];
   scope: Scope;
   scopeTitle: string;
@@ -153,35 +161,8 @@ export function aggregateSessions(sessions: ParsedSession[]): ReportStats {
     mergeCounts(stats.modelUsage, session.models);
     mergeCounts(stats.modelActiveSeconds, session.modelActiveSeconds);
     mergeTokens(stats.tokens, session.tokens);
-
-    for (const [model, usage] of Object.entries(session.modelTokens)) {
-      const bucket = (stats.modelTokens[model] ??= {
-        billableOutput: 0,
-        cacheWrite: 0,
-        cached: 0,
-        input: 0,
-        output: 0,
-        reasoning: 0,
-        total: 0,
-      });
-      bucket.billableOutput += usage.billableOutput;
-      bucket.cacheWrite += usage.cacheWrite;
-      bucket.cached += usage.cached;
-      bucket.input += usage.input;
-      bucket.output += usage.output;
-      bucket.reasoning += usage.reasoning;
-      bucket.total += usage.total;
-    }
-
-    const dayKey = session.start.toISOString().slice(0, 10);
-    const day = (stats.days[dayKey] ??= {
-      activeSeconds: 0,
-      requestCount: 0,
-      sessionCount: 0,
-    });
-    day.activeSeconds += session.activeSeconds;
-    day.requestCount += session.requestCount;
-    day.sessionCount += 1;
+    mergeModelTokens(stats.modelTokens, session.modelTokens);
+    mergeDayStats(stats.days, session.start, session.activeSeconds, session.requestCount);
   }
 
   return stats;
@@ -194,32 +175,52 @@ export function buildReport(
   now: Date,
 ): BuiltReport {
   const filtered = filterSessionsByScope(sessions, scope, now);
-  const codex = filtered.filter((session) => session.source === "codex");
-  const opencode = filtered.filter((session) => session.source === "opencode");
-  const claude = filtered.filter((session) => session.source === "claude");
-  const pi = filtered.filter((session) => session.source === "pi");
-  const codexT3 = codex.filter((session) => session.originator === "t3code_desktop");
-  const codexOther = codex.filter((session) => session.originator !== "t3code_desktop");
-  const opencodeT3 = opencode.filter((session) => session.originator === "t3code_desktop");
-  const opencodeOther = opencode.filter((session) => session.originator !== "t3code_desktop");
-  const gptOnlySessions = filterSessionsByModel(filtered, isGptModel);
+  const buckets = {
+    claude: [] as ParsedSession[],
+    codex: [] as ParsedSession[],
+    codexOther: [] as ParsedSession[],
+    codexT3: [] as ParsedSession[],
+    opencode: [] as ParsedSession[],
+    opencodeOther: [] as ParsedSession[],
+    opencodeT3: [] as ParsedSession[],
+    pi: [] as ParsedSession[],
+  };
+  const gptOnlyStats = createEmptyStats();
+  const gptOnlyRequests: SessionRequest[] = [];
+  const gptOnlyDistributions = emptySessionDistributions();
+
+  for (const session of filtered) {
+    addSectionBucket(session, buckets);
+    const gptOnly = buildModelFilteredSummary(session, isGptModel);
+    if (!gptOnly) {
+      continue;
+    }
+    mergeFilteredSessionStats(gptOnlyStats, gptOnly, session);
+    gptOnlyRequests.push(...gptOnly.requests);
+    addSessionDistributions(
+      gptOnlyDistributions,
+      gptOnly.activeSeconds,
+      gptOnly.tokens,
+      gptOnly.requests,
+    );
+  }
 
   const sections: SourceSection[] = [
     makeSection("Combined", filtered, SOURCE_TONES.combined),
-    makeSection("GPT-only", gptOnlySessions, SOURCE_TONES.gptOnly),
-    makeSection("Codex", codex, SOURCE_TONES.codex),
-    makeSection("Codex via T3 Code", codexT3, SOURCE_TONES.t3code),
-    makeSection("Codex other", codexOther, SOURCE_TONES.other),
-    makeSection("opencode", opencode, SOURCE_TONES.opencode),
-    makeSection("opencode via T3 Code", opencodeT3, SOURCE_TONES.t3code),
-    makeSection("opencode other", opencodeOther, SOURCE_TONES.other),
+    { sessions: [], stats: gptOnlyStats, title: "GPT-only", tone: SOURCE_TONES.gptOnly },
+    makeSection("Codex", buckets.codex, SOURCE_TONES.codex),
+    makeSection("Codex via T3 Code", buckets.codexT3, SOURCE_TONES.t3code),
+    makeSection("Codex other", buckets.codexOther, SOURCE_TONES.other),
+    makeSection("opencode", buckets.opencode, SOURCE_TONES.opencode),
+    makeSection("opencode via T3 Code", buckets.opencodeT3, SOURCE_TONES.t3code),
+    makeSection("opencode other", buckets.opencodeOther, SOURCE_TONES.other),
   ];
 
   if (includeClaude) {
-    sections.push(makeSection("Claude Code", claude, SOURCE_TONES.claude));
+    sections.push(makeSection("Claude Code", buckets.claude, SOURCE_TONES.claude));
   }
 
-  sections.push(makeSection("Pi", pi, SOURCE_TONES.pi));
+  sections.push(makeSection("Pi", buckets.pi, SOURCE_TONES.pi));
 
   return {
     attributionOverages: attributionOverageRows(filtered),
@@ -227,7 +228,15 @@ export function buildReport(
     dailyRows: groupedDailyModelBreakdown(filtered),
     generatedAt: now,
     gptOnly: sections[1],
+    gptOnlyRequestSummary: {
+      distributions: gptOnlyDistributions,
+      requests: gptOnlyRequests,
+    },
     includeClaude,
+    requestSummary: {
+      requests: filtered.flatMap((session) => session.requests),
+      sessions: filtered,
+    },
     requestSummarySessions: filtered,
     scope,
     scopeTitle: formatScopeTitle(scope, now),
@@ -297,59 +306,140 @@ function groupedDailyModelBreakdown(sessions: ParsedSession[]): DailyBreakdownRo
     );
 }
 
-function filterSessionsByModel(
-  sessions: ParsedSession[],
+type FilteredSessionSummary = {
+  activeSeconds: number;
+  efforts: Record<string, number>;
+  modelActiveSeconds: Record<string, number>;
+  modelTokens: ParsedSession["modelTokens"];
+  models: Record<string, number>;
+  requests: SessionRequest[];
+  stateActiveSeconds: Record<string, number>;
+  tokens: TokenUsage;
+};
+
+function addSectionBucket(
+  session: ParsedSession,
+  buckets: {
+    claude: ParsedSession[];
+    codex: ParsedSession[];
+    codexOther: ParsedSession[];
+    codexT3: ParsedSession[];
+    opencode: ParsedSession[];
+    opencodeOther: ParsedSession[];
+    opencodeT3: ParsedSession[];
+    pi: ParsedSession[];
+  },
+): void {
+  switch (session.source) {
+    case "codex":
+      buckets.codex.push(session);
+      (session.originator === "t3code_desktop" ? buckets.codexT3 : buckets.codexOther).push(
+        session,
+      );
+      return;
+    case "opencode":
+      buckets.opencode.push(session);
+      (session.originator === "t3code_desktop" ? buckets.opencodeT3 : buckets.opencodeOther).push(
+        session,
+      );
+      return;
+    case "claude":
+      buckets.claude.push(session);
+      return;
+    case "pi":
+      buckets.pi.push(session);
+      return;
+  }
+}
+
+function buildModelFilteredSummary(
+  session: ParsedSession,
   predicate: (model: string) => boolean,
-): ParsedSession[] {
-  const filtered: ParsedSession[] = [];
-
-  for (const session of sessions) {
-    const requests = session.requests.filter((request) => predicate(request.model));
-    const modelTokens = filterMap(session.modelTokens, predicate);
-    if (requests.length === 0 && Object.keys(modelTokens).length === 0) {
-      continue;
-    }
-
-    const models: Record<string, number> = {};
-    const efforts: Record<string, number> = {};
-    for (const request of requests) {
-      models[request.model] = (models[request.model] ?? 0) + 1;
-      efforts[request.effort] = (efforts[request.effort] ?? 0) + 1;
-    }
-
-    const modelActiveSeconds = filterMap(session.modelActiveSeconds, predicate);
-    const stateActiveSeconds = filterStateMap(session.stateActiveSeconds, predicate);
-    const dayModelActiveSeconds = mapValues(session.dayModelActiveSeconds, (value) =>
-      filterMap(value, predicate),
-    );
-    const dayStateActiveSeconds = mapValues(session.dayStateActiveSeconds, (value) =>
-      filterStateMap(value, predicate),
-    );
-    const tokens = sumModelTokens(modelTokens);
-    const activeSeconds =
-      sumValues(modelActiveSeconds) ||
-      Math.max(60, sumValues(stateActiveSeconds)) ||
-      session.activeSeconds;
-
-    filtered.push({
-      ...session,
-      activeSeconds,
-      assistantTurns: Math.min(session.assistantTurns, requests.length),
-      dayModelActiveSeconds,
-      dayStateActiveSeconds,
-      efforts,
-      modelActiveSeconds,
-      modelTokens,
-      models,
-      requestCount: requests.length,
-      requests,
-      stateActiveSeconds,
-      tokens,
-      userTurns: session.userTurns,
-    });
+): FilteredSessionSummary | undefined {
+  const requests = session.requests.filter((request) => predicate(request.model));
+  const modelTokens = filterMap(session.modelTokens, predicate);
+  if (requests.length === 0 && Object.keys(modelTokens).length === 0) {
+    return undefined;
   }
 
-  return filtered;
+  const models: Record<string, number> = {};
+  const efforts: Record<string, number> = {};
+  for (const request of requests) {
+    models[request.model] = (models[request.model] ?? 0) + 1;
+    efforts[request.effort] = (efforts[request.effort] ?? 0) + 1;
+  }
+
+  const modelActiveSeconds = filterMap(session.modelActiveSeconds, predicate);
+  const stateActiveSeconds = filterStateMap(session.stateActiveSeconds, predicate);
+  const tokens = sumModelTokens(modelTokens);
+  const activeSeconds =
+    sumValues(modelActiveSeconds) ||
+    Math.max(60, sumValues(stateActiveSeconds)) ||
+    session.activeSeconds;
+
+  return {
+    activeSeconds,
+    efforts,
+    modelActiveSeconds,
+    modelTokens,
+    models,
+    requests,
+    stateActiveSeconds,
+    tokens,
+  };
+}
+
+function mergeFilteredSessionStats(
+  stats: ReportStats,
+  filtered: FilteredSessionSummary,
+  session: ParsedSession,
+): void {
+  stats.activeSeconds += filtered.activeSeconds;
+  stats.assistantTurns += Math.min(session.assistantTurns, filtered.requests.length);
+  stats.requestCount += filtered.requests.length;
+  stats.sessionCount += 1;
+  stats.userTurns += session.userTurns;
+  stats.repos[session.repo] = (stats.repos[session.repo] ?? 0) + filtered.activeSeconds;
+  mergeCounts(stats.languages, session.languages);
+  mergeCounts(stats.efforts, filtered.efforts);
+  mergeCounts(stats.modelUsage, filtered.models);
+  mergeCounts(stats.modelActiveSeconds, filtered.modelActiveSeconds);
+  mergeTokens(stats.tokens, filtered.tokens);
+  mergeModelTokens(stats.modelTokens, filtered.modelTokens);
+  mergeDayStats(stats.days, session.start, filtered.activeSeconds, filtered.requests.length);
+}
+
+function mergeModelTokens(
+  target: Record<string, ModelTokenUsage>,
+  source: Record<string, ModelTokenUsage>,
+): void {
+  for (const [model, usage] of Object.entries(source)) {
+    const bucket = (target[model] ??= { ...zeroTokens(), billableOutput: 0 });
+    bucket.billableOutput += usage.billableOutput;
+    bucket.cacheWrite += usage.cacheWrite;
+    bucket.cached += usage.cached;
+    bucket.input += usage.input;
+    bucket.output += usage.output;
+    bucket.reasoning += usage.reasoning;
+    bucket.total += usage.total;
+  }
+}
+
+function mergeDayStats(
+  days: ReportStats["days"],
+  start: Date,
+  activeSeconds: number,
+  requestCount: number,
+): void {
+  const dayKey = start.toISOString().slice(0, 10);
+  const day = (days[dayKey] ??= {
+    activeSeconds: 0,
+    requestCount: 0,
+    sessionCount: 0,
+  });
+  day.activeSeconds += activeSeconds;
+  day.requestCount += requestCount;
+  day.sessionCount += 1;
 }
 
 function summarizeRequestContexts(requests: SessionRequest[]): RequestContextSummary {
@@ -396,26 +486,10 @@ export function summarizeRequestCache(
 }
 
 function sessionDistributions(sessions: ParsedSession[]): Record<string, number[]> {
-  const out: Record<string, number[]> = {
-    cachedInputPerActiveMinute: [],
-    contextSizePerRequest: [],
-    freshInputPerActiveMinute: [],
-    outputPerActiveMinute: [],
-    tokensPerActiveMinute: [],
-    totalTokensPerTurn: [],
-  };
+  const out = emptySessionDistributions();
 
   for (const session of sessions) {
-    const minutes = Math.max(session.activeSeconds / 60, 1 / 60);
-    out.tokensPerActiveMinute.push(session.tokens.total / minutes);
-    out.freshInputPerActiveMinute.push(session.tokens.input / minutes);
-    out.cachedInputPerActiveMinute.push(session.tokens.cached / minutes);
-    out.outputPerActiveMinute.push(session.tokens.output / minutes);
-
-    for (const request of session.requests) {
-      out.contextSizePerRequest.push(request.contextSize);
-      out.totalTokensPerTurn.push(request.total);
-    }
+    addSessionDistributions(out, session.activeSeconds, session.tokens, session.requests);
   }
 
   return out;
@@ -436,12 +510,12 @@ export function summarizeDistribution(values: number[]): DistributionSummary {
 }
 
 export function buildRequestSummaryData(
-  sessions: BuiltReport["requestSummarySessions"],
+  source: RequestSummarySource,
   stats: ReportStats,
   pricing: Record<string, PricingInfo>,
 ): RequestSummaryData {
-  const requests = sessions.flatMap((session) => session.requests);
-  const distributions = sessionDistributions(sessions);
+  const requests = source.requests;
+  const distributions = source.distributions ?? sessionDistributions(source.sessions ?? []);
   const distributionInputs: Array<[string, number[]]> = [
     ["Tokens / active minute", distributions.tokensPerActiveMinute],
     ["Fresh input / active minute", distributions.freshInputPerActiveMinute],
@@ -563,10 +637,17 @@ function formatScopeTitle(scope: Scope, now: Date): string {
   if (scope === "today") {
     return `Today · ${today}`;
   }
+  if (scope === "1d") {
+    return `Last 24 Hours · since ${formatScopeMoment(new Date(now.getTime() - 24 * 60 * 60 * 1000))}`;
+  }
   if (scope === "7d") {
     return `Last 7 Days · since ${offsetIsoDay(now, 6)}`;
   }
   return `Last 30 Days · since ${offsetIsoDay(now, 29)}`;
+}
+
+function formatScopeMoment(value: Date): string {
+  return `${value.toISOString().slice(0, 10)} ${value.toISOString().slice(11, 16)} UTC`;
 }
 
 export function formatFloat(value: number | undefined): string {
@@ -698,6 +779,53 @@ function makeSection(title: string, sessions: ParsedSession[], tone: string): So
   return { sessions, stats: aggregateSessions(sessions), title, tone };
 }
 
+function createEmptyStats(): ReportStats {
+  return {
+    activeSeconds: 0,
+    assistantTurns: 0,
+    days: {},
+    efforts: {},
+    languages: {},
+    modelActiveSeconds: {},
+    modelTokens: {},
+    modelUsage: {},
+    repos: {},
+    requestCount: 0,
+    sessionCount: 0,
+    tokens: zeroTokens(),
+    userTurns: 0,
+  };
+}
+
+function emptySessionDistributions(): ReturnType<typeof sessionDistributions> {
+  return {
+    cachedInputPerActiveMinute: [],
+    contextSizePerRequest: [],
+    freshInputPerActiveMinute: [],
+    outputPerActiveMinute: [],
+    tokensPerActiveMinute: [],
+    totalTokensPerTurn: [],
+  };
+}
+
+function addSessionDistributions(
+  out: ReturnType<typeof sessionDistributions>,
+  activeSeconds: number,
+  tokens: TokenUsage,
+  requests: SessionRequest[],
+): void {
+  const minutes = Math.max(activeSeconds / 60, 1 / 60);
+  out.tokensPerActiveMinute.push(tokens.total / minutes);
+  out.freshInputPerActiveMinute.push(tokens.input / minutes);
+  out.cachedInputPerActiveMinute.push(tokens.cached / minutes);
+  out.outputPerActiveMinute.push(tokens.output / minutes);
+
+  for (const request of requests) {
+    out.contextSizePerRequest.push(request.contextSize);
+    out.totalTokensPerTurn.push(request.total);
+  }
+}
+
 function offsetIsoDay(now: Date, days: number): string {
   const value = new Date(now);
   value.setDate(value.getDate() - days);
@@ -748,17 +876,6 @@ function filterStateMap(
 ): Record<string, number> {
   return Object.fromEntries(
     Object.entries(values).filter(([key]) => predicate(splitStateKey(key).model)),
-  );
-}
-
-function mapValues(
-  values: Record<string, Record<string, number>>,
-  mapper: (value: Record<string, number>) => Record<string, number>,
-): Record<string, Record<string, number>> {
-  return Object.fromEntries(
-    Object.entries(values)
-      .map(([key, value]) => [key, mapper(value)] as const)
-      .filter(([, value]) => Object.keys(value).length > 0),
   );
 }
 

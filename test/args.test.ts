@@ -13,9 +13,9 @@ describe("parseArgs", () => {
   });
 
   it("parses explicit flags", () => {
-    expect(parseArgs(["--claude", "--scope", "7d", "--full", "--html", "report.html"])).toEqual({
+    expect(parseArgs(["--claude", "--scope", "1d", "--full", "--html", "report.html"])).toEqual({
       includeClaude: true,
-      scope: "7d",
+      scope: "1d",
       html: true,
       htmlPath: "report.html",
       help: false,

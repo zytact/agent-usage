@@ -2,12 +2,12 @@ import type { Scope } from "./report-core.js";
 
 export type ReportMode = "summary" | "full";
 
-export const usageText = `Usage: agent-usage [--claude] [--scope today|7d|30d] [--full] [--html [FILE]]
+export const usageText = `Usage: agent-usage [--claude] [--scope today|1d|7d|30d] [--full] [--html [FILE]]
 
 Options:
   (default)       Include Codex, opencode, and Pi usage from local stores
   --claude        Include Claude Code usage from ~/.claude/projects
-  --scope SCOPE   Use a range without prompting: today, 7d, 30d
+  --scope SCOPE   Use a range without prompting: today, 1d, 7d, 30d
   --full          Show full diagnostic report instead of default summary view
   --html [FILE]   Write a standalone HTML report. Omit FILE to decide later.
                   Use --html=- to print HTML to stdout.
@@ -25,7 +25,7 @@ export type CliOptions = {
 
 export class UsageError extends Error {}
 
-const validScopes = new Set<Scope>(["today", "7d", "30d"]);
+const validScopes = new Set<Scope>(["today", "1d", "7d", "30d"]);
 
 type ArgParseState = {
   index: number;

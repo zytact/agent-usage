@@ -56,9 +56,15 @@ export type ParsedSession = {
   userTurns: number;
 };
 
+export type DiscoveredSessionFile = {
+  mtimeMs: number;
+  path: string;
+  size: number;
+};
+
 export type SessionDiscovery = {
-  claudeFiles: string[];
-  codexFiles: string[];
+  claudeFiles: DiscoveredSessionFile[];
+  codexFiles: DiscoveredSessionFile[];
   opencodeDbPath: string;
-  piFiles: string[];
+  piFiles: DiscoveredSessionFile[];
 };

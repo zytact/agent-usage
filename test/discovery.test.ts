@@ -27,10 +27,28 @@ describe("discoverSessionFiles", () => {
     const discovered = await discoverSessionFiles(roots);
 
     expect(discovered).toEqual({
-      claudeFiles: [join(roots.claudeDir, "project-a", "three.jsonl")],
-      codexFiles: [join(roots.codexDir, "2026", "06", "14", "one.jsonl")],
+      claudeFiles: [
+        {
+          mtimeMs: discovered.claudeFiles[0]?.mtimeMs,
+          path: join(roots.claudeDir, "project-a", "three.jsonl"),
+          size: 0,
+        },
+      ],
+      codexFiles: [
+        {
+          mtimeMs: discovered.codexFiles[0]?.mtimeMs,
+          path: join(roots.codexDir, "2026", "06", "14", "one.jsonl"),
+          size: 0,
+        },
+      ],
       opencodeDbPath: join(roots.opencodeDir, "opencode.db"),
-      piFiles: [join(roots.piDir, "repo", "two.jsonl")],
+      piFiles: [
+        {
+          mtimeMs: discovered.piFiles[0]?.mtimeMs,
+          path: join(roots.piDir, "repo", "two.jsonl"),
+          size: 0,
+        },
+      ],
     });
   });
 });

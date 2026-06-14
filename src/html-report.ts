@@ -448,9 +448,12 @@ details.raw-details summary {
 .token-row.output i { background: var(--output); }
 .token-row.total i { background: var(--total); }
 .token-row.reasoning i { background: var(--accent); }
-.detail-grid {
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  margin-top: 1px;
+.detail-grid { margin-top: 1px; }
+.detail-grid-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.detail-grid-full {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .panel,
 .panel-wide {
@@ -458,12 +461,17 @@ details.raw-details summary {
   padding: 18px;
   background: var(--surface-2);
 }
-.panel { grid-column: span 4; }
-.panel-wide { grid-column: span 6; }
 .panel h4,
 .panel-wide h4 {
   margin: 0 0 12px;
   font-size: 0.92rem;
+}
+.detail-grid-summary .model-panel,
+.detail-grid-summary .daily-panel,
+.detail-grid-full .model-panel,
+.detail-grid-full .language-panel,
+.detail-grid-full .daily-panel {
+  grid-column: span 2;
 }
 .rank-list,
 .share-list,
@@ -537,9 +545,16 @@ details.raw-details summary {
   .summary-grid,
   .request-grid,
   .source-head dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .panel,
-  .panel-wide { grid-column: span 1; }
+  .detail-grid,
+  .detail-grid-summary,
+  .detail-grid-full { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .detail-grid-summary .model-panel,
+  .detail-grid-summary .daily-panel,
+  .detail-grid-full .model-panel,
+  .detail-grid-full .language-panel,
+  .detail-grid-full .daily-panel {
+    grid-column: span 1;
+  }
 }
 @media (max-width: 760px) {
   main { width: min(100% - 20px, 1380px); padding-top: 10px; }
@@ -549,6 +564,8 @@ details.raw-details summary {
   .source-head dl,
   .model-metrics,
   .detail-grid,
+  .detail-grid-summary,
+  .detail-grid-full,
   .dist-grid,
   .dist-values { grid-template-columns: 1fr; }
   .token-row { grid-template-columns: 74px minmax(0, 1fr) 62px; gap: 10px; }
@@ -582,8 +599,8 @@ details.raw-details summary {
   ${noData}
   ${renderOverviewCharts(report, pricing)}
   ${renderDailyStrip(report)}
-  ${renderRequestSummary("Combined request summary", report.requestSummarySessions, report.combined.stats, pricing, reportMode === "full")}
-  ${reportMode === "full" ? renderRequestSummary("GPT-only request summary", report.gptOnly.sessions, report.gptOnly.stats, pricing, true) : ""}
+  ${renderRequestSummary("Combined request summary", report.requestSummary, report.combined.stats, pricing, reportMode === "full")}
+  ${reportMode === "full" ? renderRequestSummary("GPT-only request summary", report.gptOnlyRequestSummary, report.gptOnly.stats, pricing, true) : ""}
   ${reportMode === "full" ? renderDailyBreakdown(report.dailyRows) : ""}
   ${visibleSections.map((section) => renderSourceSection(section, pricing, reportMode === "full")).join("\n")}
   <footer class="footer">
@@ -647,7 +664,7 @@ function renderSourceSection(
     ${htmlTokenBar("Reasoning", stats.tokens.reasoning, tokenTotal, "reasoning")}
     ${htmlTokenBar("Total", stats.tokens.total, tokenTotal, "total")}
   </section>
-  <div class="detail-grid">
+  <div class="detail-grid ${full ? "detail-grid-full" : "detail-grid-summary"}">
     ${renderModelsPanel(models)}
     ${renderShareList("Reasoning effort", effortRows, "No effort markers")}
     ${renderSimpleList("Top repos", repos)}
@@ -656,10 +673,11 @@ function renderSourceSection(
         ? renderSimpleList(
             "Languages",
             topEntries(stats.languages, 5).map(({ key, value }) => [key, String(value)] as const),
+            "language-panel",
           )
         : ""
     }
-    ${renderSimpleList("Daily active", days)}
+    ${renderSimpleList("Daily active", days, "daily-panel")}
   </div>
 </section>`;
 }
@@ -727,12 +745,12 @@ function renderOverviewCharts(report: BuiltReport, pricing: Record<string, Prici
 
 function renderRequestSummary(
   title: string,
-  sessions: BuiltReport["requestSummarySessions"],
+  source: BuiltReport["requestSummary"],
   stats: ReportStats,
   pricing: Record<string, PricingInfo>,
   full: boolean,
 ): string {
-  const data = buildRequestSummaryData(sessions, stats, pricing);
+  const data = buildRequestSummaryData(source, stats, pricing);
 
   return `<section class="data-panel">
   <h2>${escapeHtml(title)}</h2>
@@ -800,7 +818,8 @@ function renderDailyBreakdown(rows: DailyBreakdownRow[]): string {
 }
 
 function renderDailyStrip(report: BuiltReport): string {
-  const days = report.scope === "today" ? 1 : report.scope === "7d" ? 7 : 30;
+  const days =
+    report.scope === "today" ? 1 : report.scope === "1d" ? 2 : report.scope === "7d" ? 7 : 30;
   const start = new Date(report.generatedAt);
   start.setDate(start.getDate() - (days - 1));
 
@@ -973,7 +992,11 @@ function renderDailyVisuals(rows: DailyBreakdownRow[]): string {
 </div>`;
 }
 
-function renderSimpleList(title: string, rows: ReadonlyArray<readonly [string, string]>): string {
+function renderSimpleList(
+  title: string,
+  rows: ReadonlyArray<readonly [string, string]>,
+  panelClass?: string,
+): string {
   const body =
     rows.length === 0
       ? '<li class="empty">None</li>'
@@ -983,7 +1006,7 @@ function renderSimpleList(title: string, rows: ReadonlyArray<readonly [string, s
               `<li><span title="${escapeHtml(name)}">${escapeHtml(name)}</span><b>${escapeHtml(value)}</b></li>`,
           )
           .join("");
-  return `<section class="panel"><h4>${escapeHtml(title)}</h4><ul class="rank-list">${body}</ul></section>`;
+  return `<section class="panel ${panelClass ?? ""}"><h4>${escapeHtml(title)}</h4><ul class="rank-list">${body}</ul></section>`;
 }
 
 function renderShareList(

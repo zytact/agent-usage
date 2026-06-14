@@ -34,6 +34,7 @@ describe("report-core", () => {
   it("computes scope starts", () => {
     const now = new Date(2026, 5, 14, 18, 45, 0, 0);
     expect(scopeStart("today", now).getTime()).toBe(new Date(2026, 5, 14, 0, 0, 0, 0).getTime());
+    expect(scopeStart("1d", now).getTime()).toBe(new Date(2026, 5, 13, 18, 45, 0, 0).getTime());
     expect(scopeStart("7d", now).getTime()).toBe(new Date(2026, 5, 8, 0, 0, 0, 0).getTime());
     expect(scopeStart("30d", now).getTime()).toBe(new Date(2026, 4, 16, 0, 0, 0, 0).getTime());
   });
