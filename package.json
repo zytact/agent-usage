@@ -1,0 +1,30 @@
+{
+  "name": "agent-usage",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local agent usage report CLI",
+  "keywords": [],
+  "license": "ISC",
+  "bin": {
+    "agent-usage": "./dist/cli.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "vp pack",
+    "check": "vp check",
+    "test": "vp test run",
+    "prepare": "vp config"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.10.0",
+    "sql.js": "^1.14.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "@types/sql.js": "^1.4.11",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vite-plus": "catalog:"
+  },
+  "packageManager": "pnpm@11.6.0"
+}

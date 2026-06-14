@@ -1,0 +1,14 @@
+[
+  {
+    "session_id": "ses_13fbbf5b1ffeGCb57Tzqf13iHK",
+    "time_created": 1781342195000,
+    "time_updated": 1781342196000,
+    "data": "{\"role\":\"user\",\"variant\":\"medium\",\"path\":{\"cwd\":\"/home/arnab/Projects/scripts\",\"root\":\"/home/arnab/Projects/scripts\"},\"time\":{\"created\":1781342195000,\"completed\":1781342196000},\"content\":\"Explain websearch and price-scraper.py\"}"
+  },
+  {
+    "session_id": "ses_13fbbf5b1ffeGCb57Tzqf13iHK",
+    "time_created": 1781342200243,
+    "time_updated": 1781342211157,
+    "data": "{\"parentID\":\"msg_ec0441227001I5OgnW71byCYcs\",\"role\":\"assistant\",\"mode\":\"build\",\"agent\":\"build\",\"variant\":\"medium\",\"path\":{\"cwd\":\"/home/arnab/Projects/scripts\",\"root\":\"/home/arnab/Projects/scripts\"},\"cost\":0,\"tokens\":{\"total\":14438,\"input\":2772,\"output\":173,\"reasoning\":997,\"cache\":{\"write\":0,\"read\":10496}},\"modelID\":\"deepseek-v4-flash-free\",\"providerID\":\"opencode\",\"time\":{\"created\":1781342200243,\"completed\":1781342211155},\"finish\":\"stop\"}"
+  }
+]

@@ -1,0 +1,30 @@
+[
+  {
+    "id": "ses_13fbbf5b1ffeGCb57Tzqf13iHK",
+    "directory": "/home/arnab/Projects/scripts",
+    "title": "T3 Code c84a923c-a09a-4767-9929-745f7c8cbb6e",
+    "time_created": 1781342145103,
+    "time_updated": 1781342211166,
+    "model": "{\"id\":\"deepseek-v4-flash-free\",\"providerID\":\"opencode\",\"variant\":\"medium\"}",
+    "tokens_input": 13117,
+    "tokens_output": 353,
+    "tokens_reasoning": 1046,
+    "tokens_cache_read": 10496,
+    "tokens_cache_write": 0,
+    "metadata": null
+  },
+  {
+    "id": "ses_fallback_only",
+    "directory": "/home/arnab/Projects/agent-usage",
+    "title": "Regular session",
+    "time_created": 1781343000000,
+    "time_updated": 1781343005000,
+    "model": "{\"id\":\"qwen-coder\",\"providerID\":\"opencode\",\"variant\":\"low\"}",
+    "tokens_input": 50,
+    "tokens_output": 25,
+    "tokens_reasoning": 10,
+    "tokens_cache_read": 5,
+    "tokens_cache_write": 2,
+    "metadata": null
+  }
+]
