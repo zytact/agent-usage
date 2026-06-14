@@ -1,3 +1,4 @@
+import type { ReportMode } from "./args.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
 import {
   formatFloat,
@@ -19,6 +20,7 @@ import {
 export function renderTerminalReport(
   report: BuiltReport,
   pricing: Record<string, PricingInfo>,
+  reportMode: ReportMode = "summary",
 ): string {
   const lines: string[] = [];
   const combinedCost = formatUsd(estimateStatsTotalCost(report.combined.stats, pricing));
@@ -28,34 +30,42 @@ export function renderTerminalReport(
   lines.push(
     `ACTIVE ${humanSeconds(report.combined.stats.activeSeconds)}  SESSIONS ${report.combined.stats.sessionCount}  TOKENS ${compactTokens(report.combined.stats.tokens.total)}  COST ${combinedCost}`,
   );
-  lines.push(
-    "Legend: input=fresh prompt, cached=cache reads, cache write=cache creation, output=visible output, reasoning=hidden/thinking output, total=provider total when present.",
-  );
   lines.push("");
 
-  lines.push(
-    ...renderRequestSummary(
-      "Combined request summary",
-      report.requestSummarySessions,
-      report.combined.stats,
-      pricing,
-    ),
-  );
-  lines.push("");
-  lines.push(
-    ...renderRequestSummary(
-      "GPT-only request summary",
-      report.gptOnly.sessions,
-      report.gptOnly.stats,
-      pricing,
-    ),
-  );
-  lines.push("");
-  lines.push(...renderDailyBreakdown(report.dailyRows));
-  lines.push("");
+  if (reportMode === "full") {
+    lines.push(
+      "Legend: input=fresh prompt, cached=cache reads, cache write=cache creation, output=visible output, reasoning=hidden/thinking output, total=provider total when present.",
+    );
+    lines.push("");
+    lines.push(
+      ...renderRequestSummary(
+        "Combined request summary",
+        report.requestSummarySessions,
+        report.combined.stats,
+        pricing,
+        true,
+      ),
+    );
+    lines.push("");
+    lines.push(
+      ...renderRequestSummary(
+        "GPT-only request summary",
+        report.gptOnly.sessions,
+        report.gptOnly.stats,
+        pricing,
+        true,
+      ),
+    );
+    lines.push("");
+    lines.push(...renderDailyBreakdown(report.dailyRows));
+    lines.push("");
 
-  for (const section of report.sections) {
-    lines.push(...renderSection(section, pricing));
+    for (const section of report.sections) {
+      lines.push(...renderSection(section, pricing, true));
+      lines.push("");
+    }
+  } else {
+    lines.push(...renderSummary(report, pricing));
     lines.push("");
   }
 
@@ -78,14 +88,45 @@ export function renderTerminalReport(
   }
   lines.push(
     report.attributionOverages.length === 0
-      ? "  Attribution check  model/effort-attributed active time stays within deduped parent active time."
+      ? "  Attribution  ok"
       : `  Attribution warning  ${report.attributionOverages.length} sessions with attributed time > deduped parent active time`,
   );
 
   return `${lines.join("\n")}\n`;
 }
 
-function renderSection(section: SourceSection, pricing: Record<string, PricingInfo>): string[] {
+function renderSummary(report: BuiltReport, pricing: Record<string, PricingInfo>): string[] {
+  const lines = [
+    ...renderRequestSummary(
+      "Summary",
+      report.requestSummarySessions,
+      report.combined.stats,
+      pricing,
+      false,
+    ),
+    ...renderSourceShares(report),
+    ...renderModelList(modelRows(report.combined.stats, pricing, 6)),
+    ...renderTokenBreakdown(report.combined.stats),
+    ...renderTopList(
+      "Top repos",
+      topEntries(report.combined.stats.repos, 5).map(({ key, value }) => [
+        key,
+        humanSeconds(value),
+      ]),
+    ),
+  ];
+
+  for (const section of report.sections.filter((item) => isPrimarySection(item.title))) {
+    lines.push(...renderSection(section, pricing, false));
+  }
+  return lines;
+}
+
+function renderSection(
+  section: SourceSection,
+  pricing: Record<string, PricingInfo>,
+  full: boolean,
+): string[] {
   const { stats, title } = section;
   const lines = [
     title.toUpperCase(),
@@ -107,12 +148,6 @@ function renderSection(section: SourceSection, pricing: Record<string, PricingIn
       topEntries(stats.repos, 4).map(({ key, value }) => [key, humanSeconds(value)]),
     ),
   );
-  lines.push(
-    ...renderTopList(
-      "Languages",
-      topEntries(stats.languages, 5).map(({ key, value }) => [key, String(value)]),
-    ),
-  );
   lines.push(...renderModelList(modelRows(stats, pricing, 5)));
   lines.push(
     ...renderTopList(
@@ -120,7 +155,37 @@ function renderSection(section: SourceSection, pricing: Record<string, PricingIn
       topEntries(stats.efforts, 5).map(({ key, value }) => [key, String(value)]),
     ),
   );
+  if (full) {
+    lines.push(
+      ...renderTopList(
+        "Languages",
+        topEntries(stats.languages, 5).map(({ key, value }) => [key, String(value)]),
+      ),
+    );
+  }
   return lines;
+}
+
+function renderSourceShares(report: BuiltReport): string[] {
+  return renderTopList(
+    "Source share",
+    report.sections
+      .filter((section) => isPrimarySection(section.title))
+      .map(
+        (section) => [section.title, humanSeconds(section.stats.activeSeconds)] as [string, string],
+      ),
+  );
+}
+
+function renderTokenBreakdown(stats: ReportStats): string[] {
+  return [
+    "  Token mix",
+    `    • input · ${compactTokens(stats.tokens.input)}`,
+    `    • cached · ${compactTokens(stats.tokens.cached)}`,
+    `    • output · ${compactTokens(stats.tokens.output)}`,
+    `    • reasoning · ${compactTokens(stats.tokens.reasoning)}`,
+    `    • total · ${compactTokens(stats.tokens.total)}`,
+  ];
 }
 
 function renderTopList(title: string, rows: Array<[string, string]>): string[] {
@@ -154,6 +219,7 @@ function renderRequestSummary(
   sessions: BuiltReport["requestSummarySessions"],
   stats: ReportStats,
   pricing: Record<string, PricingInfo>,
+  full: boolean,
 ): string[] {
   const requests = sessions.flatMap((session) => session.requests);
   const hours = Math.max(stats.activeSeconds / 3600, 1 / 3600);
@@ -173,19 +239,39 @@ function renderRequestSummary(
     `  Peak context    ${formatContext(context.peak)}`,
     `  Context growth  ${formatContext(context.growth)}`,
     `  Cache read ratio ${cache.cacheReadRatio === undefined ? "n/a" : `${(cache.cacheReadRatio * 100).toFixed(1)}%`}`,
-    `  Weighted input eq/req  ${formatFloat(cache.weightedInputEqPerRequest)}`,
   ];
 
-  lines.push(...renderDistribution("Tokens / active minute", dists.tokensPerActiveMinute));
-  lines.push(...renderDistribution("Fresh input / active minute", dists.freshInputPerActiveMinute));
-  lines.push(
-    ...renderDistribution("Cached input / active minute", dists.cachedInputPerActiveMinute),
-  );
-  lines.push(...renderDistribution("Output / active minute", dists.outputPerActiveMinute));
-  lines.push(...renderDistribution("Total tokens / turn", dists.totalTokensPerTurn));
-  lines.push(...renderDistribution("Context size / request", dists.contextSizePerRequest));
+  if (full) {
+    lines.push(`  Weighted input eq/req  ${formatFloat(cache.weightedInputEqPerRequest)}`);
+    lines.push(...renderDistribution("Tokens / active minute", dists.tokensPerActiveMinute));
+    lines.push(
+      ...renderDistribution("Fresh input / active minute", dists.freshInputPerActiveMinute),
+    );
+    lines.push(
+      ...renderDistribution("Cached input / active minute", dists.cachedInputPerActiveMinute),
+    );
+    lines.push(...renderDistribution("Output / active minute", dists.outputPerActiveMinute));
+    lines.push(...renderDistribution("Total tokens / turn", dists.totalTokensPerTurn));
+    lines.push(...renderDistribution("Context size / request", dists.contextSizePerRequest));
+  } else {
+    lines.push(...renderCompactDistribution("Tokens / active minute", dists.tokensPerActiveMinute));
+    lines.push(...renderCompactDistribution("Context size / request", dists.contextSizePerRequest));
+  }
 
   return lines;
+}
+
+function renderCompactDistribution(title: string, values: number[]): string[] {
+  const summary = summarizeDistribution(values);
+  return [
+    `  ${title}`,
+    `    median ${formatFloat(summary.median)}`,
+    `    p90    ${formatFloat(summary.p90)}`,
+  ];
+}
+
+function isPrimarySection(title: string): boolean {
+  return ["Codex", "opencode", "Claude Code", "Pi"].includes(title);
 }
 
 function renderDistribution(title: string, values: number[]): string[] {

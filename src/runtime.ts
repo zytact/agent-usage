@@ -79,6 +79,7 @@ async function renderHtmlOnce(
   const html = renderHtmlReport(
     buildReport(sessions, scope, options.includeClaude, deps.now()),
     pricing,
+    options.reportMode,
   );
 
   if (outputPath === "-") {
@@ -108,7 +109,13 @@ async function runInteractiveReport(
       ["Open HTML report", "Change range", "Refresh", "Exit"],
       "Choose an action",
     );
-    const nextScope = await handleInteractiveAction(action, deps, report, pricing);
+    const nextScope = await handleInteractiveAction(
+      action,
+      deps,
+      report,
+      pricing,
+      options.reportMode,
+    );
     if (nextScope === "exit") {
       return 0;
     }
@@ -125,7 +132,7 @@ function writeTerminalReport(
 ) {
   deps.clearScreen();
   const report = buildReport(sessions, scope, options.includeClaude, deps.now());
-  deps.stdout.write(`${renderTerminalReport(report, pricing)}\n`);
+  deps.stdout.write(`${renderTerminalReport(report, pricing, options.reportMode)}\n`);
   return report;
 }
 
@@ -134,6 +141,7 @@ async function handleInteractiveAction(
   deps: RuntimeDeps,
   report: ReturnType<typeof buildReport>,
   pricing: Record<string, PricingInfo>,
+  reportMode: CliOptions["reportMode"],
 ): Promise<Scope | "exit" | undefined> {
   if (!action || action === "Exit") {
     return "exit";
@@ -145,7 +153,7 @@ async function handleInteractiveAction(
     return changeScope(deps);
   }
   if (action === "Open HTML report") {
-    await openHtmlReport(deps, report, pricing);
+    await openHtmlReport(deps, report, pricing, reportMode);
   }
   return undefined;
 }
@@ -159,9 +167,10 @@ async function openHtmlReport(
   deps: RuntimeDeps,
   report: ReturnType<typeof buildReport>,
   pricing: Record<string, PricingInfo>,
+  reportMode: CliOptions["reportMode"],
 ): Promise<void> {
   const outputPath = await resolveHtmlPath();
-  await writeHtmlReport(outputPath, renderHtmlReport(report, pricing));
+  await writeHtmlReport(outputPath, renderHtmlReport(report, pricing, reportMode));
   deps.stdout.write(`HTML report: ${outputPath}\n`);
   await deps.openPath(outputPath);
 }

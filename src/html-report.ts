@@ -1,5 +1,6 @@
 import { writeFile } from "node:fs/promises";
 
+import type { ReportMode } from "./args.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
 import {
   estimateStatsTotalCost,
@@ -22,6 +23,7 @@ import {
 export function renderHtmlReport(
   report: BuiltReport,
   pricing: Record<string, PricingInfo>,
+  reportMode: ReportMode = "summary",
 ): string {
   const combinedCost = estimateStatsTotalCost(report.combined.stats, pricing);
   const noData =
@@ -31,6 +33,9 @@ export function renderHtmlReport(
   const sourcesNote = report.includeClaude
     ? "Codex: ~/.codex/sessions · opencode: ~/.local/share/opencode/opencode.db · Pi: ~/.pi/agent/sessions · Claude Code: ~/.claude/projects"
     : "Codex: ~/.codex/sessions · opencode: ~/.local/share/opencode/opencode.db · Pi: ~/.pi/agent/sessions";
+  const visibleSections = report.sections.filter((section) =>
+    reportMode === "full" ? true : isPrimarySection(section.title),
+  );
 
   return `<!doctype html>
 <html lang="en">
@@ -567,6 +572,7 @@ details.raw-details summary {
       <div><p>Range</p><b>${escapeHtml(report.scopeTitle)}</b></div>
       <div><p>Generated</p><b>${escapeHtml(formatTimestamp(report.generatedAt))}</b></div>
       <div><p>Sources</p><b>${report.sourceCount} local stores</b></div>
+      <div><p>Mode</p><b>${reportMode === "full" ? "Full" : "Summary"}</b></div>
     </aside>
   </header>
   <dl class="summary-grid" aria-label="Combined summary">
@@ -578,18 +584,18 @@ details.raw-details summary {
   ${noData}
   ${renderOverviewCharts(report, pricing)}
   ${renderDailyStrip(report)}
-  ${renderRequestSummary("Combined request summary", report.requestSummarySessions, report.combined.stats, pricing)}
-  ${renderRequestSummary("GPT-only request summary", report.gptOnly.sessions, report.gptOnly.stats, pricing)}
-  ${renderDailyBreakdown(report.dailyRows)}
-  ${report.sections.map((section) => renderSourceSection(section, pricing)).join("\n")}
+  ${renderRequestSummary("Combined request summary", report.requestSummarySessions, report.combined.stats, pricing, reportMode === "full")}
+  ${reportMode === "full" ? renderRequestSummary("GPT-only request summary", report.gptOnly.sessions, report.gptOnly.stats, pricing, true) : ""}
+  ${reportMode === "full" ? renderDailyBreakdown(report.dailyRows) : ""}
+  ${visibleSections.map((section) => renderSourceSection(section, pricing, reportMode === "full")).join("\n")}
   <footer class="footer">
     <p><strong>Data sources:</strong> ${escapeHtml(sourcesNote)}</p>
     <p>T3 Code sessions are detected from Codex session metadata: <code>originator=t3code_desktop</code>, and from opencode session titles starting <code>T3 Code</code>.</p>
-    <p>${escapeHtml(
+    ${
       report.attributionOverages.length === 0
-        ? "Attribution check passed: model and effort time stays within deduped parent active time."
-        : `Attribution warning: ${report.attributionOverages.length} sessions exceeded deduped parent active time.`,
-    )}</p>
+        ? ""
+        : `<p>${escapeHtml(`Attribution warning: ${report.attributionOverages.length} sessions exceeded deduped parent active time.`)}</p>`
+    }
     <p>Cost is an estimate. Missing pricing data appears as n/a. This file is self-contained and reads no network resources.</p>
   </footer>
 </main>
@@ -601,13 +607,14 @@ export async function writeHtmlReport(path: string, html: string): Promise<void>
   await writeFile(path, html, "utf8");
 }
 
-function renderSourceSection(section: SourceSection, pricing: Record<string, PricingInfo>): string {
+function renderSourceSection(
+  section: SourceSection,
+  pricing: Record<string, PricingInfo>,
+  full: boolean,
+): string {
   const stats = section.stats;
   const repos = topEntries(stats.repos, 5).map(
     ({ key, value }) => [key, humanSeconds(value)] as const,
-  );
-  const langs = topEntries(stats.languages, 5).map(
-    ({ key, value }) => [key, String(value)] as const,
   );
   const days = Object.entries(stats.days)
     .sort((a, b) => b[0].localeCompare(a[0]))
@@ -646,7 +653,14 @@ function renderSourceSection(section: SourceSection, pricing: Record<string, Pri
     ${renderModelsPanel(models)}
     ${renderShareList("Reasoning effort", effortRows, "No effort markers")}
     ${renderSimpleList("Top repos", repos)}
-    ${renderSimpleList("Languages", langs)}
+    ${
+      full
+        ? renderSimpleList(
+            "Languages",
+            topEntries(stats.languages, 5).map(({ key, value }) => [key, String(value)] as const),
+          )
+        : ""
+    }
     ${renderSimpleList("Daily active", days)}
   </div>
 </section>`;
@@ -718,6 +732,7 @@ function renderRequestSummary(
   sessions: BuiltReport["requestSummarySessions"],
   stats: ReportStats,
   pricing: Record<string, PricingInfo>,
+  full: boolean,
 ): string {
   const requests = sessions.flatMap((session) => session.requests);
   const hours = Math.max(stats.activeSeconds / 3600, 1 / 3600);
@@ -751,9 +766,11 @@ function renderRequestSummary(
     ${htmlMetric("Peak context", context.peak === undefined ? "n/a" : compactTokens(Math.round(context.peak)))}
     ${htmlMetric("Context growth", context.growth === undefined ? "n/a" : compactTokens(Math.round(context.growth)))}
     ${htmlMetric("Cache read ratio", cache.cacheReadRatio === undefined ? "n/a" : `${(cache.cacheReadRatio * 100).toFixed(1)}%`)}
-    ${htmlMetric("Weighted input eq/req", formatFloat(cache.weightedInputEqPerRequest))}
+    ${full ? htmlMetric("Weighted input eq/req", formatFloat(cache.weightedInputEqPerRequest)) : htmlMetric("Tokens / active min", compactDistributionValue(dists.tokensPerActiveMinute))}
   </div>
-  ${renderDistributionCards(distRows)}
+  ${
+    full
+      ? `${renderDistributionCards(distRows)}
   <details class="raw-details">
     <summary>Raw percentile table</summary>
     <table class="data-table">
@@ -765,7 +782,9 @@ function renderRequestSummary(
         )
         .join("")}</tbody>
     </table>
-  </details>
+  </details>`
+      : renderCompactDistributionCards(distRows)
+  }
 </section>`;
 }
 
@@ -1069,6 +1088,38 @@ function formatTimestamp(value: Date): string {
     month: "short",
     year: "numeric",
   });
+}
+
+function renderCompactDistributionCards(
+  rows: Array<{ label: string; summary: ReturnType<typeof summarizeDistribution> }>,
+): string {
+  return `<div class="dist-grid">
+  ${rows
+    .filter(
+      (row) => row.label === "Tokens / active minute" || row.label === "Context size / request",
+    )
+    .map(
+      (row) => `<article class="dist-card">
+    <h3>${escapeHtml(row.label)}</h3>
+    <div class="dist-values">
+      <div><dt>Median</dt><dd>${escapeHtml(formatFloat(row.summary.median))}</dd></div>
+      <div><dt>P90</dt><dd>${escapeHtml(formatFloat(row.summary.p90))}</dd></div>
+      <div><dt>Mean</dt><dd>${escapeHtml(formatFloat(row.summary.mean))}</dd></div>
+      <div><dt>Max</dt><dd>${escapeHtml(formatFloat(row.summary.max))}</dd></div>
+    </div>
+  </article>`,
+    )
+    .join("\n")}
+</div>`;
+}
+
+function compactDistributionValue(values: number[]): string {
+  const summary = summarizeDistribution(values);
+  return `${formatFloat(summary.median)} med · ${formatFloat(summary.p90)} p90`;
+}
+
+function isPrimarySection(title: string): boolean {
+  return ["Codex", "opencode", "Claude Code", "Pi"].includes(title);
 }
 
 function escapeHtml(value: string): string {

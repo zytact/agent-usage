@@ -28,6 +28,7 @@ describe("runCli", () => {
         html: true,
         htmlPath: "-",
         includeClaude: false,
+        reportMode: "summary",
         scope: "today",
       },
       {
@@ -59,6 +60,7 @@ describe("runCli", () => {
         html: true,
         htmlPath: outputPath,
         includeClaude: false,
+        reportMode: "summary",
         scope: "today",
       },
       {
