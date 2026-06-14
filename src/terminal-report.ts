@@ -1,10 +1,18 @@
 import { compactTokens, humanSeconds } from "./report-core.js";
 import {
+  formatFloat,
   estimateStatsTotalCost,
   formatUsd,
+  modelRows,
+  sessionDistributions,
+  summarizeDistribution,
+  summarizeRequestCache,
+  summarizeRequestContexts,
   topEntries,
   type BuiltReport,
+  type DailyBreakdownRow,
   type PricingInfo,
+  type ReportStats,
   type SourceSection,
 } from "./report-data.js";
 
@@ -20,6 +28,30 @@ export function renderTerminalReport(
   lines.push(
     `ACTIVE ${humanSeconds(report.combined.stats.activeSeconds)}  SESSIONS ${report.combined.stats.sessionCount}  TOKENS ${compactTokens(report.combined.stats.tokens.total)}  COST ${combinedCost}`,
   );
+  lines.push(
+    "Legend: input=fresh prompt, cached=cache reads, cache write=cache creation, output=visible output, reasoning=hidden/thinking output, total=provider total when present.",
+  );
+  lines.push("");
+
+  lines.push(
+    ...renderRequestSummary(
+      "Combined request summary",
+      report.requestSummarySessions,
+      report.combined.stats,
+      pricing,
+    ),
+  );
+  lines.push("");
+  lines.push(
+    ...renderRequestSummary(
+      "GPT-only request summary",
+      report.gptOnly.sessions,
+      report.gptOnly.stats,
+      pricing,
+    ),
+  );
+  lines.push("");
+  lines.push(...renderDailyBreakdown(report.dailyRows));
   lines.push("");
 
   for (const section of report.sections) {
@@ -81,12 +113,7 @@ function renderSection(section: SourceSection, pricing: Record<string, PricingIn
       topEntries(stats.languages, 5).map(({ key, value }) => [key, String(value)]),
     ),
   );
-  lines.push(
-    ...renderTopList(
-      "Models",
-      topEntries(stats.modelUsage, 5).map(({ key, value }) => [key, String(value)]),
-    ),
-  );
+  lines.push(...renderModelList(modelRows(stats, pricing, 5)));
   lines.push(
     ...renderTopList(
       "Reasoning effort",
@@ -106,6 +133,101 @@ function renderTopList(title: string, rows: Array<[string, string]>): string[] {
     lines.push(`    • ${name} · ${value}`);
   }
   return lines;
+}
+
+function renderModelList(rows: ReturnType<typeof modelRows>): string[] {
+  const lines = ["  Models"];
+  if (rows.length === 0) {
+    lines.push("    none");
+    return lines;
+  }
+  for (const row of rows) {
+    lines.push(
+      `    - ${row.key} · ${row.pct.toFixed(0)}% · in ${compactTokens(row.tokenInfo.input)} (${row.inputRate}) · cached ${compactTokens(row.tokenInfo.cached)} · write ${compactTokens(row.tokenInfo.cacheWrite)} · out ${compactTokens(row.tokenInfo.output)} (${row.outputRate}) · reason ${compactTokens(row.tokenInfo.reasoning)} · est ${row.cost}`,
+    );
+  }
+  return lines;
+}
+
+function renderRequestSummary(
+  title: string,
+  sessions: BuiltReport["requestSummarySessions"],
+  stats: ReportStats,
+  pricing: Record<string, PricingInfo>,
+): string[] {
+  const requests = sessions.flatMap((session) => session.requests);
+  const hours = Math.max(stats.activeSeconds / 3600, 1 / 3600);
+  const context = summarizeRequestContexts(requests);
+  const cache = summarizeRequestCache(requests, pricing);
+  const dists = sessionDistributions(sessions);
+  const lines = [
+    title.toUpperCase(),
+    `  Model requests  ${requests.length}`,
+    `  User turns      ${stats.userTurns}`,
+    `  Assistant turns ${stats.assistantTurns}`,
+    `  Requests/hour   ${formatFloat(requests.length / hours)}`,
+    `  Tokens/request  ${formatFloat(requests.length > 0 ? stats.tokens.total / requests.length : undefined)}`,
+    `  Output/request  ${formatFloat(requests.length > 0 ? stats.tokens.output / requests.length : undefined)}`,
+    `  Avg context     ${formatContext(context.average)}`,
+    `  Median context  ${formatContext(context.median)}`,
+    `  Peak context    ${formatContext(context.peak)}`,
+    `  Context growth  ${formatContext(context.growth)}`,
+    `  Cache read ratio ${cache.cacheReadRatio === undefined ? "n/a" : `${(cache.cacheReadRatio * 100).toFixed(1)}%`}`,
+    `  Weighted input eq/req  ${formatFloat(cache.weightedInputEqPerRequest)}`,
+  ];
+
+  lines.push(...renderDistribution("Tokens / active minute", dists.tokensPerActiveMinute));
+  lines.push(...renderDistribution("Fresh input / active minute", dists.freshInputPerActiveMinute));
+  lines.push(
+    ...renderDistribution("Cached input / active minute", dists.cachedInputPerActiveMinute),
+  );
+  lines.push(...renderDistribution("Output / active minute", dists.outputPerActiveMinute));
+  lines.push(...renderDistribution("Total tokens / turn", dists.totalTokensPerTurn));
+  lines.push(...renderDistribution("Context size / request", dists.contextSizePerRequest));
+
+  return lines;
+}
+
+function renderDistribution(title: string, values: number[]): string[] {
+  const summary = summarizeDistribution(values);
+  return [
+    `  ${title}`,
+    `    median ${formatFloat(summary.median)}`,
+    `    mean   ${formatFloat(summary.mean)}`,
+    `    p75    ${formatFloat(summary.p75)}`,
+    `    p90    ${formatFloat(summary.p90)}`,
+    `    max    ${formatFloat(summary.max)}`,
+  ];
+}
+
+function renderDailyBreakdown(rows: DailyBreakdownRow[]): string[] {
+  const lines = ["DAILY MODEL BREAKDOWN"];
+  if (rows.length === 0) {
+    lines.push("  No request-level rows in this range.");
+    return lines;
+  }
+
+  lines.push(
+    "  date       harness  sub        model                    effort   active  sess  req  fresh  cached  output  reason",
+  );
+  for (const row of rows.slice(0, 20)) {
+    lines.push(
+      `  ${row.date} ${pad(row.harness, 8)} ${pad(row.subharness, 10)} ${pad(row.model, 24)} ${pad(row.effort, 8)} ${padLeft(humanSeconds(row.activeSeconds), 6)} ${padLeft(String(row.sessions), 4)} ${padLeft(String(row.requests), 4)} ${padLeft(compactTokens(row.input), 6)} ${padLeft(compactTokens(row.cached), 7)} ${padLeft(compactTokens(row.output), 7)} ${padLeft(compactTokens(row.reasoning), 7)}`,
+    );
+  }
+  return lines;
+}
+
+function formatContext(value: number | undefined): string {
+  return value === undefined ? "n/a" : compactTokens(Math.round(value));
+}
+
+function pad(value: string, width: number): string {
+  return value.slice(0, width).padEnd(width, " ");
+}
+
+function padLeft(value: string, width: number): string {
+  return value.slice(0, width).padStart(width, " ");
 }
 
 function formatShortDate(value: Date): string {

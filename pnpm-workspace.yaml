@@ -1,6 +1,7 @@
 allowBuilds:
   better-sqlite3: true
   esbuild: true
+  usocket: set this to true or false
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest

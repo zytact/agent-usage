@@ -428,13 +428,24 @@ export type PricingInfo = {
   prompt?: number;
 };
 
-export function estimateCost(
+export type CostBreakdown = {
+  cacheWrite: number;
+  cached: number;
+  input: number;
+  output: number;
+  total: number;
+};
+
+export function resolveModelId(modelName: string): string {
+  return MODEL_ALIASES[modelName] ?? modelName;
+}
+
+export function estimateCostBreakdown(
   modelName: string,
   tokenInfo: ModelTokenUsage | TokenUsage,
   pricing: Record<string, PricingInfo>,
-): number | undefined {
-  const modelId = MODEL_ALIASES[modelName] ?? modelName;
-  const rates = pricing[modelId];
+): CostBreakdown | undefined {
+  const rates = pricing[resolveModelId(modelName)];
   if (!rates) {
     return undefined;
   }
@@ -445,13 +456,26 @@ export function estimateCost(
   const cacheWrite = rates.cacheWrite ?? prompt;
   const billableOutput =
     "billableOutput" in tokenInfo ? tokenInfo.billableOutput : tokenInfo.output;
+  const input = tokenInfo.input * prompt;
+  const cached = tokenInfo.cached * cacheRead;
+  const write = tokenInfo.cacheWrite * cacheWrite;
+  const output = billableOutput * completion;
 
-  return (
-    tokenInfo.input * prompt +
-    tokenInfo.cached * cacheRead +
-    tokenInfo.cacheWrite * cacheWrite +
-    billableOutput * completion
-  );
+  return {
+    cacheWrite: write,
+    cached,
+    input,
+    output,
+    total: input + cached + write + output,
+  };
+}
+
+export function estimateCost(
+  modelName: string,
+  tokenInfo: ModelTokenUsage | TokenUsage,
+  pricing: Record<string, PricingInfo>,
+): number | undefined {
+  return estimateCostBreakdown(modelName, tokenInfo, pricing)?.total;
 }
 
 export function estimateStatsTotalCost(
@@ -598,7 +622,7 @@ export function modelRows(
         reasoning: 0,
         total: 0,
       } satisfies ModelTokenUsage);
-    const modelId = MODEL_ALIASES[key] ?? key;
+    const modelId = resolveModelId(key);
     const rates = pricing[modelId] ?? {};
     return {
       cost: formatUsd(estimateCost(key, tokenInfo, pricing)),
@@ -702,7 +726,7 @@ function weightedInputEquivalent(
   request: SessionRequest,
   pricing: Record<string, PricingInfo>,
 ): number | undefined {
-  const rates = pricing[MODEL_ALIASES[request.model] ?? request.model];
+  const rates = pricing[resolveModelId(request.model)];
   if (!rates?.prompt) {
     return undefined;
   }
@@ -714,6 +738,13 @@ function weightedInputEquivalent(
   return (
     request.input + request.cacheRead * cacheReadWeight + request.cacheWrite * cacheWriteWeight
   );
+}
+
+export function estimateWeightedInputEquivalent(
+  request: SessionRequest,
+  pricing: Record<string, PricingInfo>,
+): number | undefined {
+  return weightedInputEquivalent(request, pricing);
 }
 
 function compareRows(left: string[], right: string[]): number {
