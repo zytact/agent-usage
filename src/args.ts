@@ -23,66 +23,73 @@ export class UsageError extends Error {}
 
 const validScopes = new Set<Scope>(["today", "7d", "30d"]);
 
+type ArgParseState = {
+  index: number;
+  options: CliOptions;
+};
+
 export function parseArgs(argv: string[]): CliOptions {
-  const options: CliOptions = {
-    includeClaude: false,
-    html: false,
-    help: false,
+  const state: ArgParseState = {
+    index: 0,
+    options: { includeClaude: false, html: false, help: false },
   };
 
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-
-    if (arg === "--claude") {
-      options.includeClaude = true;
-      continue;
-    }
-
-    if (arg === "--scope") {
-      const value = argv[index + 1];
-      if (!value) {
-        throw new UsageError("Missing value for --scope");
-      }
-      if (!validScopes.has(value as Scope)) {
-        throw new UsageError(`Invalid --scope: ${value}`);
-      }
-      options.scope = value as Scope;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith("--scope=")) {
-      const value = arg.slice("--scope=".length);
-      if (!validScopes.has(value as Scope)) {
-        throw new UsageError(`Invalid --scope: ${value}`);
-      }
-      options.scope = value as Scope;
-      continue;
-    }
-
-    if (arg === "--html") {
-      options.html = true;
-      const value = argv[index + 1];
-      if (value && !value.startsWith("--")) {
-        options.htmlPath = value;
-        index += 1;
-      }
-      continue;
-    }
-
-    if (arg.startsWith("--html=")) {
-      options.html = true;
-      options.htmlPath = arg.slice("--html=".length);
-      continue;
-    }
-
-    if (arg === "-h" || arg === "--help") {
-      options.help = true;
-      continue;
-    }
-
-    throw new UsageError(`Unknown argument: ${arg}`);
+  while (state.index < argv.length) {
+    parseArg(argv, state);
+    state.index += 1;
   }
 
-  return options;
+  return state.options;
+}
+
+function parseArg(argv: string[], state: ArgParseState): void {
+  const arg = argv[state.index];
+
+  if (arg === "--claude") {
+    state.options.includeClaude = true;
+    return;
+  }
+  if (arg === "--scope") {
+    state.options.scope = parseScopeValue(argv[state.index + 1], "Missing value for --scope");
+    state.index += 1;
+    return;
+  }
+  if (arg.startsWith("--scope=")) {
+    state.options.scope = parseScopeValue(arg.slice("--scope=".length));
+    return;
+  }
+  if (arg === "--html") {
+    parseHtmlFlag(argv, state);
+    return;
+  }
+  if (arg.startsWith("--html=")) {
+    state.options.html = true;
+    state.options.htmlPath = arg.slice("--html=".length);
+    return;
+  }
+  if (arg === "-h" || arg === "--help") {
+    state.options.help = true;
+    return;
+  }
+
+  throw new UsageError(`Unknown argument: ${arg}`);
+}
+
+function parseScopeValue(value: string | undefined, missingMessage?: string): Scope {
+  if (!value) {
+    throw new UsageError(missingMessage ?? `Invalid --scope: ${value}`);
+  }
+  if (!validScopes.has(value as Scope)) {
+    throw new UsageError(`Invalid --scope: ${value}`);
+  }
+  return value as Scope;
+}
+
+function parseHtmlFlag(argv: string[], state: ArgParseState): void {
+  state.options.html = true;
+  const value = argv[state.index + 1];
+  if (value && !value.startsWith("--")) {
+    state.options.htmlPath = value;
+    state.index += 1;
+  }
 }

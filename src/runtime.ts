@@ -47,8 +47,7 @@ export async function runCli(
   options: CliOptions,
   deps: RuntimeDeps = defaultRuntimeDeps(),
 ): Promise<number> {
-  const scope =
-    options.scope ?? (await deps.chooseAction(["today", "7d", "30d"], "Pick a time range"));
+  const scope = await chooseInitialScope(options, deps);
   if (!scope) {
     return 0;
   }
@@ -56,58 +55,115 @@ export async function runCli(
   const sessions = await deps.collectSessions(options.includeClaude);
   const pricing = await deps.loadPricing();
 
-  if (options.html) {
-    const outputPath = await resolveHtmlPath(options.htmlPath);
-    const html = renderHtmlReport(
-      buildReport(sessions, scope as Scope, options.includeClaude, deps.now()),
-      pricing,
-    );
+  return options.html
+    ? renderHtmlOnce(options, deps, sessions, pricing, scope)
+    : runInteractiveReport(options, deps, sessions, pricing, scope);
+}
 
-    if (outputPath === "-") {
-      deps.stdout.write(`${html}\n`);
-      return 0;
-    }
+async function chooseInitialScope(
+  options: CliOptions,
+  deps: RuntimeDeps,
+): Promise<Scope | undefined> {
+  return (options.scope ??
+    (await deps.chooseAction(["today", "7d", "30d"], "Pick a time range"))) as Scope | undefined;
+}
 
-    await writeHtmlReport(outputPath, html);
-    deps.stdout.write(`HTML report: ${outputPath}\n`);
-    if (!options.htmlPath) {
-      await deps.openPath(outputPath);
-    }
+async function renderHtmlOnce(
+  options: CliOptions,
+  deps: RuntimeDeps,
+  sessions: ParsedSession[],
+  pricing: Record<string, PricingInfo>,
+  scope: Scope,
+): Promise<number> {
+  const outputPath = await resolveHtmlPath(options.htmlPath);
+  const html = renderHtmlReport(
+    buildReport(sessions, scope, options.includeClaude, deps.now()),
+    pricing,
+  );
+
+  if (outputPath === "-") {
+    deps.stdout.write(`${html}\n`);
     return 0;
   }
 
-  let currentScope = scope as Scope;
-  while (true) {
-    deps.clearScreen();
-    const report = buildReport(sessions, currentScope, options.includeClaude, deps.now());
-    deps.stdout.write(`${renderTerminalReport(report, pricing)}\n`);
+  await writeHtmlReport(outputPath, html);
+  deps.stdout.write(`HTML report: ${outputPath}\n`);
+  if (!options.htmlPath) {
+    await deps.openPath(outputPath);
+  }
+  return 0;
+}
 
+async function runInteractiveReport(
+  options: CliOptions,
+  deps: RuntimeDeps,
+  sessions: ParsedSession[],
+  pricing: Record<string, PricingInfo>,
+  scope: Scope,
+): Promise<number> {
+  let currentScope = scope;
+  while (true) {
+    const report = writeTerminalReport(options, deps, sessions, pricing, currentScope);
     const action = await deps.chooseAction(
       ["Open HTML report", "Change range", "Refresh", "Exit"],
       "Choose an action",
     );
-    if (!action || action === "Exit") {
+    const nextScope = await handleInteractiveAction(action, deps, report, pricing);
+    if (nextScope === "exit") {
       return 0;
     }
-    if (action === "Refresh") {
-      continue;
-    }
-    if (action === "Change range") {
-      const nextScope = await deps.chooseAction(["today", "7d", "30d"], "Pick a time range");
-      if (!nextScope) {
-        return 0;
-      }
-      currentScope = nextScope as Scope;
-      continue;
-    }
-    if (action === "Open HTML report") {
-      const outputPath = await resolveHtmlPath();
-      const html = renderHtmlReport(report, pricing);
-      await writeHtmlReport(outputPath, html);
-      deps.stdout.write(`HTML report: ${outputPath}\n`);
-      await deps.openPath(outputPath);
-    }
+    currentScope = nextScope ?? currentScope;
   }
+}
+
+function writeTerminalReport(
+  options: CliOptions,
+  deps: RuntimeDeps,
+  sessions: ParsedSession[],
+  pricing: Record<string, PricingInfo>,
+  scope: Scope,
+) {
+  deps.clearScreen();
+  const report = buildReport(sessions, scope, options.includeClaude, deps.now());
+  deps.stdout.write(`${renderTerminalReport(report, pricing)}\n`);
+  return report;
+}
+
+async function handleInteractiveAction(
+  action: string | undefined,
+  deps: RuntimeDeps,
+  report: ReturnType<typeof buildReport>,
+  pricing: Record<string, PricingInfo>,
+): Promise<Scope | "exit" | undefined> {
+  if (!action || action === "Exit") {
+    return "exit";
+  }
+  if (action === "Refresh") {
+    return undefined;
+  }
+  if (action === "Change range") {
+    return changeScope(deps);
+  }
+  if (action === "Open HTML report") {
+    await openHtmlReport(deps, report, pricing);
+  }
+  return undefined;
+}
+
+async function changeScope(deps: RuntimeDeps): Promise<Scope | "exit"> {
+  const nextScope = await deps.chooseAction(["today", "7d", "30d"], "Pick a time range");
+  return nextScope ? (nextScope as Scope) : "exit";
+}
+
+async function openHtmlReport(
+  deps: RuntimeDeps,
+  report: ReturnType<typeof buildReport>,
+  pricing: Record<string, PricingInfo>,
+): Promise<void> {
+  const outputPath = await resolveHtmlPath();
+  await writeHtmlReport(outputPath, renderHtmlReport(report, pricing));
+  deps.stdout.write(`HTML report: ${outputPath}\n`);
+  await deps.openPath(outputPath);
 }
 
 export async function collectSessions(includeClaude: boolean): Promise<ParsedSession[]> {
