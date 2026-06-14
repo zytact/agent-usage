@@ -3,19 +3,17 @@ import { writeFile } from "node:fs/promises";
 import type { ReportMode } from "./args.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
 import {
+  buildRequestSummaryData,
   estimateStatsTotalCost,
   formatFloat,
   formatUsd,
   modelRows,
   percentRows,
-  sessionDistributions,
-  summarizeDistribution,
-  summarizeRequestCache,
-  summarizeRequestContexts,
   topEntries,
   type BuiltReport,
   type DailyBreakdownRow,
   type PricingInfo,
+  type RequestDistributionRow,
   type ReportStats,
   type SourceSection,
 } from "./report-data.js";
@@ -734,48 +732,32 @@ function renderRequestSummary(
   pricing: Record<string, PricingInfo>,
   full: boolean,
 ): string {
-  const requests = sessions.flatMap((session) => session.requests);
-  const hours = Math.max(stats.activeSeconds / 3600, 1 / 3600);
-  const context = summarizeRequestContexts(requests);
-  const cache = summarizeRequestCache(requests, pricing);
-  const dists = sessionDistributions(sessions);
-  const distInputs: Array<{ label: string; values: number[] }> = [
-    { label: "Tokens / active minute", values: dists.tokensPerActiveMinute },
-    { label: "Fresh input / active minute", values: dists.freshInputPerActiveMinute },
-    { label: "Cached input / active minute", values: dists.cachedInputPerActiveMinute },
-    { label: "Output / active minute", values: dists.outputPerActiveMinute },
-    { label: "Total tokens / turn", values: dists.totalTokensPerTurn },
-    { label: "Context size / request", values: dists.contextSizePerRequest },
-  ];
-  const distRows = distInputs.map(({ label, values }) => ({
-    label,
-    summary: summarizeDistribution(values),
-  }));
+  const data = buildRequestSummaryData(sessions, stats, pricing);
 
   return `<section class="data-panel">
   <h2>${escapeHtml(title)}</h2>
   <div class="request-grid">
-    ${htmlMetric("Model requests", String(requests.length))}
+    ${htmlMetric("Model requests", String(data.requests.length))}
     ${htmlMetric("User turns", String(stats.userTurns))}
     ${htmlMetric("Assistant turns", String(stats.assistantTurns))}
-    ${htmlMetric("Requests / active hour", formatFloat(requests.length / hours))}
-    ${htmlMetric("Tokens / request", formatFloat(requests.length > 0 ? stats.tokens.total / requests.length : undefined))}
-    ${htmlMetric("Output / request", formatFloat(requests.length > 0 ? stats.tokens.output / requests.length : undefined))}
-    ${htmlMetric("Avg context", context.average === undefined ? "n/a" : compactTokens(Math.round(context.average)))}
-    ${htmlMetric("Median context", context.median === undefined ? "n/a" : compactTokens(Math.round(context.median)))}
-    ${htmlMetric("Peak context", context.peak === undefined ? "n/a" : compactTokens(Math.round(context.peak)))}
-    ${htmlMetric("Context growth", context.growth === undefined ? "n/a" : compactTokens(Math.round(context.growth)))}
-    ${htmlMetric("Cache read ratio", cache.cacheReadRatio === undefined ? "n/a" : `${(cache.cacheReadRatio * 100).toFixed(1)}%`)}
-    ${full ? htmlMetric("Weighted input eq/req", formatFloat(cache.weightedInputEqPerRequest)) : htmlMetric("Tokens / active min", compactDistributionValue(dists.tokensPerActiveMinute))}
+    ${htmlMetric("Requests / active hour", formatFloat(data.requests.length / data.hours))}
+    ${htmlMetric("Tokens / request", averageMetric(stats.tokens.total, data.requests.length))}
+    ${htmlMetric("Output / request", averageMetric(stats.tokens.output, data.requests.length))}
+    ${htmlMetric("Avg context", formatContextMetric(data.context.average))}
+    ${htmlMetric("Median context", formatContextMetric(data.context.median))}
+    ${htmlMetric("Peak context", formatContextMetric(data.context.peak))}
+    ${htmlMetric("Context growth", formatContextMetric(data.context.growth))}
+    ${htmlMetric("Cache read ratio", formatCacheRatio(data.cache.cacheReadRatio))}
+    ${full ? htmlMetric("Weighted input eq/req", formatFloat(data.cache.weightedInputEqPerRequest)) : htmlMetric("Tokens / active min", compactDistributionValue(data.rows[0]))}
   </div>
   ${
     full
-      ? `${renderDistributionCards(distRows)}
+      ? `${renderDistributionCards(data.rows)}
   <details class="raw-details">
     <summary>Raw percentile table</summary>
     <table class="data-table">
       <thead><tr><th>Metric</th><th>Median</th><th>Mean</th><th>P75</th><th>P90</th><th>Max</th></tr></thead>
-      <tbody>${distRows
+      <tbody>${data.rows
         .map(
           ({ label, summary }) =>
             `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(formatFloat(summary.median))}</td><td>${escapeHtml(formatFloat(summary.mean))}</td><td>${escapeHtml(formatFloat(summary.p75))}</td><td>${escapeHtml(formatFloat(summary.p90))}</td><td>${escapeHtml(formatFloat(summary.max))}</td></tr>`,
@@ -783,7 +765,7 @@ function renderRequestSummary(
         .join("")}</tbody>
     </table>
   </details>`
-      : renderCompactDistributionCards(distRows)
+      : renderCompactDistributionCards(data.rows)
   }
 </section>`;
 }
@@ -912,12 +894,7 @@ function renderTokenStackList(
   return `<div class="stack-track" title="${escapeHtml(`Total: ${compactTokens(total)}`)}">${stack}</div><ul class="token-stack-list">${legend}</ul>`;
 }
 
-function renderDistributionCards(
-  rows: ReadonlyArray<{
-    label: string;
-    summary: ReturnType<typeof summarizeDistribution>;
-  }>,
-): string {
+function renderDistributionCards(rows: ReadonlyArray<RequestDistributionRow>): string {
   return `<div class="dist-grid">${rows
     .map(({ label, summary }) => {
       const max = Math.max(summary.max ?? 0, 1);
@@ -1090,9 +1067,7 @@ function formatTimestamp(value: Date): string {
   });
 }
 
-function renderCompactDistributionCards(
-  rows: Array<{ label: string; summary: ReturnType<typeof summarizeDistribution> }>,
-): string {
+function renderCompactDistributionCards(rows: ReadonlyArray<RequestDistributionRow>): string {
   return `<div class="dist-grid">
   ${rows
     .filter(
@@ -1113,9 +1088,21 @@ function renderCompactDistributionCards(
 </div>`;
 }
 
-function compactDistributionValue(values: number[]): string {
-  const summary = summarizeDistribution(values);
+function compactDistributionValue(row: RequestDistributionRow): string {
+  const { summary } = row;
   return `${formatFloat(summary.median)} med · ${formatFloat(summary.p90)} p90`;
+}
+
+function averageMetric(total: number, count: number): string {
+  return formatFloat(count > 0 ? total / count : undefined);
+}
+
+function formatContextMetric(value: number | undefined): string {
+  return value === undefined ? "n/a" : compactTokens(Math.round(value));
+}
+
+function formatCacheRatio(value: number | undefined): string {
+  return value === undefined ? "n/a" : `${(value * 100).toFixed(1)}%`;
 }
 
 function isPrimarySection(title: string): boolean {

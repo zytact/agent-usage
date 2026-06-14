@@ -1,53 +1,34 @@
 import { readFile } from "node:fs/promises";
 
 import type { ParsedSession } from "../domain.js";
+import { addRequest, repoName, sessionLabel, zeroTokens } from "../ingest-shared.js";
 import {
-  addRequest,
-  inferLanguages,
-  mergeCounts,
-  repoName,
-  sessionLabel,
-  zeroTokens,
-} from "../ingest-shared.js";
-import {
-  allocateStateTime,
-  collapseDayStateSeconds,
-  collapseStateSeconds,
-  parseTimestamp,
-} from "../report-core.js";
+  addModelTokens,
+  addTokens,
+  asNumber,
+  asString,
+  buildParsedSession,
+  countRole,
+  finalSessionId,
+  isRecord,
+  type ModelTokenParserState,
+  parseSessionText,
+  prepareJsonLine,
+  setCurrentModel as setSharedCurrentModel,
+} from "./shared.js";
 
 export async function parseClaudeSessionFile(path: string): Promise<ParsedSession | undefined> {
   const content = await readFile(path, "utf8");
   return parseClaudeSessionText(content, path);
 }
 
-type ClaudeParseState = {
-  assistantTurns: number;
-  currentModel?: string;
-  cwd?: string;
-  eventMarks: Array<{ effort?: string; model?: string; ts: Date }>;
-  events: Date[];
-  languages: Record<string, number>;
-  modelTokens: ParsedSession["modelTokens"];
-  models: Record<string, number>;
-  path: string;
-  requests: ParsedSession["requests"];
-  sessionId?: string;
-  tokens: ParsedSession["tokens"];
-  userTurns: number;
-};
+type ClaudeParseState = ModelTokenParserState;
 
 export function parseClaudeSessionText(
   content: string,
   path = "session.jsonl",
 ): ParsedSession | undefined {
-  const state = createClaudeState(path);
-
-  for (const rawLine of content.split("\n")) {
-    parseClaudeLine(rawLine, state);
-  }
-
-  return finishClaudeSession(state);
+  return parseSessionText(content, path, createClaudeState, parseClaudeLine, finishClaudeSession);
 }
 
 function createClaudeState(path: string): ClaudeParseState {
@@ -66,31 +47,16 @@ function createClaudeState(path: string): ClaudeParseState {
 }
 
 function parseClaudeLine(rawLine: string, state: ClaudeParseState): void {
-  const line = rawLine.trim();
-  if (!line) {
+  const parsed = prepareJsonLine(rawLine, state);
+  if (!parsed) {
     return;
   }
 
-  mergeCounts(state.languages, inferLanguages(line));
-  const item = parseJsonObject(line);
-  if (!item) {
-    return;
-  }
-
-  const ts = readTimestamp(item, state);
+  const { item, ts } = parsed;
   state.sessionId = asString(item.sessionId) ?? state.sessionId;
   state.cwd = asString(item.cwd) ?? state.cwd;
   countRole(asString(item.type), state);
   parseClaudeMessage(isRecord(item.message) ? item.message : undefined, ts, state);
-}
-
-function readTimestamp(item: Record<string, unknown>, state: ClaudeParseState): Date | undefined {
-  const ts = typeof item.timestamp === "string" ? parseTimestamp(item.timestamp) : undefined;
-  if (ts) {
-    state.events.push(ts);
-    addEventMark(ts, state);
-  }
-  return ts;
 }
 
 function parseClaudeMessage(
@@ -115,37 +81,12 @@ function parseClaudeMessage(
 }
 
 function finishClaudeSession(state: ClaudeParseState): ParsedSession | undefined {
-  if (state.events.length === 0) {
-    return undefined;
-  }
-
-  state.events.sort((a, b) => a.getTime() - b.getTime());
-  const allocated = allocateStateTime(state.eventMarks);
-
-  return {
-    activeSeconds: allocated.totalSeconds,
-    assistantTurns: state.assistantTurns,
-    cwd: state.cwd,
-    dayModelActiveSeconds: collapseDayStateSeconds(allocated.byDayStateSeconds),
-    dayStateActiveSeconds: allocated.byDayStateSeconds,
-    end: state.events.at(-1) ?? state.events[0],
+  return buildParsedSession(state, {
     efforts: {},
-    languages: state.languages,
-    modelActiveSeconds: collapseStateSeconds(allocated.byStateSeconds),
     modelTokens: state.modelTokens,
-    models: state.models,
-    path: state.path,
-    repo: repoName(state.cwd),
-    requestCount: state.requests.length,
-    requests: state.requests,
-    sessionId: finalSessionId(state.sessionId, state.path),
     source: "claude",
     sourceLabel: sessionLabel("claude", undefined),
-    start: state.events[0],
-    stateActiveSeconds: allocated.byStateSeconds,
-    tokens: { ...state.tokens },
-    userTurns: state.userTurns,
-  };
+  });
 }
 
 function setCurrentModel(
@@ -156,11 +97,7 @@ function setCurrentModel(
   if (!isRealModel(model)) {
     return;
   }
-  state.models[model] = (state.models[model] ?? 0) + 1;
-  state.currentModel = model;
-  if (ts) {
-    addEventMark(ts, state);
-  }
+  setSharedCurrentModel(model, ts, state);
 }
 
 function addClaudeRequest(
@@ -177,19 +114,6 @@ function addClaudeRequest(
     tokens,
     ts,
   });
-}
-
-function countRole(role: string | undefined, state: ClaudeParseState): void {
-  if (role === "user") {
-    state.userTurns += 1;
-  }
-  if (role === "assistant") {
-    state.assistantTurns += 1;
-  }
-}
-
-function addEventMark(ts: Date, state: ClaudeParseState): void {
-  state.eventMarks.push({ model: state.currentModel, ts });
 }
 
 function claudeUsageTokens(usage: Record<string, unknown>): ParsedSession["tokens"] {
@@ -222,61 +146,6 @@ function sumIterationOutput(value: unknown): number {
   return total;
 }
 
-function addTokens(target: ParsedSession["tokens"], value: ParsedSession["tokens"]): void {
-  target.input += value.input;
-  target.cached += value.cached;
-  target.cacheWrite += value.cacheWrite;
-  target.output += value.output;
-  target.reasoning += value.reasoning;
-  target.total += value.total;
-}
-
-function addModelTokens(
-  modelTokens: ParsedSession["modelTokens"],
-  model: string,
-  value: ParsedSession["tokens"],
-): void {
-  const bucket = (modelTokens[model] ??= modelTokenBucket());
-  addTokens(bucket, value);
-  bucket.billableOutput += value.output + value.reasoning;
-}
-
-function modelTokenBucket(): ParsedSession["modelTokens"][string] {
-  return { ...zeroTokens(), billableOutput: 0 };
-}
-
 function isRealModel(model: string | undefined): model is string {
   return Boolean(model && model !== "<synthetic>");
-}
-
-function finalSessionId(sessionId: string | undefined, path: string): string {
-  return (
-    sessionId ??
-    path
-      .split("/")
-      .pop()
-      ?.replace(/\.jsonl$/, "") ??
-    "unknown"
-  );
-}
-
-function parseJsonObject(line: string): Record<string, unknown> | undefined {
-  try {
-    const item: unknown = JSON.parse(line);
-    return isRecord(item) ? item : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, any> {
-  return typeof value === "object" && value !== null;
-}
-
-function asNumber(value: unknown): number {
-  return Number(value ?? 0) || 0;
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === "string" && value ? value : undefined;
 }

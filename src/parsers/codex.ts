@@ -1,20 +1,19 @@
 import { readFile } from "node:fs/promises";
 
 import type { ParsedSession } from "../domain.js";
+import { addRequest, repoName, sessionLabel, zeroTokens } from "../ingest-shared.js";
 import {
-  addRequest,
-  inferLanguages,
-  mergeCounts,
-  repoName,
-  sessionLabel,
-  zeroTokens,
-} from "../ingest-shared.js";
-import {
-  allocateStateTime,
-  collapseDayStateSeconds,
-  collapseStateSeconds,
-  parseTimestamp,
-} from "../report-core.js";
+  asNumber,
+  asString,
+  buildParsedSession,
+  countRole,
+  finalSessionId,
+  isRecord,
+  parseSessionText,
+  prepareJsonLine,
+  setCurrentEffort as setSharedCurrentEffort,
+  setCurrentModel as setSharedCurrentModel,
+} from "./shared.js";
 
 export async function parseCodexSessionFile(path: string): Promise<ParsedSession | undefined> {
   const content = await readFile(path, "utf8");
@@ -43,13 +42,7 @@ export function parseCodexSessionText(
   content: string,
   path = "session.jsonl",
 ): ParsedSession | undefined {
-  const state = createCodexState(path);
-
-  for (const rawLine of content.split("\n")) {
-    parseCodexLine(rawLine, state);
-  }
-
-  return finishCodexSession(state);
+  return parseSessionText(content, path, createCodexState, parseCodexLine, finishCodexSession);
 }
 
 function createCodexState(path: string): CodexParseState {
@@ -68,33 +61,18 @@ function createCodexState(path: string): CodexParseState {
 }
 
 function parseCodexLine(rawLine: string, state: CodexParseState): void {
-  const line = rawLine.trim();
-  if (!line) {
+  const parsed = prepareJsonLine(rawLine, state);
+  if (!parsed) {
     return;
   }
 
-  mergeCounts(state.languages, inferLanguages(line));
-  const item = parseJsonObject(line);
-  if (!item) {
-    return;
-  }
-
-  const ts = readTimestamp(item, state);
+  const { item, ts } = parsed;
   const payload = isRecord(item.payload) ? item.payload : undefined;
 
   parseSessionMeta(item.type, payload, state);
   parseTurnContext(item.type, payload, ts, state);
   parseResponseItem(item.type, payload, state);
   parseTokenCount(item.type, payload, ts, state);
-}
-
-function readTimestamp(item: Record<string, unknown>, state: CodexParseState): Date | undefined {
-  const ts = typeof item.timestamp === "string" ? parseTimestamp(item.timestamp) : undefined;
-  if (ts) {
-    state.events.push(ts);
-    addEventMark(ts, state);
-  }
-  return ts;
 }
 
 function parseSessionMeta(
@@ -131,13 +109,7 @@ function parseResponseItem(
   if (type !== "response_item" || payload?.type !== "message") {
     return;
   }
-  const role = payload.role;
-  if (role === "assistant") {
-    state.assistantTurns += 1;
-  }
-  if (role === "user") {
-    state.userTurns += 1;
-  }
+  countRole(asString(payload.role), state);
 }
 
 function parseTokenCount(
@@ -208,39 +180,14 @@ function addCodexRequest(
 }
 
 function finishCodexSession(state: CodexParseState): ParsedSession | undefined {
-  if (state.events.length === 0) {
-    return undefined;
-  }
-
-  state.events.sort((a, b) => a.getTime() - b.getTime());
-  const allocated = allocateStateTime(state.eventMarks);
   const modelTokens = distributeModelTokens(state.tokens, state.models);
-
-  return {
-    activeSeconds: allocated.totalSeconds,
-    assistantTurns: state.assistantTurns,
-    cwd: state.cwd,
-    dayModelActiveSeconds: collapseDayStateSeconds(allocated.byDayStateSeconds),
-    dayStateActiveSeconds: allocated.byDayStateSeconds,
-    end: state.events.at(-1) ?? state.events[0],
+  return buildParsedSession(state, {
     efforts: state.efforts,
-    languages: state.languages,
-    modelActiveSeconds: collapseStateSeconds(allocated.byStateSeconds),
     modelTokens,
-    models: state.models,
     originator: state.originator ?? "unknown",
-    path: state.path,
-    repo: repoName(state.cwd),
-    requestCount: state.requests.length,
-    requests: state.requests,
-    sessionId: finalSessionId(state.sessionId, state.path),
     source: "codex",
     sourceLabel: sessionLabel("codex", state.originator),
-    start: state.events[0],
-    stateActiveSeconds: allocated.byStateSeconds,
-    tokens: { ...state.tokens },
-    userTurns: state.userTurns,
-  };
+  });
 }
 
 function setCurrentModel(
@@ -248,14 +195,7 @@ function setCurrentModel(
   ts: Date | undefined,
   state: CodexParseState,
 ): void {
-  if (!model) {
-    return;
-  }
-  state.models[model] = (state.models[model] ?? 0) + 1;
-  state.currentModel = model;
-  if (ts) {
-    addEventMark(ts, state);
-  }
+  setSharedCurrentModel(model, ts, state);
 }
 
 function setCurrentEffort(
@@ -263,18 +203,7 @@ function setCurrentEffort(
   ts: Date | undefined,
   state: CodexParseState,
 ): void {
-  if (!effort) {
-    return;
-  }
-  state.efforts[effort] = (state.efforts[effort] ?? 0) + 1;
-  state.currentEffort = effort;
-  if (ts) {
-    addEventMark(ts, state);
-  }
-}
-
-function addEventMark(ts: Date, state: CodexParseState): void {
-  state.eventMarks.push({ effort: state.currentEffort, model: state.currentModel, ts });
+  setSharedCurrentEffort(effort, ts, state);
 }
 
 function codexTotalTokens(usage: Record<string, unknown>): ParsedSession["tokens"] {
@@ -337,36 +266,4 @@ function nestedReasoningEffort(payload: Record<string, unknown>): string | undef
     : undefined;
   const settings = isRecord(collaborationMode?.settings) ? collaborationMode.settings : undefined;
   return asString(settings?.reasoning_effort);
-}
-
-function finalSessionId(sessionId: string | undefined, path: string): string {
-  return (
-    sessionId ??
-    path
-      .split("/")
-      .pop()
-      ?.replace(/\.jsonl$/, "") ??
-    "unknown"
-  );
-}
-
-function parseJsonObject(line: string): Record<string, unknown> | undefined {
-  try {
-    const item: unknown = JSON.parse(line);
-    return isRecord(item) ? item : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, any> {
-  return typeof value === "object" && value !== null;
-}
-
-function asNumber(value: unknown): number {
-  return Number(value ?? 0) || 0;
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === "string" && value ? value : undefined;
 }

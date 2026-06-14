@@ -1,14 +1,12 @@
 import type { ReportMode } from "./args.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
 import {
+  buildRequestSummaryData,
   formatFloat,
   estimateStatsTotalCost,
   formatUsd,
   modelRows,
-  sessionDistributions,
   summarizeDistribution,
-  summarizeRequestCache,
-  summarizeRequestContexts,
   topEntries,
   type BuiltReport,
   type DailyBreakdownRow,
@@ -221,48 +219,42 @@ function renderRequestSummary(
   pricing: Record<string, PricingInfo>,
   full: boolean,
 ): string[] {
-  const requests = sessions.flatMap((session) => session.requests);
-  const hours = Math.max(stats.activeSeconds / 3600, 1 / 3600);
-  const context = summarizeRequestContexts(requests);
-  const cache = summarizeRequestCache(requests, pricing);
-  const dists = sessionDistributions(sessions);
+  const data = buildRequestSummaryData(sessions, stats, pricing);
   const lines = [
     title.toUpperCase(),
-    `  Model requests  ${requests.length}`,
+    `  Model requests  ${data.requests.length}`,
     `  User turns      ${stats.userTurns}`,
     `  Assistant turns ${stats.assistantTurns}`,
-    `  Requests/hour   ${formatFloat(requests.length / hours)}`,
-    `  Tokens/request  ${formatFloat(requests.length > 0 ? stats.tokens.total / requests.length : undefined)}`,
-    `  Output/request  ${formatFloat(requests.length > 0 ? stats.tokens.output / requests.length : undefined)}`,
-    `  Avg context     ${formatContext(context.average)}`,
-    `  Median context  ${formatContext(context.median)}`,
-    `  Peak context    ${formatContext(context.peak)}`,
-    `  Context growth  ${formatContext(context.growth)}`,
-    `  Cache read ratio ${cache.cacheReadRatio === undefined ? "n/a" : `${(cache.cacheReadRatio * 100).toFixed(1)}%`}`,
+    `  Requests/hour   ${formatFloat(data.requests.length / data.hours)}`,
+    `  Tokens/request  ${averageMetric(stats.tokens.total, data.requests.length)}`,
+    `  Output/request  ${averageMetric(stats.tokens.output, data.requests.length)}`,
+    `  Avg context     ${formatContext(data.context.average)}`,
+    `  Median context  ${formatContext(data.context.median)}`,
+    `  Peak context    ${formatContext(data.context.peak)}`,
+    `  Context growth  ${formatContext(data.context.growth)}`,
+    `  Cache read ratio ${formatCacheRatio(data.cache.cacheReadRatio)}`,
   ];
 
   if (full) {
-    lines.push(`  Weighted input eq/req  ${formatFloat(cache.weightedInputEqPerRequest)}`);
-    lines.push(...renderDistribution("Tokens / active minute", dists.tokensPerActiveMinute));
-    lines.push(
-      ...renderDistribution("Fresh input / active minute", dists.freshInputPerActiveMinute),
-    );
-    lines.push(
-      ...renderDistribution("Cached input / active minute", dists.cachedInputPerActiveMinute),
-    );
-    lines.push(...renderDistribution("Output / active minute", dists.outputPerActiveMinute));
-    lines.push(...renderDistribution("Total tokens / turn", dists.totalTokensPerTurn));
-    lines.push(...renderDistribution("Context size / request", dists.contextSizePerRequest));
+    lines.push(`  Weighted input eq/req  ${formatFloat(data.cache.weightedInputEqPerRequest)}`);
+    lines.push(...renderDistributionSummary("Tokens / active minute", data.rows[0].summary));
+    lines.push(...renderDistributionSummary("Fresh input / active minute", data.rows[1].summary));
+    lines.push(...renderDistributionSummary("Cached input / active minute", data.rows[2].summary));
+    lines.push(...renderDistributionSummary("Output / active minute", data.rows[3].summary));
+    lines.push(...renderDistributionSummary("Total tokens / turn", data.rows[4].summary));
+    lines.push(...renderDistributionSummary("Context size / request", data.rows[5].summary));
   } else {
-    lines.push(...renderCompactDistribution("Tokens / active minute", dists.tokensPerActiveMinute));
-    lines.push(...renderCompactDistribution("Context size / request", dists.contextSizePerRequest));
+    lines.push(...renderCompactDistribution("Tokens / active minute", data.rows[0].summary));
+    lines.push(...renderCompactDistribution("Context size / request", data.rows[5].summary));
   }
 
   return lines;
 }
 
-function renderCompactDistribution(title: string, values: number[]): string[] {
-  const summary = summarizeDistribution(values);
+function renderCompactDistribution(
+  title: string,
+  summary: ReturnType<typeof summarizeDistribution>,
+): string[] {
   return [
     `  ${title}`,
     `    median ${formatFloat(summary.median)}`,
@@ -274,8 +266,10 @@ function isPrimarySection(title: string): boolean {
   return ["Codex", "opencode", "Claude Code", "Pi"].includes(title);
 }
 
-function renderDistribution(title: string, values: number[]): string[] {
-  const summary = summarizeDistribution(values);
+function renderDistributionSummary(
+  title: string,
+  summary: ReturnType<typeof summarizeDistribution>,
+): string[] {
   return [
     `  ${title}`,
     `    median ${formatFloat(summary.median)}`,
@@ -306,6 +300,14 @@ function renderDailyBreakdown(rows: DailyBreakdownRow[]): string[] {
 
 function formatContext(value: number | undefined): string {
   return value === undefined ? "n/a" : compactTokens(Math.round(value));
+}
+
+function averageMetric(total: number, count: number): string {
+  return formatFloat(count > 0 ? total / count : undefined);
+}
+
+function formatCacheRatio(value: number | undefined): string {
+  return value === undefined ? "n/a" : `${(value * 100).toFixed(1)}%`;
 }
 
 function pad(value: string, width: number): string {

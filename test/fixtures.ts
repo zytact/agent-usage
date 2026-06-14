@@ -1,9 +1,25 @@
+import { rm } from "node:fs/promises";
+
+import { afterEach } from "vite-plus/test";
+
 import type { ParsedSession, SessionRequest } from "../src/domain.js";
 
 type RequestInput = Partial<SessionRequest> & Pick<SessionRequest, "model">;
 
 const defaultDate = new Date("2026-06-14T10:00:00Z");
 const defaultEnd = new Date("2026-06-14T10:30:00Z");
+
+export function useTempDirs(): string[] {
+  const tempDirs: string[] = [];
+
+  afterEach(async () => {
+    await Promise.allSettled(
+      tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true })),
+    );
+  });
+
+  return tempDirs;
+}
 
 export function makeRequest(overrides: RequestInput): SessionRequest {
   return {
