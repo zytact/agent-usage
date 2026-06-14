@@ -8,16 +8,18 @@ describe("parseArgs", () => {
       includeClaude: false,
       html: false,
       help: false,
+      reportMode: "summary",
     });
   });
 
   it("parses explicit flags", () => {
-    expect(parseArgs(["--claude", "--scope", "7d", "--html", "report.html"])).toEqual({
+    expect(parseArgs(["--claude", "--scope", "7d", "--full", "--html", "report.html"])).toEqual({
       includeClaude: true,
       scope: "7d",
       html: true,
       htmlPath: "report.html",
       help: false,
+      reportMode: "full",
     });
   });
 
@@ -28,6 +30,7 @@ describe("parseArgs", () => {
       html: true,
       htmlPath: "-",
       help: false,
+      reportMode: "summary",
     });
   });
 
@@ -36,6 +39,7 @@ describe("parseArgs", () => {
       includeClaude: false,
       html: false,
       help: true,
+      reportMode: "summary",
     });
   });
 

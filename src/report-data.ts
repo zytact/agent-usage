@@ -64,6 +64,20 @@ export type RequestCacheSummary = {
   weightedInputEqPerRequest?: number;
 };
 
+export type RequestDistributionRow = {
+  label: string;
+  summary: DistributionSummary;
+};
+
+export type RequestSummaryData = {
+  cache: RequestCacheSummary;
+  context: RequestContextSummary;
+  distributions: ReturnType<typeof sessionDistributions>;
+  hours: number;
+  requests: SessionRequest[];
+  rows: RequestDistributionRow[];
+};
+
 export type SourceSection = {
   sessions: ParsedSession[];
   stats: ReportStats;
@@ -338,7 +352,7 @@ function filterSessionsByModel(
   return filtered;
 }
 
-export function summarizeRequestContexts(requests: SessionRequest[]): RequestContextSummary {
+function summarizeRequestContexts(requests: SessionRequest[]): RequestContextSummary {
   const values = requests.map((request) => request.contextSize).filter((value) => value >= 0);
   if (values.length === 0) {
     return {};
@@ -381,7 +395,7 @@ export function summarizeRequestCache(
   };
 }
 
-export function sessionDistributions(sessions: ParsedSession[]): Record<string, number[]> {
+function sessionDistributions(sessions: ParsedSession[]): Record<string, number[]> {
   const out: Record<string, number[]> = {
     cachedInputPerActiveMinute: [],
     contextSizePerRequest: [],
@@ -418,6 +432,36 @@ export function summarizeDistribution(values: number[]): DistributionSummary {
     median: percentile(values, 0.5),
     p75: percentile(values, 0.75),
     p90: percentile(values, 0.9),
+  };
+}
+
+export function buildRequestSummaryData(
+  sessions: BuiltReport["requestSummarySessions"],
+  stats: ReportStats,
+  pricing: Record<string, PricingInfo>,
+): RequestSummaryData {
+  const requests = sessions.flatMap((session) => session.requests);
+  const distributions = sessionDistributions(sessions);
+  const distributionInputs: Array<[string, number[]]> = [
+    ["Tokens / active minute", distributions.tokensPerActiveMinute],
+    ["Fresh input / active minute", distributions.freshInputPerActiveMinute],
+    ["Cached input / active minute", distributions.cachedInputPerActiveMinute],
+    ["Output / active minute", distributions.outputPerActiveMinute],
+    ["Total tokens / turn", distributions.totalTokensPerTurn],
+    ["Context size / request", distributions.contextSizePerRequest],
+  ];
+  const rows: RequestDistributionRow[] = distributionInputs.map(([label, values]) => ({
+    label,
+    summary: summarizeDistribution(values),
+  }));
+
+  return {
+    cache: summarizeRequestCache(requests, pricing),
+    context: summarizeRequestContexts(requests),
+    distributions,
+    hours: Math.max(stats.activeSeconds / 3600, 1 / 3600),
+    requests,
+    rows,
   };
 }
 

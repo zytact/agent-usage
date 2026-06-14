@@ -1,11 +1,14 @@
 import type { Scope } from "./report-core.js";
 
-export const usageText = `Usage: agent-usage [--claude] [--scope today|7d|30d] [--html [FILE]]
+export type ReportMode = "summary" | "full";
+
+export const usageText = `Usage: agent-usage [--claude] [--scope today|7d|30d] [--full] [--html [FILE]]
 
 Options:
   (default)       Include Codex, opencode, and Pi usage from local stores
   --claude        Include Claude Code usage from ~/.claude/projects
   --scope SCOPE   Use a range without prompting: today, 7d, 30d
+  --full          Show full diagnostic report instead of default summary view
   --html [FILE]   Write a standalone HTML report. Omit FILE to decide later.
                   Use --html=- to print HTML to stdout.
   -h, --help      Show this help
@@ -17,6 +20,7 @@ export type CliOptions = {
   html: boolean;
   htmlPath?: string;
   help: boolean;
+  reportMode: ReportMode;
 };
 
 export class UsageError extends Error {}
@@ -31,7 +35,7 @@ type ArgParseState = {
 export function parseArgs(argv: string[]): CliOptions {
   const state: ArgParseState = {
     index: 0,
-    options: { includeClaude: false, html: false, help: false },
+    options: { includeClaude: false, html: false, help: false, reportMode: "summary" },
   };
 
   while (state.index < argv.length) {
@@ -60,6 +64,10 @@ function parseArg(argv: string[], state: ArgParseState): void {
   }
   if (arg === "--html") {
     parseHtmlFlag(argv, state);
+    return;
+  }
+  if (arg === "--full") {
+    state.options.reportMode = "full";
     return;
   }
   if (arg.startsWith("--html=")) {

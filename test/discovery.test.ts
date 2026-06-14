@@ -2,21 +2,12 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import { defaultDiscoveryRoots, discoverSessionFiles } from "../src/discovery.js";
+import { useTempDirs } from "./fixtures.js";
 
-const tempDirs: string[] = [];
-
-afterEach(async () => {
-  await Promise.allSettled(
-    tempDirs
-      .splice(0)
-      .map(async (dir) =>
-        import("node:fs/promises").then(({ rm }) => rm(dir, { force: true, recursive: true })),
-      ),
-  );
-});
+const tempDirs = useTempDirs();
 
 describe("discoverSessionFiles", () => {
   it("finds nested jsonl sources and db path", async () => {
