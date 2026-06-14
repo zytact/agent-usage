@@ -6,7 +6,7 @@
   "keywords": [],
   "license": "ISC",
   "bin": {
-    "agent-usage": "./dist/cli.js"
+    "agent-usage": "./dist/cli.mjs"
   },
   "type": "module",
   "scripts": {
