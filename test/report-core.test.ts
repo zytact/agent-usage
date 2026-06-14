@@ -32,10 +32,10 @@ describe("report-core", () => {
   });
 
   it("computes scope starts", () => {
-    const now = new Date("2026-06-14T18:45:00+05:30");
-    expect(scopeStart("today", now).toISOString()).toBe("2026-06-13T18:30:00.000Z");
-    expect(scopeStart("7d", now).toISOString()).toBe("2026-06-07T18:30:00.000Z");
-    expect(scopeStart("30d", now).toISOString()).toBe("2026-05-15T18:30:00.000Z");
+    const now = new Date(2026, 5, 14, 18, 45, 0, 0);
+    expect(scopeStart("today", now).getTime()).toBe(new Date(2026, 5, 14, 0, 0, 0, 0).getTime());
+    expect(scopeStart("7d", now).getTime()).toBe(new Date(2026, 5, 8, 0, 0, 0, 0).getTime());
+    expect(scopeStart("30d", now).getTime()).toBe(new Date(2026, 4, 16, 0, 0, 0, 0).getTime());
   });
 
   it("computes capped active seconds", () => {

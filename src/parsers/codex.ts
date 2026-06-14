@@ -21,172 +21,287 @@ export async function parseCodexSessionFile(path: string): Promise<ParsedSession
   return parseCodexSessionText(content, path);
 }
 
+type CodexParseState = {
+  assistantTurns: number;
+  currentEffort?: string;
+  currentModel?: string;
+  cwd?: string;
+  efforts: Record<string, number>;
+  eventMarks: Array<{ effort?: string; model?: string; ts: Date }>;
+  events: Date[];
+  languages: Record<string, number>;
+  models: Record<string, number>;
+  originator?: string;
+  path: string;
+  requests: ParsedSession["requests"];
+  sessionId?: string;
+  tokens: ParsedSession["tokens"];
+  userTurns: number;
+};
+
 export function parseCodexSessionText(
   content: string,
   path = "session.jsonl",
 ): ParsedSession | undefined {
-  let sessionId: string | undefined;
-  let cwd: string | undefined;
-  let originator: string | undefined;
-  let currentModel: string | undefined;
-  let currentEffort: string | undefined;
-
-  const events: Date[] = [];
-  const eventMarks: Array<{ effort?: string; model?: string; ts: Date }> = [];
-  const tokens = zeroTokens();
-  const languages: Record<string, number> = {};
-  const models: Record<string, number> = {};
-  const efforts: Record<string, number> = {};
-  const requests: ParsedSession["requests"] = [];
-  let userTurns = 0;
-  let assistantTurns = 0;
+  const state = createCodexState(path);
 
   for (const rawLine of content.split("\n")) {
-    const line = rawLine.trim();
-    if (!line) {
-      continue;
-    }
-
-    mergeCounts(languages, inferLanguages(line));
-
-    let item: unknown;
-    try {
-      item = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (!isRecord(item)) {
-      continue;
-    }
-
-    const ts = typeof item.timestamp === "string" ? parseTimestamp(item.timestamp) : undefined;
-    if (ts) {
-      events.push(ts);
-      eventMarks.push({ effort: currentEffort, model: currentModel, ts });
-    }
-
-    const payload = isRecord(item.payload) ? item.payload : undefined;
-
-    if (item.type === "session_meta" && payload) {
-      sessionId = asString(payload.id) ?? sessionId;
-      cwd = asString(payload.cwd) ?? cwd;
-      originator = asString(payload.originator) ?? originator;
-    }
-
-    if (item.type === "turn_context" && payload) {
-      const model = asString(payload.model);
-      if (model) {
-        models[model] = (models[model] ?? 0) + 1;
-        currentModel = model;
-        if (ts) {
-          eventMarks.push({ effort: currentEffort, model: currentModel, ts });
-        }
-      }
-
-      const effort = asString(payload.effort) ?? nestedReasoningEffort(payload);
-      if (effort) {
-        efforts[effort] = (efforts[effort] ?? 0) + 1;
-        currentEffort = effort;
-        if (ts) {
-          eventMarks.push({ effort: currentEffort, model: currentModel, ts });
-        }
-      }
-    }
-
-    if (item.type === "response_item" && payload?.type === "message") {
-      if (payload.role === "assistant") {
-        assistantTurns += 1;
-      }
-      if (payload.role === "user") {
-        userTurns += 1;
-      }
-    }
-
-    if (item.type === "event_msg" && payload?.type === "token_count") {
-      const info = isRecord(payload.info) ? payload.info : undefined;
-      const totalUsage = isRecord(info?.total_token_usage) ? info.total_token_usage : undefined;
-      const lastUsage = isRecord(info?.last_token_usage) ? info.last_token_usage : undefined;
-      if (!totalUsage || !lastUsage) {
-        continue;
-      }
-
-      const rawInput = asNumber(totalUsage.input_tokens);
-      const cached = asNumber(totalUsage.cached_input_tokens);
-      tokens.input = Math.max(rawInput - cached, 0);
-      tokens.cached = cached;
-      tokens.cacheWrite = 0;
-      tokens.output = asNumber(totalUsage.output_tokens);
-      tokens.reasoning = asNumber(totalUsage.reasoning_output_tokens);
-      tokens.total =
-        asNumber(totalUsage.total_tokens) || tokens.input + tokens.cached + tokens.output;
-
-      const reqRawInput = asNumber(lastUsage.input_tokens);
-      const reqCached = asNumber(lastUsage.cached_input_tokens);
-      addRequest(requests, {
-        effort: currentEffort,
-        model: currentModel,
-        originator,
-        repo: repoName(cwd),
-        sessionId:
-          sessionId ??
-          path
-            .split("/")
-            .pop()
-            ?.replace(/\.jsonl$/, "") ??
-          "unknown",
-        source: "codex",
-        tokens: {
-          cacheWrite: 0,
-          cached: reqCached,
-          input: Math.max(reqRawInput - reqCached, 0),
-          output: asNumber(lastUsage.output_tokens),
-          reasoning: asNumber(lastUsage.reasoning_output_tokens),
-          total: asNumber(lastUsage.total_tokens),
-        },
-        ts,
-      });
-    }
+    parseCodexLine(rawLine, state);
   }
 
-  if (events.length === 0) {
+  return finishCodexSession(state);
+}
+
+function createCodexState(path: string): CodexParseState {
+  return {
+    assistantTurns: 0,
+    efforts: {},
+    eventMarks: [],
+    events: [],
+    languages: {},
+    models: {},
+    path,
+    requests: [],
+    tokens: zeroTokens(),
+    userTurns: 0,
+  };
+}
+
+function parseCodexLine(rawLine: string, state: CodexParseState): void {
+  const line = rawLine.trim();
+  if (!line) {
+    return;
+  }
+
+  mergeCounts(state.languages, inferLanguages(line));
+  const item = parseJsonObject(line);
+  if (!item) {
+    return;
+  }
+
+  const ts = readTimestamp(item, state);
+  const payload = isRecord(item.payload) ? item.payload : undefined;
+
+  parseSessionMeta(item.type, payload, state);
+  parseTurnContext(item.type, payload, ts, state);
+  parseResponseItem(item.type, payload, state);
+  parseTokenCount(item.type, payload, ts, state);
+}
+
+function readTimestamp(item: Record<string, unknown>, state: CodexParseState): Date | undefined {
+  const ts = typeof item.timestamp === "string" ? parseTimestamp(item.timestamp) : undefined;
+  if (ts) {
+    state.events.push(ts);
+    addEventMark(ts, state);
+  }
+  return ts;
+}
+
+function parseSessionMeta(
+  type: unknown,
+  payload: Record<string, unknown> | undefined,
+  state: CodexParseState,
+): void {
+  if (type !== "session_meta" || !payload) {
+    return;
+  }
+  state.sessionId = asString(payload.id) ?? state.sessionId;
+  state.cwd = asString(payload.cwd) ?? state.cwd;
+  state.originator = asString(payload.originator) ?? state.originator;
+}
+
+function parseTurnContext(
+  type: unknown,
+  payload: Record<string, unknown> | undefined,
+  ts: Date | undefined,
+  state: CodexParseState,
+): void {
+  if (type !== "turn_context" || !payload) {
+    return;
+  }
+  setCurrentModel(asString(payload.model), ts, state);
+  setCurrentEffort(asString(payload.effort) ?? nestedReasoningEffort(payload), ts, state);
+}
+
+function parseResponseItem(
+  type: unknown,
+  payload: Record<string, unknown> | undefined,
+  state: CodexParseState,
+): void {
+  if (type !== "response_item" || payload?.type !== "message") {
+    return;
+  }
+  const role = payload.role;
+  if (role === "assistant") {
+    state.assistantTurns += 1;
+  }
+  if (role === "user") {
+    state.userTurns += 1;
+  }
+}
+
+function parseTokenCount(
+  type: unknown,
+  payload: Record<string, unknown> | undefined,
+  ts: Date | undefined,
+  state: CodexParseState,
+): void {
+  const usages = readTokenUsages(type, payload);
+  if (!usages) {
+    return;
+  }
+
+  state.tokens = codexTotalTokens(usages.totalUsage);
+  addCodexRequest(codexRequestTokens(usages.lastUsage), ts, state);
+}
+
+function readTokenUsages(
+  type: unknown,
+  payload: Record<string, unknown> | undefined,
+): { lastUsage: Record<string, unknown>; totalUsage: Record<string, unknown> } | undefined {
+  if (!isTokenCountEvent(type, payload)) {
+    return undefined;
+  }
+  return tokenUsagesFromInfo(readRecord(payload.info));
+}
+
+function isTokenCountEvent(
+  type: unknown,
+  payload: Record<string, unknown> | undefined,
+): payload is Record<string, unknown> {
+  return type === "event_msg" && payload?.type === "token_count";
+}
+
+function tokenUsagesFromInfo(
+  info: Record<string, unknown> | undefined,
+): { lastUsage: Record<string, unknown>; totalUsage: Record<string, unknown> } | undefined {
+  const totalUsage = readRecord(info?.total_token_usage);
+  const lastUsage = readRecord(info?.last_token_usage);
+  if (!totalUsage) {
+    return undefined;
+  }
+  if (!lastUsage) {
+    return undefined;
+  }
+  return { lastUsage, totalUsage };
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return isRecord(value) ? value : undefined;
+}
+
+function addCodexRequest(
+  tokens: ParsedSession["tokens"],
+  ts: Date | undefined,
+  state: CodexParseState,
+): void {
+  addRequest(state.requests, {
+    effort: state.currentEffort,
+    model: state.currentModel,
+    originator: state.originator,
+    repo: repoName(state.cwd),
+    sessionId: finalSessionId(state.sessionId, state.path),
+    source: "codex",
+    tokens,
+    ts,
+  });
+}
+
+function finishCodexSession(state: CodexParseState): ParsedSession | undefined {
+  if (state.events.length === 0) {
     return undefined;
   }
 
-  events.sort((a, b) => a.getTime() - b.getTime());
-  const allocated = allocateStateTime(eventMarks);
-  const modelTokens = distributeModelTokens(tokens, models);
-  const finalSessionId =
-    sessionId ??
-    path
-      .split("/")
-      .pop()
-      ?.replace(/\.jsonl$/, "") ??
-    "unknown";
+  state.events.sort((a, b) => a.getTime() - b.getTime());
+  const allocated = allocateStateTime(state.eventMarks);
+  const modelTokens = distributeModelTokens(state.tokens, state.models);
 
   return {
     activeSeconds: allocated.totalSeconds,
-    assistantTurns,
-    cwd,
+    assistantTurns: state.assistantTurns,
+    cwd: state.cwd,
     dayModelActiveSeconds: collapseDayStateSeconds(allocated.byDayStateSeconds),
     dayStateActiveSeconds: allocated.byDayStateSeconds,
-    end: events.at(-1) ?? events[0],
-    efforts,
-    languages,
+    end: state.events.at(-1) ?? state.events[0],
+    efforts: state.efforts,
+    languages: state.languages,
     modelActiveSeconds: collapseStateSeconds(allocated.byStateSeconds),
     modelTokens,
-    models,
-    originator: originator ?? "unknown",
-    path,
-    repo: repoName(cwd),
-    requestCount: requests.length,
-    requests,
-    sessionId: finalSessionId,
+    models: state.models,
+    originator: state.originator ?? "unknown",
+    path: state.path,
+    repo: repoName(state.cwd),
+    requestCount: state.requests.length,
+    requests: state.requests,
+    sessionId: finalSessionId(state.sessionId, state.path),
     source: "codex",
-    sourceLabel: sessionLabel("codex", originator),
-    start: events[0],
+    sourceLabel: sessionLabel("codex", state.originator),
+    start: state.events[0],
     stateActiveSeconds: allocated.byStateSeconds,
-    tokens: { ...tokens },
-    userTurns,
+    tokens: { ...state.tokens },
+    userTurns: state.userTurns,
+  };
+}
+
+function setCurrentModel(
+  model: string | undefined,
+  ts: Date | undefined,
+  state: CodexParseState,
+): void {
+  if (!model) {
+    return;
+  }
+  state.models[model] = (state.models[model] ?? 0) + 1;
+  state.currentModel = model;
+  if (ts) {
+    addEventMark(ts, state);
+  }
+}
+
+function setCurrentEffort(
+  effort: string | undefined,
+  ts: Date | undefined,
+  state: CodexParseState,
+): void {
+  if (!effort) {
+    return;
+  }
+  state.efforts[effort] = (state.efforts[effort] ?? 0) + 1;
+  state.currentEffort = effort;
+  if (ts) {
+    addEventMark(ts, state);
+  }
+}
+
+function addEventMark(ts: Date, state: CodexParseState): void {
+  state.eventMarks.push({ effort: state.currentEffort, model: state.currentModel, ts });
+}
+
+function codexTotalTokens(usage: Record<string, unknown>): ParsedSession["tokens"] {
+  const rawInput = asNumber(usage.input_tokens);
+  const cached = asNumber(usage.cached_input_tokens);
+  const input = Math.max(rawInput - cached, 0);
+  const output = asNumber(usage.output_tokens);
+  return {
+    cacheWrite: 0,
+    cached,
+    input,
+    output,
+    reasoning: asNumber(usage.reasoning_output_tokens),
+    total: asNumber(usage.total_tokens) || input + cached + output,
+  };
+}
+
+function codexRequestTokens(usage: Record<string, unknown>): ParsedSession["tokens"] {
+  const rawInput = asNumber(usage.input_tokens);
+  const cached = asNumber(usage.cached_input_tokens);
+  return {
+    cacheWrite: 0,
+    cached,
+    input: Math.max(rawInput - cached, 0),
+    output: asNumber(usage.output_tokens),
+    reasoning: asNumber(usage.reasoning_output_tokens),
+    total: asNumber(usage.total_tokens),
   };
 }
 
@@ -222,6 +337,26 @@ function nestedReasoningEffort(payload: Record<string, unknown>): string | undef
     : undefined;
   const settings = isRecord(collaborationMode?.settings) ? collaborationMode.settings : undefined;
   return asString(settings?.reasoning_effort);
+}
+
+function finalSessionId(sessionId: string | undefined, path: string): string {
+  return (
+    sessionId ??
+    path
+      .split("/")
+      .pop()
+      ?.replace(/\.jsonl$/, "") ??
+    "unknown"
+  );
+}
+
+function parseJsonObject(line: string): Record<string, unknown> | undefined {
+  try {
+    const item: unknown = JSON.parse(line);
+    return isRecord(item) ? item : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, any> {

@@ -13,16 +13,18 @@
     "build": "vp pack",
     "check": "vp check",
     "test": "vp test run",
-    "prepare": "vp config"
+    "prepare": "vp config",
+    "fallow": "fallow",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@inquirer/select": "^5.2.1",
-    "better-sqlite3": "^12.10.0",
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",
     "@types/sql.js": "^1.4.11",
+    "fallow": "^2.96.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vite-plus": "catalog:"

@@ -109,6 +109,7 @@ export async function parseOpencodeRows({
   return sessions;
 }
 
+// fallow-ignore-next-line complexity
 async function parseSessionRow(
   row: OpencodeSessionRow,
   messages: OpencodeMessageRow[],
