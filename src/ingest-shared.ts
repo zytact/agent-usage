@@ -2,7 +2,7 @@ import { basename, extname } from "node:path";
 
 import type { SessionRequest, SourceId, TokenUsage } from "./domain.js";
 
-export const EXTENSION_LANGUAGES: Record<string, string> = {
+const EXTENSION_LANGUAGES: Record<string, string> = {
   ".bash": "Shell",
   ".c": "C",
   ".cc": "C++",
@@ -93,7 +93,7 @@ export function sessionLabel(source: SourceId, originator: string | undefined): 
   return source;
 }
 
-export function subharnessName(source: SourceId, originator: string | undefined): string {
+function subharnessName(source: SourceId, originator: string | undefined): string {
   if ((source === "codex" || source === "opencode") && originator === "t3code_desktop") {
     return "t3code";
   }

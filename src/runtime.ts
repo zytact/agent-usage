@@ -28,7 +28,7 @@ export type RuntimeDeps = {
   stdout: Pick<NodeJS.WriteStream, "write">;
 };
 
-export function defaultRuntimeDeps(): RuntimeDeps {
+function defaultRuntimeDeps(): RuntimeDeps {
   return {
     chooseAction: promptChoose,
     clearScreen: () => {
@@ -166,7 +166,7 @@ async function openHtmlReport(
   await deps.openPath(outputPath);
 }
 
-export async function collectSessions(includeClaude: boolean): Promise<ParsedSession[]> {
+async function collectSessions(includeClaude: boolean): Promise<ParsedSession[]> {
   const roots = defaultDiscoveryRoots(homedir());
   const discovered = await discoverSessionFiles(roots);
   const codexSessions = (

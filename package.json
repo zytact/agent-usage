@@ -19,7 +19,6 @@
   },
   "dependencies": {
     "@inquirer/select": "^5.2.1",
-    "better-sqlite3": "^12.10.0",
     "sql.js": "^1.14.1"
   },
   "devDependencies": {

@@ -90,7 +90,7 @@ export type BuiltReport = {
   sourceCount: number;
 };
 
-export const SOURCE_TONES = {
+const SOURCE_TONES = {
   claude: "oklch(0.72 0.1 50)",
   codex: "oklch(0.681 0.132 258.4)",
   combined: "oklch(0.681 0.132 258.4)",
@@ -101,7 +101,7 @@ export const SOURCE_TONES = {
   other: "oklch(0.72 0.09 210)",
 } as const;
 
-export function filterSessionsByScope(
+function filterSessionsByScope(
   sessions: ParsedSession[],
   scope: Scope,
   now: Date,
@@ -222,7 +222,7 @@ export function buildReport(
   };
 }
 
-export function groupedDailyModelBreakdown(sessions: ParsedSession[]): DailyBreakdownRow[] {
+function groupedDailyModelBreakdown(sessions: ParsedSession[]): DailyBreakdownRow[] {
   const grouped = new Map<string, DailyBreakdownRow & { _sessionIds: Set<string> }>();
 
   for (const session of sessions) {
@@ -283,7 +283,7 @@ export function groupedDailyModelBreakdown(sessions: ParsedSession[]): DailyBrea
     );
 }
 
-export function filterSessionsByModel(
+function filterSessionsByModel(
   sessions: ParsedSession[],
   predicate: (model: string) => boolean,
 ): ParsedSession[] {
@@ -497,11 +497,11 @@ export function estimateStatsTotalCost(
   return found ? total : undefined;
 }
 
-export function isGptModel(model: string): boolean {
+function isGptModel(model: string): boolean {
   return model.toLowerCase().includes("gpt");
 }
 
-export function attributionOverageRows(
+function attributionOverageRows(
   sessions: ParsedSession[],
 ): Array<{ active: number; attributed: number; sessionId: string; source: string }> {
   return sessions
@@ -514,7 +514,7 @@ export function attributionOverageRows(
     .filter((row) => row.attributed > row.active);
 }
 
-export function formatScopeTitle(scope: Scope, now: Date): string {
+function formatScopeTitle(scope: Scope, now: Date): string {
   const today = now.toISOString().slice(0, 10);
   if (scope === "today") {
     return `Today · ${today}`;
@@ -635,7 +635,7 @@ export function modelRows(
   });
 }
 
-export const MODEL_ALIASES: Record<string, string> = {
+const MODEL_ALIASES: Record<string, string> = {
   "claude-haiku-4-5-20251001": "anthropic/claude-haiku-4.5",
   "claude-opus-4-6": "anthropic/claude-opus-4.6",
   "claude-opus-4-7": "anthropic/claude-opus-4.7",
