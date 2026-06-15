@@ -4,7 +4,7 @@ on:
   pull_request:
 
 jobs:
-  typecheck:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -13,29 +13,7 @@ jobs:
           node-version: "22"
           cache: true
       - run: vp install
-      - run: vp run typecheck
-
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version: "22"
-          cache: true
-      - run: vp install
-      - run: vp lint
-
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version: "22"
-          cache: true
-      - run: vp install
-      - run: vp test run
+      - run: vp check
 
   fallow:
     runs-on: ubuntu-latest
