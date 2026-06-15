@@ -229,7 +229,7 @@ function renderModelList(rows: ReturnType<typeof modelRows>): string[] {
   }
   for (const row of rows) {
     lines.push(
-      `    - ${row.key} · ${row.pct.toFixed(0)}% · in ${compactTokens(row.tokenInfo.input)} (${row.inputRate}) · cached ${compactTokens(row.tokenInfo.cached)} · write ${compactTokens(row.tokenInfo.cacheWrite)} · out ${compactTokens(row.tokenInfo.output)} (${row.outputRate}) · reason ${compactTokens(row.tokenInfo.reasoning)} · est ${row.cost}`,
+      `    - ${row.key} · ${row.pct.toFixed(0)}% · time ${humanSeconds(row.activeSeconds)} · in ${compactTokens(row.tokenInfo.input)} (${row.inputRate}) · cached ${compactTokens(row.tokenInfo.cached)} · write ${compactTokens(row.tokenInfo.cacheWrite)} · out ${compactTokens(row.tokenInfo.output)} (${row.outputRate}) · reason ${compactTokens(row.tokenInfo.reasoning)} · est ${row.cost}`,
     );
   }
   return lines;

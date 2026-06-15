@@ -842,6 +842,7 @@ export function modelRows(
   pricing: Record<string, PricingInfo>,
   limit: number,
 ): Array<{
+  activeSeconds: number;
   cost: string;
   inputRate: string;
   key: string;
@@ -869,6 +870,7 @@ export function modelRows(
     const modelId = resolveModelId(key);
     const rates = pricing[modelId] ?? {};
     return {
+      activeSeconds: stats.modelActiveSeconds[key] ?? 0,
       cost: formatUsd(estimateCost(key, tokenInfo, pricing)),
       inputRate: formatUsdPerMillion(rates.prompt),
       key,
