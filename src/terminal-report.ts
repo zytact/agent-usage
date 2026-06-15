@@ -1,6 +1,12 @@
 import type { ReportMode } from "./args.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
-import { ALL_SECTIONS, DEFAULT_SECTIONS, inferSectionMode, type SectionKey } from "./sections.js";
+import {
+  ALL_SECTIONS,
+  DEFAULT_SECTIONS,
+  inferSectionModeForScope,
+  sanitizeSectionsForScope,
+  type SectionKey,
+} from "./sections.js";
 import {
   buildRequestSummaryData,
   formatFloat,
@@ -22,10 +28,11 @@ export function renderTerminalReport(
   reportMode: ReportMode = "summary",
   sections: SectionKey[] = reportMode === "full" ? ALL_SECTIONS : DEFAULT_SECTIONS,
 ): string {
+  const resolvedSections = sanitizeSectionsForScope(report.scope, sections);
   const lines: string[] = [];
   const combinedCost = formatUsd(estimateStatsTotalCost(report.combined.stats, pricing));
-  const activeSections = new Set(sections);
-  const mode = inferSectionMode(sections);
+  const activeSections = new Set(resolvedSections);
+  const mode = inferSectionModeForScope(report.scope, resolvedSections);
 
   lines.push(`AGENT USAGE DASHBOARD`);
   lines.push(report.scopeTitle);

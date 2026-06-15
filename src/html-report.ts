@@ -2,7 +2,13 @@ import { writeFile } from "node:fs/promises";
 
 import type { ReportMode } from "./args.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
-import { ALL_SECTIONS, DEFAULT_SECTIONS, inferSectionMode, type SectionKey } from "./sections.js";
+import {
+  ALL_SECTIONS,
+  DEFAULT_SECTIONS,
+  inferSectionModeForScope,
+  sanitizeSectionsForScope,
+  type SectionKey,
+} from "./sections.js";
 import {
   buildRequestSummaryData,
   estimateStatsTotalCost,
@@ -25,6 +31,7 @@ export function renderHtmlReport(
   reportMode: ReportMode = "summary",
   sections: SectionKey[] = reportMode === "full" ? ALL_SECTIONS : DEFAULT_SECTIONS,
 ): string {
+  const resolvedSections = sanitizeSectionsForScope(report.scope, sections);
   const combinedCost = estimateStatsTotalCost(report.combined.stats, pricing);
   const noData =
     report.combined.stats.sessionCount === 0
@@ -33,8 +40,8 @@ export function renderHtmlReport(
   const sourcesNote = report.includeClaude
     ? "Codex: ~/.codex/sessions · opencode: ~/.local/share/opencode/opencode.db · Pi: ~/.pi/agent/sessions · Claude Code: ~/.claude/projects"
     : "Codex: ~/.codex/sessions · opencode: ~/.local/share/opencode/opencode.db · Pi: ~/.pi/agent/sessions";
-  const activeSections = new Set(sections);
-  const mode = inferSectionMode(sections);
+  const activeSections = new Set(resolvedSections);
+  const mode = inferSectionModeForScope(report.scope, resolvedSections);
   const visibleSections = activeSections.has("source-sections")
     ? report.sections.filter((section) =>
         mode === "full" ? true : isPrimarySection(section.title),

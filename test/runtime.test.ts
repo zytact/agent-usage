@@ -10,6 +10,37 @@ import { useTempDirs } from "./fixtures.js";
 const tempDirs = useTempDirs();
 
 describe("runCli", () => {
+  it("omits daily-usage from section prompt for today", async () => {
+    let availableSections: string[] = [];
+
+    const code = await runCli(
+      {
+        help: false,
+        html: true,
+        htmlPath: "-",
+        includeClaude: false,
+        reportMode: "summary",
+      },
+      {
+        chooseAction: async () => "today",
+        chooseSections: async (defaults, available) => {
+          availableSections = available;
+          return defaults;
+        },
+        clearScreen: () => {},
+        collectSessions: async () => [],
+        loadPricing: async () => ({}),
+        now: () => new Date("2026-06-14T18:45:00+05:30"),
+        openPath: async () => {},
+        stderr: { write: () => true },
+        stdout: { write: () => true },
+      },
+    );
+
+    expect(code).toBe(0);
+    expect(availableSections).not.toContain("daily-usage");
+  });
+
   it("writes html to stdout when --html=-", async () => {
     const { code, stdout } = await runHtmlCli("-");
 

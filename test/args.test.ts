@@ -75,6 +75,12 @@ describe("parseArgs", () => {
     );
   });
 
+  it("rejects daily-usage when scope is today", () => {
+    expect(() => parseArgs(["--scope", "today", "--section", "daily-usage"])).toThrowError(
+      new UsageError("Invalid for --scope=today: daily-usage"),
+    );
+  });
+
   it("rejects --full with --section", () => {
     expect(() => parseArgs(["--full", "--section", "request-summary"])).toThrowError(
       new UsageError("Cannot use --section with --full"),

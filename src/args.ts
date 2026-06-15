@@ -1,5 +1,5 @@
 import type { Scope } from "./report-core.js";
-import { normalizeSectionList, type SectionKey } from "./sections.js";
+import { normalizeSectionList, validateSectionsForScope, type SectionKey } from "./sections.js";
 
 export type ReportMode = "summary" | "full";
 
@@ -46,6 +46,7 @@ export function parseArgs(argv: string[]): CliOptions {
     state.index += 1;
   }
 
+  validateOptions(state.options);
   return state.options;
 }
 
@@ -119,6 +120,19 @@ function parseHtmlFlag(argv: string[], state: ArgParseState): void {
   if (value && !value.startsWith("--")) {
     state.options.htmlPath = value;
     state.index += 1;
+  }
+}
+
+function validateOptions(options: CliOptions): void {
+  if (options.scope && options.sections) {
+    try {
+      validateSectionsForScope(options.scope, options.sections);
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new UsageError(error.message);
+      }
+      throw error;
+    }
   }
 }
 

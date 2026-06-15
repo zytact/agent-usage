@@ -1,3 +1,5 @@
+import type { Scope } from "./report-core.js";
+
 const SECTION_KEYS = [
   "request-summary",
   "gpt-only-request-summary",
@@ -59,18 +61,45 @@ export function normalizeSectionList(values: string[]): SectionKey[] {
   return out;
 }
 
-export const DETAIL_SECTIONS: SectionKey[] = ALL_SECTIONS.filter(
-  (section) => !DEFAULT_SECTIONS.includes(section),
-);
+export function defaultSectionsForScope(scope: Scope): SectionKey[] {
+  return scope === "today"
+    ? DEFAULT_SECTIONS.filter((section) => section !== "daily-usage")
+    : DEFAULT_SECTIONS;
+}
 
-export function inferSectionMode(sections: SectionKey[]): "summary" | "full" | "custom" {
-  const sameLength = sections.length === DEFAULT_SECTIONS.length;
-  if (sameLength && DEFAULT_SECTIONS.every((section, index) => sections[index] === section)) {
+export function availableSectionsForScope(scope: Scope): SectionKey[] {
+  return scope === "today"
+    ? ALL_SECTIONS.filter((section) => section !== "daily-usage")
+    : ALL_SECTIONS;
+}
+
+export function sanitizeSectionsForScope(scope: Scope, sections: SectionKey[]): SectionKey[] {
+  const allowed = new Set(availableSectionsForScope(scope));
+  return sections.filter((section) => allowed.has(section));
+}
+
+export function validateSectionsForScope(scope: Scope, sections: SectionKey[]): void {
+  const invalid = sections.filter((section) => !availableSectionsForScope(scope).includes(section));
+  if (invalid.length > 0) {
+    throw new Error(`Invalid for --scope=${scope}: ${invalid.join(", ")}`);
+  }
+}
+
+export function inferSectionModeForScope(
+  scope: Scope,
+  sections: SectionKey[],
+): "summary" | "full" | "custom" {
+  const defaults = defaultSectionsForScope(scope);
+  const all = availableSectionsForScope(scope);
+  if (
+    sections.length === defaults.length &&
+    defaults.every((section, index) => sections[index] === section)
+  ) {
     return "summary";
   }
   if (
-    sections.length === ALL_SECTIONS.length &&
-    ALL_SECTIONS.every((section, index) => sections[index] === section)
+    sections.length === all.length &&
+    all.every((section, index) => sections[index] === section)
   ) {
     return "full";
   }

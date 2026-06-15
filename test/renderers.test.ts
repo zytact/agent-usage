@@ -123,15 +123,17 @@ describe("renderers", () => {
     expect(output).not.toContain("CODEX");
   });
 
-  it("renders terminal empty-state text", () => {
+  it("omits daily usage for today", () => {
     const report = buildReport([], "today", false, new Date("2026-06-14T18:45:00+05:30"), pricing);
     const output = renderTerminalReport(report, {});
+    const html = renderHtmlReport(report, {});
 
     expect(output).toContain("SUMMARY");
-    expect(output).toContain("DAILY USAGE");
+    expect(output).not.toContain("DAILY USAGE");
     expect(output).toContain("Model requests  0");
     expect(output).toContain("Tokens / active minute");
     expect(output).not.toContain("DAILY MODEL BREAKDOWN");
     expect(output).toContain("No sessions found in this range.");
+    expect(html).not.toContain("Per-day tokens and cost");
   });
 });

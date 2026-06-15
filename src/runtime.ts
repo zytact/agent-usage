@@ -18,18 +18,21 @@ import { loadPricingMap } from "./pricing.js";
 import { scopeStart, type Scope } from "./report-core.js";
 import { buildReport, type PricingInfo } from "./report-data.js";
 import {
-  ALL_SECTIONS,
-  DEFAULT_SECTIONS,
-  DETAIL_SECTIONS,
   SECTION_LABELS,
-  inferSectionMode,
+  availableSectionsForScope,
+  defaultSectionsForScope,
+  inferSectionModeForScope,
+  sanitizeSectionsForScope,
   type SectionKey,
 } from "./sections.js";
 import { renderTerminalReport } from "./terminal-report.js";
 
 export type RuntimeDeps = {
   chooseAction: (items: string[], header: string) => Promise<string | undefined>;
-  chooseSections: (defaults: SectionKey[]) => Promise<SectionKey[] | undefined>;
+  chooseSections: (
+    defaults: SectionKey[],
+    available: SectionKey[],
+  ) => Promise<SectionKey[] | undefined>;
   clearScreen: () => void;
   collectSessions: (includeClaude: boolean, start: Date) => Promise<ParsedSession[]>;
   loadPricing: () => Promise<Record<string, PricingInfo>>;
@@ -64,7 +67,7 @@ export async function runCli(
     return 0;
   }
 
-  const sections = await chooseReportSections(options, deps);
+  const sections = await chooseReportSections(options, deps, scope);
   if (!sections) {
     return 0;
   }
@@ -94,14 +97,15 @@ async function chooseInitialScope(
 async function chooseReportSections(
   options: CliOptions,
   deps: RuntimeDeps,
+  scope: Scope,
 ): Promise<SectionKey[] | undefined> {
   if (options.sections?.length) {
-    return options.sections;
+    return sanitizeSectionsForScope(scope, options.sections);
   }
   if (options.reportMode === "full") {
-    return ALL_SECTIONS;
+    return availableSectionsForScope(scope);
   }
-  return deps.chooseSections(DEFAULT_SECTIONS);
+  return deps.chooseSections(defaultSectionsForScope(scope), availableSectionsForScope(scope));
 }
 
 async function renderHtmlOnce(
@@ -116,7 +120,7 @@ async function renderHtmlOnce(
   const html = renderHtmlReport(
     buildReport(sessions, scope, options.includeClaude, deps.now(), pricing),
     pricing,
-    inferSectionMode(sections) === "full" ? "full" : "summary",
+    inferSectionModeForScope(scope, sections) === "full" ? "full" : "summary",
     sections,
   );
 
@@ -143,7 +147,15 @@ async function runInteractiveReport(
 ): Promise<number> {
   let currentScope = scope;
   while (true) {
-    const report = writeTerminalReport(options, deps, sessions, pricing, currentScope, sections);
+    const activeSections = sanitizeSectionsForScope(currentScope, sections);
+    const report = writeTerminalReport(
+      options,
+      deps,
+      sessions,
+      pricing,
+      currentScope,
+      activeSections,
+    );
     const action = await deps.chooseAction(
       ["Open HTML report", "Change range", "Refresh", "Exit"],
       "Choose an action",
@@ -154,7 +166,7 @@ async function runInteractiveReport(
       report,
       pricing,
       options.reportMode,
-      sections,
+      activeSections,
     );
     if (nextScope === "exit") {
       return 0;
@@ -177,7 +189,7 @@ function writeTerminalReport(
     `${renderTerminalReport(
       report,
       pricing,
-      inferSectionMode(sections) === "full" ? "full" : "summary",
+      inferSectionModeForScope(scope, sections) === "full" ? "full" : "summary",
       sections,
     )}\n`,
   );
@@ -367,21 +379,25 @@ async function promptChoose(items: string[], header: string): Promise<string | u
   }
 }
 
-async function promptSections(defaults: SectionKey[]): Promise<SectionKey[] | undefined> {
+async function promptSections(
+  defaults: SectionKey[],
+  available: SectionKey[],
+): Promise<SectionKey[] | undefined> {
+  const detail = available.filter((section) => !defaults.includes(section));
   try {
     const selected = await checkbox({
       choices: [
         new Separator("Defaults"),
-        ...DEFAULT_SECTIONS.map((section) => ({
-          checked: defaults.includes(section),
+        ...defaults.map((section) => ({
+          checked: true,
           description:
             section === "source-sections" ? "Codex, opencode, Pi, Claude Code" : undefined,
           name: SECTION_LABELS[section],
           value: section,
         })),
         new Separator("Extra detail"),
-        ...DETAIL_SECTIONS.map((section) => ({
-          checked: defaults.includes(section),
+        ...detail.map((section) => ({
+          checked: false,
           description:
             section === "source-section-languages" ? "Only affects per-source sections" : undefined,
           name: SECTION_LABELS[section],
@@ -391,7 +407,7 @@ async function promptSections(defaults: SectionKey[]): Promise<SectionKey[] | un
       instructions: false,
       loop: false,
       message: "Pick report sections",
-      pageSize: ALL_SECTIONS.length + 2,
+      pageSize: available.length + 2,
       required: true,
       shortcuts: { all: null, invert: null },
     });
