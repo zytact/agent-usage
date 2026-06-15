@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+import checkbox, { Separator } from "@inquirer/checkbox";
 import select from "@inquirer/select";
 
 import type { CliOptions } from "./args.js";
@@ -16,10 +17,19 @@ import { parsePiSessionFile } from "./parsers/pi.js";
 import { loadPricingMap } from "./pricing.js";
 import { scopeStart, type Scope } from "./report-core.js";
 import { buildReport, type PricingInfo } from "./report-data.js";
+import {
+  ALL_SECTIONS,
+  DEFAULT_SECTIONS,
+  DETAIL_SECTIONS,
+  SECTION_LABELS,
+  inferSectionMode,
+  type SectionKey,
+} from "./sections.js";
 import { renderTerminalReport } from "./terminal-report.js";
 
 export type RuntimeDeps = {
   chooseAction: (items: string[], header: string) => Promise<string | undefined>;
+  chooseSections: (defaults: SectionKey[]) => Promise<SectionKey[] | undefined>;
   clearScreen: () => void;
   collectSessions: (includeClaude: boolean, start: Date) => Promise<ParsedSession[]>;
   loadPricing: () => Promise<Record<string, PricingInfo>>;
@@ -32,6 +42,7 @@ export type RuntimeDeps = {
 function defaultRuntimeDeps(): RuntimeDeps {
   return {
     chooseAction: promptChoose,
+    chooseSections: promptSections,
     clearScreen: () => {
       process.stdout.write("\x1bc");
     },
@@ -53,6 +64,11 @@ export async function runCli(
     return 0;
   }
 
+  const sections = await chooseReportSections(options, deps);
+  if (!sections) {
+    return 0;
+  }
+
   const ingestScope = options.html ? scope : "30d";
   const sessions = await deps.collectSessions(
     options.includeClaude,
@@ -61,8 +77,8 @@ export async function runCli(
   const pricing = await deps.loadPricing();
 
   return options.html
-    ? renderHtmlOnce(options, deps, sessions, pricing, scope)
-    : runInteractiveReport(options, deps, sessions, pricing, scope);
+    ? renderHtmlOnce(options, deps, sessions, pricing, scope, sections)
+    : runInteractiveReport(options, deps, sessions, pricing, scope, sections);
 }
 
 async function chooseInitialScope(
@@ -75,18 +91,33 @@ async function chooseInitialScope(
     | undefined;
 }
 
+async function chooseReportSections(
+  options: CliOptions,
+  deps: RuntimeDeps,
+): Promise<SectionKey[] | undefined> {
+  if (options.sections?.length) {
+    return options.sections;
+  }
+  if (options.reportMode === "full") {
+    return ALL_SECTIONS;
+  }
+  return deps.chooseSections(DEFAULT_SECTIONS);
+}
+
 async function renderHtmlOnce(
   options: CliOptions,
   deps: RuntimeDeps,
   sessions: ParsedSession[],
   pricing: Record<string, PricingInfo>,
   scope: Scope,
+  sections: SectionKey[],
 ): Promise<number> {
   const outputPath = await resolveHtmlPath(options.htmlPath);
   const html = renderHtmlReport(
     buildReport(sessions, scope, options.includeClaude, deps.now(), pricing),
     pricing,
-    options.reportMode,
+    inferSectionMode(sections) === "full" ? "full" : "summary",
+    sections,
   );
 
   if (outputPath === "-") {
@@ -108,10 +139,11 @@ async function runInteractiveReport(
   sessions: ParsedSession[],
   pricing: Record<string, PricingInfo>,
   scope: Scope,
+  sections: SectionKey[],
 ): Promise<number> {
   let currentScope = scope;
   while (true) {
-    const report = writeTerminalReport(options, deps, sessions, pricing, currentScope);
+    const report = writeTerminalReport(options, deps, sessions, pricing, currentScope, sections);
     const action = await deps.chooseAction(
       ["Open HTML report", "Change range", "Refresh", "Exit"],
       "Choose an action",
@@ -122,6 +154,7 @@ async function runInteractiveReport(
       report,
       pricing,
       options.reportMode,
+      sections,
     );
     if (nextScope === "exit") {
       return 0;
@@ -136,10 +169,18 @@ function writeTerminalReport(
   sessions: ParsedSession[],
   pricing: Record<string, PricingInfo>,
   scope: Scope,
+  sections: SectionKey[],
 ) {
   deps.clearScreen();
   const report = buildReport(sessions, scope, options.includeClaude, deps.now(), pricing);
-  deps.stdout.write(`${renderTerminalReport(report, pricing, options.reportMode)}\n`);
+  deps.stdout.write(
+    `${renderTerminalReport(
+      report,
+      pricing,
+      inferSectionMode(sections) === "full" ? "full" : "summary",
+      sections,
+    )}\n`,
+  );
   return report;
 }
 
@@ -149,6 +190,7 @@ async function handleInteractiveAction(
   report: ReturnType<typeof buildReport>,
   pricing: Record<string, PricingInfo>,
   reportMode: CliOptions["reportMode"],
+  sections: SectionKey[],
 ): Promise<Scope | "exit" | undefined> {
   if (!action || action === "Exit") {
     return "exit";
@@ -160,7 +202,7 @@ async function handleInteractiveAction(
     return changeScope(deps);
   }
   if (action === "Open HTML report") {
-    await openHtmlReport(deps, report, pricing, reportMode);
+    await openHtmlReport(deps, report, pricing, reportMode, sections);
   }
   return undefined;
 }
@@ -175,9 +217,10 @@ async function openHtmlReport(
   report: ReturnType<typeof buildReport>,
   pricing: Record<string, PricingInfo>,
   reportMode: CliOptions["reportMode"],
+  sections: SectionKey[],
 ): Promise<void> {
   const outputPath = await resolveHtmlPath();
-  await writeHtmlReport(outputPath, renderHtmlReport(report, pricing, reportMode));
+  await writeHtmlReport(outputPath, renderHtmlReport(report, pricing, reportMode, sections));
   deps.stdout.write(`HTML report: ${outputPath}\n`);
   await deps.openPath(outputPath);
 }
@@ -316,6 +359,43 @@ async function promptChoose(items: string[], header: string): Promise<string | u
       choices: items.map((item) => ({ name: item, value: item })),
       message: header,
     });
+  } catch (error) {
+    if (error instanceof Error && error.name === "ExitPromptError") {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+async function promptSections(defaults: SectionKey[]): Promise<SectionKey[] | undefined> {
+  try {
+    const selected = await checkbox({
+      choices: [
+        new Separator("Defaults"),
+        ...DEFAULT_SECTIONS.map((section) => ({
+          checked: defaults.includes(section),
+          description:
+            section === "source-sections" ? "Codex, opencode, Pi, Claude Code" : undefined,
+          name: SECTION_LABELS[section],
+          value: section,
+        })),
+        new Separator("Extra detail"),
+        ...DETAIL_SECTIONS.map((section) => ({
+          checked: defaults.includes(section),
+          description:
+            section === "source-section-languages" ? "Only affects per-source sections" : undefined,
+          name: SECTION_LABELS[section],
+          value: section,
+        })),
+      ],
+      instructions: false,
+      loop: false,
+      message: "Pick report sections",
+      pageSize: ALL_SECTIONS.length + 2,
+      required: true,
+      shortcuts: { all: null, invert: null },
+    });
+    return selected;
   } catch (error) {
     if (error instanceof Error && error.name === "ExitPromptError") {
       return undefined;

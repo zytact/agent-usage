@@ -2,6 +2,7 @@ import { writeFile } from "node:fs/promises";
 
 import type { ReportMode } from "./args.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
+import { ALL_SECTIONS, DEFAULT_SECTIONS, inferSectionMode, type SectionKey } from "./sections.js";
 import {
   buildRequestSummaryData,
   estimateStatsTotalCost,
@@ -22,6 +23,7 @@ export function renderHtmlReport(
   report: BuiltReport,
   pricing: Record<string, PricingInfo>,
   reportMode: ReportMode = "summary",
+  sections: SectionKey[] = reportMode === "full" ? ALL_SECTIONS : DEFAULT_SECTIONS,
 ): string {
   const combinedCost = estimateStatsTotalCost(report.combined.stats, pricing);
   const noData =
@@ -31,9 +33,13 @@ export function renderHtmlReport(
   const sourcesNote = report.includeClaude
     ? "Codex: ~/.codex/sessions · opencode: ~/.local/share/opencode/opencode.db · Pi: ~/.pi/agent/sessions · Claude Code: ~/.claude/projects"
     : "Codex: ~/.codex/sessions · opencode: ~/.local/share/opencode/opencode.db · Pi: ~/.pi/agent/sessions";
-  const visibleSections = report.sections.filter((section) =>
-    reportMode === "full" ? true : isPrimarySection(section.title),
-  );
+  const activeSections = new Set(sections);
+  const mode = inferSectionMode(sections);
+  const visibleSections = activeSections.has("source-sections")
+    ? report.sections.filter((section) =>
+        mode === "full" ? true : isPrimarySection(section.title),
+      )
+    : [];
 
   return `<!doctype html>
 <html lang="en">
@@ -383,6 +389,39 @@ details.raw-details summary {
   font-weight: 750;
 }
 .data-panel { padding: 22px 24px; }
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 14px;
+  background: var(--line);
+}
+.metric-pair {
+  min-width: 0;
+  padding: 14px 16px;
+  background: var(--surface-2);
+}
+.metric-pair h3 {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.metric-pair dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 12px;
+  margin: 0;
+}
+.metric-pair dt {
+  color: var(--soft);
+  font-size: 0.74rem;
+}
+.metric-pair dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
 .request-grid { grid-template-columns: repeat(4, minmax(140px, 1fr)); }
 .request-grid .metric { background: var(--surface-2); }
 .data-table {
@@ -544,7 +583,8 @@ details.raw-details summary {
   .daily-viz { grid-template-columns: 1fr; }
   .summary-grid,
   .request-grid,
-  .source-head dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .source-head dl,
+  .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .detail-grid,
   .detail-grid-summary,
   .detail-grid-full { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -561,6 +601,8 @@ details.raw-details summary {
   h1 { font-size: 2rem; }
   .summary-grid,
   .request-grid,
+  .metric-grid,
+  .metric-pair,
   .source-head dl,
   .model-metrics,
   .detail-grid,
@@ -587,7 +629,7 @@ details.raw-details summary {
       <div><p>Range</p><b>${escapeHtml(report.scopeTitle)}</b></div>
       <div><p>Generated</p><b>${escapeHtml(formatTimestamp(report.generatedAt))}</b></div>
       <div><p>Sources</p><b>${report.sourceCount} local stores</b></div>
-      <div><p>Mode</p><b>${reportMode === "full" ? "Full" : "Summary"}</b></div>
+      <div><p>Mode</p><b>${mode === "full" ? "Full" : mode === "summary" ? "Summary" : "Custom"}</b></div>
     </aside>
   </header>
   <dl class="summary-grid" aria-label="Combined summary">
@@ -597,13 +639,12 @@ details.raw-details summary {
     ${htmlMetric("Estimated cost", formatUsd(combinedCost), "models.dev rate card when available")}
   </dl>
   ${noData}
-  ${renderOverviewCharts(report, pricing)}
-  ${renderDailyStrip(report)}
-  ${renderDailyUsagePanel(report)}
-  ${renderRequestSummary("Combined request summary", report.requestSummary, report.combined.stats, pricing, reportMode === "full")}
-  ${reportMode === "full" ? renderRequestSummary("GPT-only request summary", report.gptOnlyRequestSummary, report.gptOnly.stats, pricing, true) : ""}
-  ${reportMode === "full" ? renderDailyBreakdown(report.dailyRows) : ""}
-  ${visibleSections.map((section) => renderSourceSection(section, pricing, reportMode === "full")).join("\n")}
+  ${renderSelectedOverview(report, pricing, activeSections, mode === "full")}
+  ${visibleSections
+    .map((section) =>
+      renderSourceSection(section, pricing, activeSections.has("source-section-languages")),
+    )
+    .join("\n")}
   <footer class="footer">
     <p><strong>Data sources:</strong> ${escapeHtml(sourcesNote)}</p>
     <p>T3 Code sessions are detected from Codex session metadata: <code>originator=t3code_desktop</code>, and from opencode session titles starting <code>T3 Code</code>.</p>
@@ -683,7 +724,59 @@ function renderSourceSection(
 </section>`;
 }
 
-function renderOverviewCharts(report: BuiltReport, pricing: Record<string, PricingInfo>): string {
+function renderSelectedOverview(
+  report: BuiltReport,
+  pricing: Record<string, PricingInfo>,
+  sections: Set<SectionKey>,
+  full: boolean,
+): string {
+  const parts: string[] = [];
+
+  const charts = renderSelectedChartGrid(report, pricing, sections);
+  if (charts) {
+    parts.push(charts);
+  }
+  if (sections.has("top-repos")) {
+    parts.push(renderCombinedTopReposPanel(report));
+  }
+  if (sections.has("daily-usage")) {
+    parts.push(renderDailyStrip(report));
+    parts.push(renderDailyUsagePanel(report, full));
+  }
+  if (sections.has("request-summary")) {
+    parts.push(
+      renderRequestSummary(
+        "Combined request summary",
+        report.requestSummary,
+        report.combined.stats,
+        pricing,
+        full,
+      ),
+    );
+  }
+  if (sections.has("gpt-only-request-summary")) {
+    parts.push(
+      renderRequestSummary(
+        "GPT-only request summary",
+        report.gptOnlyRequestSummary,
+        report.gptOnly.stats,
+        pricing,
+        true,
+      ),
+    );
+  }
+  if (sections.has("daily-breakdown")) {
+    parts.push(renderDailyBreakdown(report.dailyRows));
+  }
+
+  return parts.join("\n");
+}
+
+function renderSelectedChartGrid(
+  report: BuiltReport,
+  pricing: Record<string, PricingInfo>,
+  sections: Set<SectionKey>,
+): string {
   const sourceRows = report.sections
     .filter((section) => ["Codex", "opencode", "Claude Code", "Pi"].includes(section.title))
     .map((section) => ({
@@ -724,24 +817,51 @@ function renderOverviewCharts(report: BuiltReport, pricing: Record<string, Prici
     },
   ].filter((row) => row.value > 0);
 
-  return `<section class="chart-grid" aria-label="Glanceable usage overview">
-  <section class="chart-panel">
+  const panels: string[] = [];
+
+  if (sections.has("source-share")) {
+    panels.push(`<section class="chart-panel">
     <h2>Source share</h2>
     ${renderRingChart(sourceRows, report.combined.stats.activeSeconds, "active time")}
-  </section>
-  <section class="chart-panel">
-    <h2>Token composition</h2>
-    ${renderTokenStackList(tokenRows)}
-  </section>
-  <section class="chart-panel">
-    <h2>Model request mix</h2>
-    ${renderBarList(modelMix, 100, "No model markers")}
-  </section>
-  <section class="chart-panel">
+  </section>`);
+    panels.push(`<section class="chart-panel">
     <h2>Estimated cost by source</h2>
     ${renderBarList(costRows, Math.max(...costRows.map((row) => row.value), 1), "No priced usage")}
-  </section>
+  </section>`);
+  }
+  if (sections.has("token-mix")) {
+    panels.push(`<section class="chart-panel">
+    <h2>Token composition</h2>
+    ${renderTokenStackList(tokenRows)}
+  </section>`);
+  }
+  if (sections.has("model-breakdown")) {
+    panels.push(`<section class="chart-panel">
+    <h2>Model request mix</h2>
+    ${renderBarList(modelMix, 100, "No model markers")}
+  </section>`);
+  }
+
+  return panels.length === 0
+    ? ""
+    : `<section class="chart-grid" aria-label="Glanceable usage overview">${panels.join("\n")}
 </section>`;
+}
+
+function renderCombinedTopReposPanel(report: BuiltReport): string {
+  const repos = topEntries(report.combined.stats.repos, 8).map(
+    ({ key, value }) => [key, humanSeconds(value)] as const,
+  );
+  const body =
+    repos.length === 0
+      ? '<li class="empty">None</li>'
+      : repos
+          .map(
+            ([name, value]) =>
+              `<li><span title="${escapeHtml(name)}">${escapeHtml(name)}</span><b>${escapeHtml(value)}</b></li>`,
+          )
+          .join("");
+  return `<section class="data-panel"><h2>Top repos</h2><ul class="rank-list">${body}</ul></section>`;
 }
 
 function renderRequestSummary(
@@ -818,21 +938,16 @@ function renderDailyBreakdown(rows: DailyBreakdownRow[]): string {
 </section>`;
 }
 
-function renderDailyUsagePanel(report: BuiltReport): string {
-  const rows = report.dailyUsage.rows;
+function renderDailyUsagePanel(report: BuiltReport, full: boolean): string {
+  const rows = full ? report.dailyUsage.rows : report.dailyUsage.rows.slice(-7);
   return `<section class="data-panel">
   <h2>Per-day tokens and cost</h2>
   <div class="metric-grid">
-    ${htmlMetric("Avg tokens/day", compactMetric(report.dailyUsage.avgTokens))}
-    ${htmlMetric("Active-day avg tokens", compactMetric(report.dailyUsage.activeDayAvgTokens))}
-    ${htmlMetric("Median tokens/day", compactMetric(report.dailyUsage.tokenMedian))}
-    ${htmlMetric("P90 tokens/day", compactMetric(report.dailyUsage.tokenP90))}
-    ${htmlMetric("Token volatility", formatPercent(report.dailyUsage.tokenVolatility))}
-    ${htmlMetric("Avg cost/day", formatUsd(report.dailyUsage.avgCost))}
-    ${htmlMetric("Active-day avg cost", formatUsd(report.dailyUsage.activeDayAvgCost))}
-    ${htmlMetric("Median cost/day", formatUsd(report.dailyUsage.costMedian))}
-    ${htmlMetric("P90 cost/day", formatUsd(report.dailyUsage.costP90))}
-    ${htmlMetric("Cost volatility", formatPercent(report.dailyUsage.costVolatility))}
+    ${htmlMetricPair("Average", "Tokens/day", compactMetric(report.dailyUsage.avgTokens), "Cost/day", formatUsd(report.dailyUsage.avgCost))}
+    ${htmlMetricPair("Active-day average", "Tokens", compactMetric(report.dailyUsage.activeDayAvgTokens), "Cost", formatUsd(report.dailyUsage.activeDayAvgCost))}
+    ${htmlMetricPair("Median", "Tokens/day", compactMetric(report.dailyUsage.tokenMedian), "Cost/day", formatUsd(report.dailyUsage.costMedian))}
+    ${htmlMetricPair("P90", "Tokens/day", compactMetric(report.dailyUsage.tokenP90), "Cost/day", formatUsd(report.dailyUsage.costP90))}
+    ${htmlMetricPair("Volatility", "Tokens", formatPercent(report.dailyUsage.tokenVolatility), "Cost", formatPercent(report.dailyUsage.costVolatility))}
   </div>
   <table class="data-table dense">
     <thead><tr><th>Date</th><th>Active</th><th>Req</th><th>Tokens</th><th>Cost</th></tr></thead>
@@ -1080,6 +1195,20 @@ function htmlMetric(label: string, value: string, note?: string): string {
   return `<div class="metric"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>${
     note ? `<span>${escapeHtml(note)}</span>` : ""
   }</div>`;
+}
+
+function htmlMetricPair(
+  title: string,
+  leftLabel: string,
+  leftValue: string,
+  rightLabel: string,
+  rightValue: string,
+): string {
+  return `<section class="metric-pair"><h3>${escapeHtml(title)}</h3><dl><dt>${escapeHtml(
+    leftLabel,
+  )}</dt><dd>${escapeHtml(leftValue)}</dd><dt>${escapeHtml(rightLabel)}</dt><dd>${escapeHtml(
+    rightValue,
+  )}</dd></dl></section>`;
 }
 
 function formatPercent(value: number | undefined): string {

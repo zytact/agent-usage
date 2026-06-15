@@ -72,6 +72,17 @@ describe("renderers", () => {
     expect(html).toContain("Codex via T3 Code");
   });
 
+  it("renders custom html section subset", async () => {
+    const report = await makeReport();
+    const html = renderHtmlReport(report, {}, "summary", ["request-summary", "token-mix"]);
+
+    expect(html).toContain("Combined request summary");
+    expect(html).toContain("Token composition");
+    expect(html).not.toContain("Per-day tokens and cost");
+    expect(html).not.toContain("Source share");
+    expect(html).toContain("<b>Custom</b>");
+  });
+
   it("renders terminal dashboard text", async () => {
     const report = await makeReport();
     const output = renderTerminalReport(report, pricing);
@@ -100,6 +111,16 @@ describe("renderers", () => {
     expect(output).toContain("DAILY MODEL BREAKDOWN");
     expect(output).toContain("GPT-ONLY");
     expect(output).toContain("Weighted input eq/req");
+  });
+
+  it("renders terminal custom section subset", async () => {
+    const report = await makeReport();
+    const output = renderTerminalReport(report, pricing, "summary", ["token-mix"]);
+
+    expect(output).toContain("Token mix");
+    expect(output).not.toContain("SUMMARY");
+    expect(output).not.toContain("DAILY USAGE");
+    expect(output).not.toContain("CODEX");
   });
 
   it("renders terminal empty-state text", () => {

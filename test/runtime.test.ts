@@ -48,6 +48,7 @@ async function runHtmlCli(
     },
     {
       chooseAction: async () => undefined,
+      chooseSections: async (defaults) => defaults,
       clearScreen: () => {},
       collectSessions: async () => [],
       loadPricing: async () => ({}),
