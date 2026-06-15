@@ -599,6 +599,7 @@ details.raw-details summary {
   ${noData}
   ${renderOverviewCharts(report, pricing)}
   ${renderDailyStrip(report)}
+  ${renderDailyUsagePanel(report)}
   ${renderRequestSummary("Combined request summary", report.requestSummary, report.combined.stats, pricing, reportMode === "full")}
   ${reportMode === "full" ? renderRequestSummary("GPT-only request summary", report.gptOnlyRequestSummary, report.gptOnly.stats, pricing, true) : ""}
   ${reportMode === "full" ? renderDailyBreakdown(report.dailyRows) : ""}
@@ -817,6 +818,38 @@ function renderDailyBreakdown(rows: DailyBreakdownRow[]): string {
 </section>`;
 }
 
+function renderDailyUsagePanel(report: BuiltReport): string {
+  const rows = report.dailyUsage.rows;
+  return `<section class="data-panel">
+  <h2>Per-day tokens and cost</h2>
+  <div class="metric-grid">
+    ${htmlMetric("Avg tokens/day", compactMetric(report.dailyUsage.avgTokens))}
+    ${htmlMetric("Active-day avg tokens", compactMetric(report.dailyUsage.activeDayAvgTokens))}
+    ${htmlMetric("Median tokens/day", compactMetric(report.dailyUsage.tokenMedian))}
+    ${htmlMetric("P90 tokens/day", compactMetric(report.dailyUsage.tokenP90))}
+    ${htmlMetric("Token volatility", formatPercent(report.dailyUsage.tokenVolatility))}
+    ${htmlMetric("Avg cost/day", formatUsd(report.dailyUsage.avgCost))}
+    ${htmlMetric("Active-day avg cost", formatUsd(report.dailyUsage.activeDayAvgCost))}
+    ${htmlMetric("Median cost/day", formatUsd(report.dailyUsage.costMedian))}
+    ${htmlMetric("P90 cost/day", formatUsd(report.dailyUsage.costP90))}
+    ${htmlMetric("Cost volatility", formatPercent(report.dailyUsage.costVolatility))}
+  </div>
+  <table class="data-table dense">
+    <thead><tr><th>Date</th><th>Active</th><th>Req</th><th>Tokens</th><th>Cost</th></tr></thead>
+    <tbody>${
+      rows.length === 0
+        ? '<tr><td colspan="5" class="empty">No rows</td></tr>'
+        : rows
+            .map(
+              (row) =>
+                `<tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(humanSeconds(row.activeSeconds))}</td><td>${row.requestCount}</td><td>${escapeHtml(compactTokens(row.tokens))}</td><td>${escapeHtml(formatUsd(row.cost))}</td></tr>`,
+            )
+            .join("")
+    }</tbody>
+  </table>
+</section>`;
+}
+
 function renderDailyStrip(report: BuiltReport): string {
   const days =
     report.scope === "today" ? 1 : report.scope === "1d" ? 2 : report.scope === "7d" ? 7 : 30;
@@ -1009,6 +1042,10 @@ function renderSimpleList(
   return `<section class="panel ${panelClass ?? ""}"><h4>${escapeHtml(title)}</h4><ul class="rank-list">${body}</ul></section>`;
 }
 
+function compactMetric(value: number | undefined): string {
+  return value === undefined ? "n/a" : compactTokens(Math.round(value));
+}
+
 function renderShareList(
   title: string,
   rows: ReadonlyArray<{ key: string; label: string; pct: number }>,
@@ -1043,6 +1080,10 @@ function htmlMetric(label: string, value: string, note?: string): string {
   return `<div class="metric"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>${
     note ? `<span>${escapeHtml(note)}</span>` : ""
   }</div>`;
+}
+
+function formatPercent(value: number | undefined): string {
+  return value === undefined ? "n/a" : `${(value * 100).toFixed(1)}%`;
 }
 
 function htmlTokenBar(label: string, value: number, maxValue: number, cls: string): string {

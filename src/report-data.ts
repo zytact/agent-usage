@@ -1,5 +1,12 @@
 import type { ParsedSession, SessionRequest, TokenUsage } from "./domain.js";
-import { mean, percentile, scopeStart, splitStateKey, type Scope } from "./report-core.js";
+import {
+  coefficientOfVariation,
+  mean,
+  percentile,
+  scopeStart,
+  splitStateKey,
+  type Scope,
+} from "./report-core.js";
 
 export type ModelTokenUsage = TokenUsage & { billableOutput: number };
 
@@ -38,6 +45,28 @@ export type DailyBreakdownRow = {
   requests: number;
   sessions: number;
   subharness: string;
+};
+
+export type DailyUsageRow = {
+  activeSeconds: number;
+  cost?: number;
+  date: string;
+  requestCount: number;
+  tokens: number;
+};
+
+export type DailyUsageSummary = {
+  activeDayAvgCost?: number;
+  activeDayAvgTokens?: number;
+  avgCost?: number;
+  avgTokens?: number;
+  costMedian?: number;
+  costP90?: number;
+  costVolatility?: number;
+  rows: DailyUsageRow[];
+  tokenMedian?: number;
+  tokenP90?: number;
+  tokenVolatility?: number;
 };
 
 export type DistributionSummary = {
@@ -100,6 +129,7 @@ export type BuiltReport = {
   }>;
   combined: SourceSection;
   dailyRows: DailyBreakdownRow[];
+  dailyUsage: DailyUsageSummary;
   generatedAt: Date;
   gptOnly: SourceSection;
   gptOnlyRequestSummary: RequestSummarySource;
@@ -173,6 +203,7 @@ export function buildReport(
   scope: Scope,
   includeClaude: boolean,
   now: Date,
+  pricing: Record<string, PricingInfo> = {},
 ): BuiltReport {
   const filtered = filterSessionsByScope(sessions, scope, now);
   const buckets = {
@@ -226,6 +257,7 @@ export function buildReport(
     attributionOverages: attributionOverageRows(filtered),
     combined: sections[0],
     dailyRows: groupedDailyModelBreakdown(filtered),
+    dailyUsage: buildDailyUsageSummary(filtered, scope, now, pricing),
     generatedAt: now,
     gptOnly: sections[1],
     gptOnlyRequestSummary: {
@@ -242,6 +274,64 @@ export function buildReport(
     scopeTitle: formatScopeTitle(scope, now),
     sections,
     sourceCount: 3 + (includeClaude ? 1 : 0),
+  };
+}
+
+function buildDailyUsageSummary(
+  sessions: ParsedSession[],
+  scope: Scope,
+  now: Date,
+  pricing: Record<string, PricingInfo>,
+): DailyUsageSummary {
+  const rows: DailyUsageRow[] = scopeDays(scope, now).map((date) => ({
+    activeSeconds: 0,
+    cost: undefined,
+    date,
+    requestCount: 0,
+    tokens: 0,
+  }));
+  const byDate = new Map(rows.map((row) => [row.date, row]));
+
+  for (const session of sessions) {
+    for (const [date, day] of Object.entries(session.dayModelActiveSeconds)) {
+      const row = byDate.get(date);
+      if (!row) {
+        continue;
+      }
+      row.activeSeconds += sumValues(day);
+    }
+
+    for (const request of session.requests) {
+      const row = byDate.get(request.date);
+      if (!row) {
+        continue;
+      }
+      row.requestCount += 1;
+      row.tokens += request.total;
+      row.cost = (row.cost ?? 0) + estimateRequestCost(request, pricing);
+    }
+  }
+
+  const tokenValues = rows.map((row) => row.tokens);
+  const costValues = rows.map((row) => row.cost ?? 0);
+  const activeRows = rows.filter(
+    (row) => row.activeSeconds > 0 || row.requestCount > 0 || row.tokens > 0 || (row.cost ?? 0) > 0,
+  );
+  const activeTokenValues = activeRows.map((row) => row.tokens);
+  const activeCostValues = activeRows.map((row) => row.cost ?? 0);
+
+  return {
+    activeDayAvgCost: mean(activeCostValues),
+    activeDayAvgTokens: mean(activeTokenValues),
+    avgCost: mean(costValues),
+    avgTokens: mean(tokenValues),
+    costMedian: percentile(activeCostValues, 0.5),
+    costP90: percentile(activeCostValues, 0.9),
+    costVolatility: coefficientOfVariation(activeCostValues),
+    rows,
+    tokenMedian: percentile(activeTokenValues, 0.5),
+    tokenP90: percentile(activeTokenValues, 0.9),
+    tokenVolatility: coefficientOfVariation(activeTokenValues),
   };
 }
 
@@ -615,6 +705,35 @@ export function estimateStatsTotalCost(
   return found ? total : undefined;
 }
 
+function estimateRequestCost(
+  request: Pick<
+    SessionRequest,
+    "cacheRead" | "cacheWrite" | "input" | "model" | "output" | "reasoning"
+  >,
+  pricing: Record<string, PricingInfo> = {},
+): number {
+  return (
+    estimateCost(
+      request.model,
+      {
+        billableOutput: request.output + request.reasoning,
+        cacheWrite: request.cacheWrite,
+        cached: request.cacheRead,
+        input: request.input,
+        output: request.output,
+        reasoning: request.reasoning,
+        total:
+          request.input +
+          request.cacheRead +
+          request.cacheWrite +
+          request.output +
+          request.reasoning,
+      },
+      pricing,
+    ) ?? 0
+  );
+}
+
 function isGptModel(model: string): boolean {
   return model.toLowerCase().includes("gpt");
 }
@@ -830,6 +949,18 @@ function offsetIsoDay(now: Date, days: number): string {
   const value = new Date(now);
   value.setDate(value.getDate() - days);
   return value.toISOString().slice(0, 10);
+}
+
+function scopeDays(scope: Scope, now: Date): string[] {
+  if (scope === "1d") {
+    return [offsetIsoDay(now, 1), offsetIsoDay(now, 0)];
+  }
+  if (scope === "today") {
+    return [offsetIsoDay(now, 0)];
+  }
+
+  const days = scope === "7d" ? 7 : 30;
+  return Array.from({ length: days }, (_, index) => offsetIsoDay(now, days - index - 1));
 }
 
 function mergeCounts(target: Record<string, number>, source: Record<string, number>): void {

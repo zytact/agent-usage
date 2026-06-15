@@ -6,6 +6,7 @@ import {
   allocateStateTime,
   collapseDayStateSeconds,
   collapseStateSeconds,
+  coefficientOfVariation,
   compactTokens,
   humanSeconds,
   mean,
@@ -113,6 +114,9 @@ describe("report-core", () => {
   it("computes mean and percentile", () => {
     expect(mean([])).toBeUndefined();
     expect(mean([2, 4, 6])).toBe(4);
+    expect(coefficientOfVariation([])).toBeUndefined();
+    expect(coefficientOfVariation([0, 0])).toBeUndefined();
+    expect(coefficientOfVariation([10, 20, 30])).toBeCloseTo(0.408248, 6);
     expect(percentile([], 0.95)).toBeUndefined();
     expect(percentile([10], 0.95)).toBe(10);
     expect(percentile([10, 20, 40], 0.5)).toBe(20);

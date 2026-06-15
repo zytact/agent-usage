@@ -84,7 +84,7 @@ async function renderHtmlOnce(
 ): Promise<number> {
   const outputPath = await resolveHtmlPath(options.htmlPath);
   const html = renderHtmlReport(
-    buildReport(sessions, scope, options.includeClaude, deps.now()),
+    buildReport(sessions, scope, options.includeClaude, deps.now(), pricing),
     pricing,
     options.reportMode,
   );
@@ -138,7 +138,7 @@ function writeTerminalReport(
   scope: Scope,
 ) {
   deps.clearScreen();
-  const report = buildReport(sessions, scope, options.includeClaude, deps.now());
+  const report = buildReport(sessions, scope, options.includeClaude, deps.now(), pricing);
   deps.stdout.write(`${renderTerminalReport(report, pricing, options.reportMode)}\n`);
   return report;
 }

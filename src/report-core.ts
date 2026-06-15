@@ -212,6 +212,26 @@ export function mean(values: number[]): number | undefined {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+function stddev(values: number[]): number | undefined {
+  const avg = mean(values);
+  if (avg === undefined) {
+    return undefined;
+  }
+
+  const variance =
+    values.reduce((sum, value) => sum + (value - avg) * (value - avg), 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+export function coefficientOfVariation(values: number[]): number | undefined {
+  const avg = mean(values);
+  if (avg === undefined || avg === 0) {
+    return undefined;
+  }
+  const spread = stddev(values);
+  return spread === undefined ? undefined : spread / avg;
+}
+
 export function percentile(values: number[], pct: number): number | undefined {
   if (values.length === 0) {
     return undefined;

@@ -55,6 +55,8 @@ export function renderTerminalReport(
       ),
     );
     lines.push("");
+    lines.push(...renderDailyUsage(report, true));
+    lines.push("");
     lines.push(...renderDailyBreakdown(report.dailyRows));
     lines.push("");
 
@@ -102,6 +104,7 @@ function renderSummary(report: BuiltReport, pricing: Record<string, PricingInfo>
       pricing,
       false,
     ),
+    ...renderDailyUsage(report, false),
     ...renderSourceShares(report),
     ...renderModelList(modelRows(report.combined.stats, pricing, 6)),
     ...renderTokenBreakdown(report.combined.stats),
@@ -298,8 +301,41 @@ function renderDailyBreakdown(rows: DailyBreakdownRow[]): string[] {
   return lines;
 }
 
+function renderDailyUsage(report: BuiltReport, full: boolean): string[] {
+  const lines = [
+    "DAILY USAGE",
+    `  Avg tokens/day ${formatContext(report.dailyUsage.avgTokens)}`,
+    `  Active avg tok ${formatContext(report.dailyUsage.activeDayAvgTokens)}`,
+    `  Median tok/day ${formatContext(report.dailyUsage.tokenMedian)}`,
+    `  P90 tok/day    ${formatContext(report.dailyUsage.tokenP90)}`,
+    `  Tok volatility ${formatPercent(report.dailyUsage.tokenVolatility)}`,
+    `  Avg cost/day   ${formatUsd(report.dailyUsage.avgCost)}`,
+    `  Active avg $   ${formatUsd(report.dailyUsage.activeDayAvgCost)}`,
+    `  Median $/day   ${formatUsd(report.dailyUsage.costMedian)}`,
+    `  P90 $/day      ${formatUsd(report.dailyUsage.costP90)}`,
+    `  $ volatility   ${formatPercent(report.dailyUsage.costVolatility)}`,
+  ];
+  const rows = full ? report.dailyUsage.rows : report.dailyUsage.rows.slice(-7);
+  if (rows.length === 0) {
+    lines.push("  No days in range.");
+    return lines;
+  }
+
+  lines.push("  date         active   req   tokens   cost");
+  for (const row of rows) {
+    lines.push(
+      `  ${row.date} ${padLeft(humanSeconds(row.activeSeconds), 6)} ${padLeft(String(row.requestCount), 4)} ${padLeft(compactTokens(row.tokens), 8)} ${padLeft(formatUsd(row.cost), 8)}`,
+    );
+  }
+  return lines;
+}
+
 function formatContext(value: number | undefined): string {
   return value === undefined ? "n/a" : compactTokens(Math.round(value));
+}
+
+function formatPercent(value: number | undefined): string {
+  return value === undefined ? "n/a" : `${(value * 100).toFixed(1)}%`;
 }
 
 function averageMetric(total: number, count: number): string {
