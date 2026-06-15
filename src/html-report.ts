@@ -561,7 +561,7 @@ details.raw-details summary {
 .share-list .track { height: 6px; }
 .model-panel { background: color-mix(in oklch, var(--surface-2), var(--tone) 8%); }
 .model-list .track { height: 7px; margin-bottom: 10px; }
-.model-metrics { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.model-metrics { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .model-metrics div { padding: 9px 10px; background: var(--surface); }
 .model-metrics dt {
   margin: 0;
@@ -1192,7 +1192,7 @@ function renderModelsPanel(rows: ReturnType<typeof modelRows>): string {
       : rows
           .map(
             (row) =>
-              `<li class="model-row"><div class="model-top"><span title="${escapeHtml(row.key)}">${escapeHtml(row.key)}</span><b>${row.pct.toFixed(0)}%</b></div><div class="track"><i style="width:${Math.max(2, Math.min(100, row.pct)).toFixed(1)}%"></i></div><dl class="model-metrics"><div><dt>Input</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.input))}</dd><small>${escapeHtml(row.inputRate)}</small></div><div><dt>Cached</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.cached))}</dd><small>cache read</small></div><div><dt>Write</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.cacheWrite))}</dd><small>cache create</small></div><div><dt>Output</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.output))}</dd><small>${escapeHtml(row.outputRate)}</small></div><div><dt>Reason</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.reasoning))}</dd><small>thinking</small></div><div><dt>Est cost</dt><dd>${escapeHtml(row.cost)}</dd><small>range total</small></div></dl></li>`,
+              `<li class="model-row"><div class="model-top"><span title="${escapeHtml(row.key)}">${escapeHtml(row.key)}</span><b>${row.pct.toFixed(0)}%</b></div><div class="track"><i style="width:${Math.max(2, Math.min(100, row.pct)).toFixed(1)}%"></i></div><dl class="model-metrics"><div><dt>Time</dt><dd>${escapeHtml(humanSeconds(row.activeSeconds))}</dd><small>range total</small></div><div><dt>Input</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.input))}</dd><small>${escapeHtml(row.inputRate)}</small></div><div><dt>Cached</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.cached))}</dd><small>cache read</small></div><div><dt>Write</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.cacheWrite))}</dd><small>cache create</small></div><div><dt>Output</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.output))}</dd><small>${escapeHtml(row.outputRate)}</small></div><div><dt>Reason</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.reasoning))}</dd><small>thinking</small></div><div><dt>Est cost</dt><dd>${escapeHtml(row.cost)}</dd><small>range total</small></div></dl></li>`,
           )
           .join("");
   return `<section class="panel-wide model-panel"><h4>Models</h4><ul class="model-list">${body}</ul></section>`;

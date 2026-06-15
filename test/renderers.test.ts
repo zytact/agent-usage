@@ -59,6 +59,7 @@ describe("renderers", () => {
     expect(html).not.toContain("GPT-only request summary");
     expect(html).not.toContain("Per-day / per-harness / per-model");
     expect(html).toContain("Claude Code");
+    expect(html).toContain("<dt>Time</dt>");
     expect(html).not.toContain("Codex via T3 Code");
     expect(html).toContain("Cost is an estimate.");
   });
@@ -97,6 +98,7 @@ describe("renderers", () => {
     expect(output).not.toContain("Legend: input=fresh prompt");
     expect(output).not.toContain("DAILY MODEL BREAKDOWN");
     expect(output).not.toContain("GPT-ONLY");
+    expect(output).toContain("time ");
     expect(output).toContain("est $");
     expect(output).toContain("HIGHLIGHTS");
   });
