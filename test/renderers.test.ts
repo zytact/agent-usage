@@ -72,6 +72,17 @@ describe("renderers", () => {
     expect(html).toContain("Codex via T3 Code");
   });
 
+  it("renders custom html section subset", async () => {
+    const report = await makeReport();
+    const html = renderHtmlReport(report, {}, "summary", ["request-summary", "token-mix"]);
+
+    expect(html).toContain("Combined request summary");
+    expect(html).toContain("Token composition");
+    expect(html).not.toContain("Per-day tokens and cost");
+    expect(html).not.toContain("Source share");
+    expect(html).toContain("<b>Custom</b>");
+  });
+
   it("renders terminal dashboard text", async () => {
     const report = await makeReport();
     const output = renderTerminalReport(report, pricing);
@@ -102,15 +113,27 @@ describe("renderers", () => {
     expect(output).toContain("Weighted input eq/req");
   });
 
-  it("renders terminal empty-state text", () => {
+  it("renders terminal custom section subset", async () => {
+    const report = await makeReport();
+    const output = renderTerminalReport(report, pricing, "summary", ["token-mix"]);
+
+    expect(output).toContain("Token mix");
+    expect(output).not.toContain("SUMMARY");
+    expect(output).not.toContain("DAILY USAGE");
+    expect(output).not.toContain("CODEX");
+  });
+
+  it("omits daily usage for today", () => {
     const report = buildReport([], "today", false, new Date("2026-06-14T18:45:00+05:30"), pricing);
     const output = renderTerminalReport(report, {});
+    const html = renderHtmlReport(report, {});
 
     expect(output).toContain("SUMMARY");
-    expect(output).toContain("DAILY USAGE");
+    expect(output).not.toContain("DAILY USAGE");
     expect(output).toContain("Model requests  0");
     expect(output).toContain("Tokens / active minute");
     expect(output).not.toContain("DAILY MODEL BREAKDOWN");
     expect(output).toContain("No sessions found in this range.");
+    expect(html).not.toContain("Per-day tokens and cost");
   });
 });

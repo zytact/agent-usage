@@ -1,6 +1,13 @@
 import type { ReportMode } from "./args.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
 import {
+  ALL_SECTIONS,
+  DEFAULT_SECTIONS,
+  inferSectionModeForScope,
+  sanitizeSectionsForScope,
+  type SectionKey,
+} from "./sections.js";
+import {
   buildRequestSummaryData,
   formatFloat,
   estimateStatsTotalCost,
@@ -19,9 +26,13 @@ export function renderTerminalReport(
   report: BuiltReport,
   pricing: Record<string, PricingInfo>,
   reportMode: ReportMode = "summary",
+  sections: SectionKey[] = reportMode === "full" ? ALL_SECTIONS : DEFAULT_SECTIONS,
 ): string {
+  const resolvedSections = sanitizeSectionsForScope(report.scope, sections);
   const lines: string[] = [];
   const combinedCost = formatUsd(estimateStatsTotalCost(report.combined.stats, pricing));
+  const activeSections = new Set(resolvedSections);
+  const mode = inferSectionModeForScope(report.scope, resolvedSections);
 
   lines.push(`AGENT USAGE DASHBOARD`);
   lines.push(report.scopeTitle);
@@ -30,43 +41,23 @@ export function renderTerminalReport(
   );
   lines.push("");
 
-  if (reportMode === "full") {
+  if (mode === "full") {
     lines.push(
       "Legend: input=fresh prompt, cached=cache reads, cache write=cache creation, output=visible output, reasoning=hidden/thinking output, total=provider total when present.",
     );
     lines.push("");
-    lines.push(
-      ...renderRequestSummary(
-        "Combined request summary",
-        report.requestSummary,
-        report.combined.stats,
-        pricing,
-        true,
-      ),
-    );
-    lines.push("");
-    lines.push(
-      ...renderRequestSummary(
-        "GPT-only request summary",
-        report.gptOnlyRequestSummary,
-        report.gptOnly.stats,
-        pricing,
-        true,
-      ),
-    );
-    lines.push("");
-    lines.push(...renderDailyUsage(report, true));
-    lines.push("");
-    lines.push(...renderDailyBreakdown(report.dailyRows));
-    lines.push("");
+  }
 
-    for (const section of report.sections) {
-      lines.push(...renderSection(section, pricing, true));
+  lines.push(...renderSelectedSummary(report, pricing, activeSections, mode === "full"));
+  lines.push("");
+
+  if (activeSections.has("source-sections")) {
+    for (const section of report.sections.filter((item) => shouldShowSection(item.title, mode))) {
+      lines.push(
+        ...renderSection(section, pricing, activeSections.has("source-section-languages")),
+      );
       lines.push("");
     }
-  } else {
-    lines.push(...renderSummary(report, pricing));
-    lines.push("");
   }
 
   lines.push("HIGHLIGHTS");
@@ -95,32 +86,61 @@ export function renderTerminalReport(
   return `${lines.join("\n")}\n`;
 }
 
-function renderSummary(report: BuiltReport, pricing: Record<string, PricingInfo>): string[] {
-  const lines = [
-    ...renderRequestSummary(
-      "Summary",
-      report.requestSummary,
-      report.combined.stats,
-      pricing,
-      false,
-    ),
-    ...renderDailyUsage(report, false),
-    ...renderSourceShares(report),
-    ...renderModelList(modelRows(report.combined.stats, pricing, 6)),
-    ...renderTokenBreakdown(report.combined.stats),
-    ...renderTopList(
-      "Top repos",
-      topEntries(report.combined.stats.repos, 5).map(({ key, value }) => [
-        key,
-        humanSeconds(value),
-      ]),
-    ),
+function renderSelectedSummary(
+  report: BuiltReport,
+  pricing: Record<string, PricingInfo>,
+  sections: Set<SectionKey>,
+  full: boolean,
+): string[] {
+  const blocks: Array<{ key: SectionKey; render: () => string[] }> = [
+    {
+      key: "request-summary",
+      render: () =>
+        renderRequestSummary(
+          full ? "Combined request summary" : "Summary",
+          report.requestSummary,
+          report.combined.stats,
+          pricing,
+          full,
+        ),
+    },
+    {
+      key: "gpt-only-request-summary",
+      render: () =>
+        renderRequestSummary(
+          "GPT-only request summary",
+          report.gptOnlyRequestSummary,
+          report.gptOnly.stats,
+          pricing,
+          true,
+        ),
+    },
+    { key: "daily-usage", render: () => renderDailyUsage(report, full) },
+    { key: "daily-breakdown", render: () => renderDailyBreakdown(report.dailyRows) },
+    { key: "source-share", render: () => renderSourceShares(report) },
+    {
+      key: "model-breakdown",
+      render: () => renderModelList(modelRows(report.combined.stats, pricing, 6)),
+    },
+    { key: "token-mix", render: () => renderTokenBreakdown(report.combined.stats) },
+    {
+      key: "top-repos",
+      render: () =>
+        renderTopList(
+          "Top repos",
+          topEntries(report.combined.stats.repos, 5).map(({ key, value }) => [
+            key,
+            humanSeconds(value),
+          ]),
+        ),
+    },
   ];
 
-  for (const section of report.sections.filter((item) => isPrimarySection(item.title))) {
-    lines.push(...renderSection(section, pricing, false));
-  }
-  return lines;
+  const selectedBlocks = blocks.filter((block) => sections.has(block.key));
+  return selectedBlocks.flatMap((block, index) => {
+    const rendered = block.render();
+    return index === selectedBlocks.length - 1 ? rendered : [...rendered, ""];
+  });
 }
 
 function renderSection(
@@ -267,6 +287,10 @@ function renderCompactDistribution(
 
 function isPrimarySection(title: string): boolean {
   return ["Codex", "opencode", "Claude Code", "Pi"].includes(title);
+}
+
+function shouldShowSection(title: string, mode: "summary" | "full" | "custom"): boolean {
+  return mode === "full" ? true : isPrimarySection(title);
 }
 
 function renderDistributionSummary(

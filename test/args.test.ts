@@ -34,6 +34,22 @@ describe("parseArgs", () => {
     });
   });
 
+  it("parses sections", () => {
+    expect(
+      parseArgs([
+        "--section",
+        "request-summary,daily-usage",
+        "--section=source-sections,token-mix",
+      ]),
+    ).toEqual({
+      includeClaude: false,
+      html: false,
+      help: false,
+      reportMode: "summary",
+      sections: ["request-summary", "daily-usage", "source-sections", "token-mix"],
+    });
+  });
+
   it("keeps help separate", () => {
     expect(parseArgs(["--help"])).toEqual({
       includeClaude: false,
@@ -50,6 +66,24 @@ describe("parseArgs", () => {
   it("rejects invalid scope", () => {
     expect(() => parseArgs(["--scope", "90d"])).toThrowError(
       new UsageError("Invalid --scope: 90d"),
+    );
+  });
+
+  it("rejects invalid section", () => {
+    expect(() => parseArgs(["--section", "wat"])).toThrowError(
+      new UsageError("Invalid --section: wat"),
+    );
+  });
+
+  it("rejects daily-usage when scope is today", () => {
+    expect(() => parseArgs(["--scope", "today", "--section", "daily-usage"])).toThrowError(
+      new UsageError("Invalid for --scope=today: daily-usage"),
+    );
+  });
+
+  it("rejects --full with --section", () => {
+    expect(() => parseArgs(["--full", "--section", "request-summary"])).toThrowError(
+      new UsageError("Cannot use --section with --full"),
     );
   });
 

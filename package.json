@@ -18,6 +18,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@inquirer/checkbox": "^4.2.1",
     "@inquirer/select": "^5.2.1",
     "sql.js": "^1.14.1"
   },
