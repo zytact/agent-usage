@@ -10,7 +10,7 @@ Local power users and developers reviewing their own AI coding-agent usage from 
 
 ## Product Purpose
 
-`agent-usage` reads local Codex, Pi, and optional Claude Code JSONL session stores, aggregates activity by rolling time range, and presents a usage dashboard. Success means the report quickly answers: how much agent work happened, where it happened, which models drove it, what it likely cost, and what changed recently.
+`agent-usage` reads local Codex, Pi, OpenCode and optional Claude Code JSONL session stores, aggregates activity by rolling time range, and presents a usage dashboard. Success means the report quickly answers: how much agent work happened, where it happened, which models drove it, what it likely cost, and what changed recently.
 
 ## Brand Personality
 
