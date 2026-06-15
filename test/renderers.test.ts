@@ -10,6 +10,27 @@ import { parsePiSessionText } from "../src/parsers/pi.js";
 import { buildReport } from "../src/report-data.js";
 import { renderTerminalReport } from "../src/terminal-report.js";
 
+const pricing = {
+  "anthropic/claude-sonnet-4.6": {
+    cacheRead: 0.0000003,
+    cacheWrite: 0.000003,
+    completion: 0.000015,
+    prompt: 0.000003,
+  },
+  "openai/gpt-5": {
+    cacheRead: 0.000000125,
+    cacheWrite: 0.00000125,
+    completion: 0.00001,
+    prompt: 0.00000125,
+  },
+  "openai/gpt-5-mini": {
+    cacheRead: 0.000000025,
+    cacheWrite: 0.00000025,
+    completion: 0.000002,
+    prompt: 0.00000025,
+  },
+};
+
 async function makeReport() {
   const [codexContent, claudeContent, piContent] = await Promise.all([
     readFile(resolve("test/parsers/codex.fixture.jsonl"), "utf8"),
@@ -22,7 +43,7 @@ async function makeReport() {
     parsePiSessionText(piContent, "pi.jsonl"),
   ].filter((value) => value !== undefined);
 
-  return buildReport(sessions, "7d", true, new Date("2026-06-14T18:45:00+05:30"));
+  return buildReport(sessions, "7d", true, new Date("2026-06-14T18:45:00+05:30"), pricing);
 }
 
 describe("renderers", () => {
@@ -34,6 +55,7 @@ describe("renderers", () => {
     expect(html).toContain("color-scheme: dark");
     expect(html).toContain("Agent usage report");
     expect(html).toContain("Combined request summary");
+    expect(html).toContain("Per-day tokens and cost");
     expect(html).not.toContain("GPT-only request summary");
     expect(html).not.toContain("Per-day / per-harness / per-model");
     expect(html).toContain("Claude Code");
@@ -52,29 +74,12 @@ describe("renderers", () => {
 
   it("renders terminal dashboard text", async () => {
     const report = await makeReport();
-    const output = renderTerminalReport(report, {
-      "anthropic/claude-sonnet-4.6": {
-        cacheRead: 0.0000003,
-        cacheWrite: 0.000003,
-        completion: 0.000015,
-        prompt: 0.000003,
-      },
-      "openai/gpt-5": {
-        cacheRead: 0.000000125,
-        cacheWrite: 0.00000125,
-        completion: 0.00001,
-        prompt: 0.00000125,
-      },
-      "openai/gpt-5-mini": {
-        cacheRead: 0.000000025,
-        cacheWrite: 0.00000025,
-        completion: 0.000002,
-        prompt: 0.00000025,
-      },
-    });
+    const output = renderTerminalReport(report, pricing);
 
     expect(output).toContain("AGENT USAGE DASHBOARD");
     expect(output).toContain("SUMMARY");
+    expect(output).toContain("DAILY USAGE");
+    expect(output).toContain("Avg tokens/day");
     expect(output).toContain("Source share");
     expect(output).toContain("Token mix");
     expect(output).not.toContain("Legend: input=fresh prompt");
@@ -90,16 +95,18 @@ describe("renderers", () => {
 
     expect(output).toContain("Legend: input=fresh prompt");
     expect(output).toContain("COMBINED REQUEST SUMMARY");
+    expect(output).toContain("DAILY USAGE");
     expect(output).toContain("DAILY MODEL BREAKDOWN");
     expect(output).toContain("GPT-ONLY");
     expect(output).toContain("Weighted input eq/req");
   });
 
   it("renders terminal empty-state text", () => {
-    const report = buildReport([], "today", false, new Date("2026-06-14T18:45:00+05:30"));
+    const report = buildReport([], "today", false, new Date("2026-06-14T18:45:00+05:30"), pricing);
     const output = renderTerminalReport(report, {});
 
     expect(output).toContain("SUMMARY");
+    expect(output).toContain("DAILY USAGE");
     expect(output).toContain("Model requests  0");
     expect(output).toContain("Tokens / active minute");
     expect(output).not.toContain("DAILY MODEL BREAKDOWN");

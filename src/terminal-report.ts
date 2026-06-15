@@ -55,6 +55,8 @@ export function renderTerminalReport(
       ),
     );
     lines.push("");
+    lines.push(...renderDailyUsage(report, true));
+    lines.push("");
     lines.push(...renderDailyBreakdown(report.dailyRows));
     lines.push("");
 
@@ -102,6 +104,7 @@ function renderSummary(report: BuiltReport, pricing: Record<string, PricingInfo>
       pricing,
       false,
     ),
+    ...renderDailyUsage(report, false),
     ...renderSourceShares(report),
     ...renderModelList(modelRows(report.combined.stats, pricing, 6)),
     ...renderTokenBreakdown(report.combined.stats),
@@ -293,6 +296,29 @@ function renderDailyBreakdown(rows: DailyBreakdownRow[]): string[] {
   for (const row of rows.slice(0, 20)) {
     lines.push(
       `  ${row.date} ${pad(row.harness, 8)} ${pad(row.subharness, 10)} ${pad(row.model, 24)} ${pad(row.effort, 8)} ${padLeft(humanSeconds(row.activeSeconds), 6)} ${padLeft(String(row.sessions), 4)} ${padLeft(String(row.requests), 4)} ${padLeft(compactTokens(row.input), 6)} ${padLeft(compactTokens(row.cached), 7)} ${padLeft(compactTokens(row.output), 7)} ${padLeft(compactTokens(row.reasoning), 7)}`,
+    );
+  }
+  return lines;
+}
+
+function renderDailyUsage(report: BuiltReport, full: boolean): string[] {
+  const lines = [
+    "DAILY USAGE",
+    `  Avg tokens/day ${formatContext(report.dailyUsage.avgTokens)}`,
+    `  Token stddev   ${formatContext(report.dailyUsage.tokenStddev)}`,
+    `  Avg cost/day   ${formatUsd(report.dailyUsage.avgCost)}`,
+    `  Cost stddev    ${formatUsd(report.dailyUsage.costStddev)}`,
+  ];
+  const rows = full ? report.dailyUsage.rows : report.dailyUsage.rows.slice(-7);
+  if (rows.length === 0) {
+    lines.push("  No days in range.");
+    return lines;
+  }
+
+  lines.push("  date         active   req   tokens   cost");
+  for (const row of rows) {
+    lines.push(
+      `  ${row.date} ${padLeft(humanSeconds(row.activeSeconds), 6)} ${padLeft(String(row.requestCount), 4)} ${padLeft(compactTokens(row.tokens), 8)} ${padLeft(formatUsd(row.cost), 8)}`,
     );
   }
   return lines;
