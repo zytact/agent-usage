@@ -681,7 +681,7 @@ export function estimateStatsTotalCost(
   return found ? total : undefined;
 }
 
-export function estimateRequestCost(
+function estimateRequestCost(
   request: Pick<
     SessionRequest,
     "cacheRead" | "cacheWrite" | "input" | "model" | "output" | "reasoning"
