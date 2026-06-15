@@ -18,8 +18,8 @@ export default defineConfig({
   },
   pack: {
     entry: ["src/cli.ts"],
-    dts: true,
+    dts: false,
     format: ["esm"],
-    sourcemap: true,
+    sourcemap: false,
   },
 });
