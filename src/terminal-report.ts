@@ -305,9 +305,15 @@ function renderDailyUsage(report: BuiltReport, full: boolean): string[] {
   const lines = [
     "DAILY USAGE",
     `  Avg tokens/day ${formatContext(report.dailyUsage.avgTokens)}`,
-    `  Token stddev   ${formatContext(report.dailyUsage.tokenStddev)}`,
+    `  Active avg tok ${formatContext(report.dailyUsage.activeDayAvgTokens)}`,
+    `  Median tok/day ${formatContext(report.dailyUsage.tokenMedian)}`,
+    `  P90 tok/day    ${formatContext(report.dailyUsage.tokenP90)}`,
+    `  Tok volatility ${formatPercent(report.dailyUsage.tokenVolatility)}`,
     `  Avg cost/day   ${formatUsd(report.dailyUsage.avgCost)}`,
-    `  Cost stddev    ${formatUsd(report.dailyUsage.costStddev)}`,
+    `  Active avg $   ${formatUsd(report.dailyUsage.activeDayAvgCost)}`,
+    `  Median $/day   ${formatUsd(report.dailyUsage.costMedian)}`,
+    `  P90 $/day      ${formatUsd(report.dailyUsage.costP90)}`,
+    `  $ volatility   ${formatPercent(report.dailyUsage.costVolatility)}`,
   ];
   const rows = full ? report.dailyUsage.rows : report.dailyUsage.rows.slice(-7);
   if (rows.length === 0) {
@@ -326,6 +332,10 @@ function renderDailyUsage(report: BuiltReport, full: boolean): string[] {
 
 function formatContext(value: number | undefined): string {
   return value === undefined ? "n/a" : compactTokens(Math.round(value));
+}
+
+function formatPercent(value: number | undefined): string {
+  return value === undefined ? "n/a" : `${(value * 100).toFixed(1)}%`;
 }
 
 function averageMetric(total: number, count: number): string {

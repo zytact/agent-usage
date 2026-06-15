@@ -79,9 +79,17 @@ describe("buildReport", () => {
       tokens: 3100,
     });
     expect(report.dailyUsage.avgTokens).toBeGreaterThan(0);
-    expect(report.dailyUsage.tokenStddev).toBeGreaterThan(0);
+    expect(report.dailyUsage.activeDayAvgTokens).toBeGreaterThan(0);
+    expect(report.dailyUsage.tokenMedian).toBeGreaterThan(0);
+    expect(report.dailyUsage.tokenP90).toBeGreaterThan(0);
+    expect(report.dailyUsage.tokenVolatility).toBeDefined();
+    expect(report.dailyUsage.tokenVolatility).toBeGreaterThanOrEqual(0);
     expect(report.dailyUsage.avgCost).toBeGreaterThan(0);
-    expect(report.dailyUsage.costStddev).toBeGreaterThan(0);
+    expect(report.dailyUsage.activeDayAvgCost).toBeGreaterThan(0);
+    expect(report.dailyUsage.costMedian).toBeGreaterThan(0);
+    expect(report.dailyUsage.costP90).toBeGreaterThan(0);
+    expect(report.dailyUsage.costVolatility).toBeDefined();
+    expect(report.dailyUsage.costVolatility).toBeGreaterThanOrEqual(0);
   });
 
   it("formats last-day scope as rolling 24 hours", async () => {

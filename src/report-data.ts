@@ -1,5 +1,12 @@
 import type { ParsedSession, SessionRequest, TokenUsage } from "./domain.js";
-import { mean, percentile, scopeStart, splitStateKey, stddev, type Scope } from "./report-core.js";
+import {
+  coefficientOfVariation,
+  mean,
+  percentile,
+  scopeStart,
+  splitStateKey,
+  type Scope,
+} from "./report-core.js";
 
 export type ModelTokenUsage = TokenUsage & { billableOutput: number };
 
@@ -49,11 +56,17 @@ export type DailyUsageRow = {
 };
 
 export type DailyUsageSummary = {
+  activeDayAvgCost?: number;
+  activeDayAvgTokens?: number;
   avgCost?: number;
   avgTokens?: number;
-  costStddev?: number;
+  costMedian?: number;
+  costP90?: number;
+  costVolatility?: number;
   rows: DailyUsageRow[];
-  tokenStddev?: number;
+  tokenMedian?: number;
+  tokenP90?: number;
+  tokenVolatility?: number;
 };
 
 export type DistributionSummary = {
@@ -301,13 +314,24 @@ function buildDailyUsageSummary(
 
   const tokenValues = rows.map((row) => row.tokens);
   const costValues = rows.map((row) => row.cost ?? 0);
+  const activeRows = rows.filter(
+    (row) => row.activeSeconds > 0 || row.requestCount > 0 || row.tokens > 0 || (row.cost ?? 0) > 0,
+  );
+  const activeTokenValues = activeRows.map((row) => row.tokens);
+  const activeCostValues = activeRows.map((row) => row.cost ?? 0);
 
   return {
+    activeDayAvgCost: mean(activeCostValues),
+    activeDayAvgTokens: mean(activeTokenValues),
     avgCost: mean(costValues),
     avgTokens: mean(tokenValues),
-    costStddev: stddev(costValues),
+    costMedian: percentile(activeCostValues, 0.5),
+    costP90: percentile(activeCostValues, 0.9),
+    costVolatility: coefficientOfVariation(activeCostValues),
     rows,
-    tokenStddev: stddev(tokenValues),
+    tokenMedian: percentile(activeTokenValues, 0.5),
+    tokenP90: percentile(activeTokenValues, 0.9),
+    tokenVolatility: coefficientOfVariation(activeTokenValues),
   };
 }
 

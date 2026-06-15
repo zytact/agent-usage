@@ -80,6 +80,7 @@ describe("renderers", () => {
     expect(output).toContain("SUMMARY");
     expect(output).toContain("DAILY USAGE");
     expect(output).toContain("Avg tokens/day");
+    expect(output).toContain("Tok volatility");
     expect(output).toContain("Source share");
     expect(output).toContain("Token mix");
     expect(output).not.toContain("Legend: input=fresh prompt");

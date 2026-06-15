@@ -824,9 +824,15 @@ function renderDailyUsagePanel(report: BuiltReport): string {
   <h2>Per-day tokens and cost</h2>
   <div class="metric-grid">
     ${htmlMetric("Avg tokens/day", compactMetric(report.dailyUsage.avgTokens))}
-    ${htmlMetric("Token stddev", compactMetric(report.dailyUsage.tokenStddev))}
+    ${htmlMetric("Active-day avg tokens", compactMetric(report.dailyUsage.activeDayAvgTokens))}
+    ${htmlMetric("Median tokens/day", compactMetric(report.dailyUsage.tokenMedian))}
+    ${htmlMetric("P90 tokens/day", compactMetric(report.dailyUsage.tokenP90))}
+    ${htmlMetric("Token volatility", formatPercent(report.dailyUsage.tokenVolatility))}
     ${htmlMetric("Avg cost/day", formatUsd(report.dailyUsage.avgCost))}
-    ${htmlMetric("Cost stddev", formatUsd(report.dailyUsage.costStddev))}
+    ${htmlMetric("Active-day avg cost", formatUsd(report.dailyUsage.activeDayAvgCost))}
+    ${htmlMetric("Median cost/day", formatUsd(report.dailyUsage.costMedian))}
+    ${htmlMetric("P90 cost/day", formatUsd(report.dailyUsage.costP90))}
+    ${htmlMetric("Cost volatility", formatPercent(report.dailyUsage.costVolatility))}
   </div>
   <table class="data-table dense">
     <thead><tr><th>Date</th><th>Active</th><th>Req</th><th>Tokens</th><th>Cost</th></tr></thead>
@@ -1074,6 +1080,10 @@ function htmlMetric(label: string, value: string, note?: string): string {
   return `<div class="metric"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>${
     note ? `<span>${escapeHtml(note)}</span>` : ""
   }</div>`;
+}
+
+function formatPercent(value: number | undefined): string {
+  return value === undefined ? "n/a" : `${(value * 100).toFixed(1)}%`;
 }
 
 function htmlTokenBar(label: string, value: number, maxValue: number, cls: string): string {

@@ -1,4 +1,11 @@
-Do not rely on child shell processes. Such as so not use `sqlite` command to parse a db. Use a library that works.
+At the end of a successful change, run:
+
+```sh
+vp check
+vp run fallow
+```
+
+to verify them.
 
 <!--VITE PLUS START-->
 
