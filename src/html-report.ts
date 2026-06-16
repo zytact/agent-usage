@@ -25,6 +25,13 @@ import {
   type SourceSection,
 } from "./report-data.js";
 
+const SOURCE_NOTES = {
+  claude: "Claude Code: ~/.claude/projects",
+  codex: "Codex: ~/.codex/sessions",
+  opencode: "opencode: ~/.local/share/opencode/opencode.db",
+  pi: "Pi: ~/.pi/agent/sessions",
+} as const;
+
 export function renderHtmlReport(
   report: BuiltReport,
   pricing: Record<string, PricingInfo>,
@@ -37,9 +44,7 @@ export function renderHtmlReport(
     report.combined.stats.sessionCount === 0
       ? '<p class="notice">No sessions found in this range.</p>'
       : "";
-  const sourcesNote = report.includeClaude
-    ? "Codex: ~/.codex/sessions · opencode: ~/.local/share/opencode/opencode.db · Pi: ~/.pi/agent/sessions · Claude Code: ~/.claude/projects"
-    : "Codex: ~/.codex/sessions · opencode: ~/.local/share/opencode/opencode.db · Pi: ~/.pi/agent/sessions";
+  const sourcesNote = report.selectedSources.map((source) => SOURCE_NOTES[source]).join(" · ");
   const activeSections = new Set(resolvedSections);
   const mode = inferSectionModeForScope(report.scope, resolvedSections);
   const visibleSections = activeSections.has("source-sections")

@@ -43,7 +43,13 @@ async function makeReport() {
     parsePiSessionText(piContent, "pi.jsonl"),
   ].filter((value) => value !== undefined);
 
-  return buildReport(sessions, "7d", true, new Date("2026-06-14T18:45:00+05:30"), pricing);
+  return buildReport(
+    sessions,
+    "7d",
+    ["codex", "opencode", "pi", "claude"],
+    new Date("2026-06-14T18:45:00+05:30"),
+    pricing,
+  );
 }
 
 describe("renderers", () => {
@@ -126,7 +132,13 @@ describe("renderers", () => {
   });
 
   it("omits daily usage for today", () => {
-    const report = buildReport([], "today", false, new Date("2026-06-14T18:45:00+05:30"), pricing);
+    const report = buildReport(
+      [],
+      "today",
+      ["codex", "opencode", "pi"],
+      new Date("2026-06-14T18:45:00+05:30"),
+      pricing,
+    );
     const output = renderTerminalReport(report, {});
     const html = renderHtmlReport(report, {});
 

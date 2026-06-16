@@ -1,12 +1,24 @@
+import type { SourceId } from "./domain.js";
 import type { Scope } from "./report-core.js";
 import { normalizeSectionList, validateSectionsForScope, type SectionKey } from "./sections.js";
 
 export type ReportMode = "summary" | "full";
 
-export const usageText = `Usage: agent-usage [--claude] [--scope today|1d|7d|30d] [--full | --section KEY[,KEY...]] [--html [FILE]]
+export const DEFAULT_SOURCES: SourceId[] = ["codex", "opencode", "pi"];
+const SOURCE_FLAGS: Record<string, SourceId> = {
+  "--claude": "claude",
+  "--codex": "codex",
+  "--opencode": "opencode",
+  "--pi": "pi",
+};
+
+export const usageText = `Usage: agent-usage [--codex] [--opencode] [--pi] [--claude] [--scope today|1d|7d|30d] [--full | --section KEY[,KEY...]] [--html [FILE]]
 
 Options:
-  (default)       Include Codex, opencode, and Pi usage from local stores
+  (default)       Preselect Codex, opencode, and Pi usage from local stores
+  --codex         Include Codex usage from ~/.codex/sessions
+  --opencode      Include opencode usage from ~/.local/share/opencode/opencode.db
+  --pi            Include Pi usage from ~/.pi/agent/sessions
   --claude        Include Claude Code usage from ~/.claude/projects
   --scope SCOPE   Use a range without prompting: today, 1d, 7d, 30d
   --full          Show full diagnostic report instead of default summary view
@@ -17,13 +29,13 @@ Options:
 `;
 
 export type CliOptions = {
-  includeClaude: boolean;
   scope?: Scope;
   html: boolean;
   htmlPath?: string;
   help: boolean;
   reportMode: ReportMode;
   sections?: SectionKey[];
+  sources?: SourceId[];
 };
 
 export class UsageError extends Error {}
@@ -35,10 +47,12 @@ type ArgParseState = {
   options: CliOptions;
 };
 
+type ArgHandler = (argv: string[], state: ArgParseState) => void;
+
 export function parseArgs(argv: string[]): CliOptions {
   const state: ArgParseState = {
     index: 0,
-    options: { includeClaude: false, html: false, help: false, reportMode: "summary" },
+    options: { html: false, help: false, reportMode: "summary" },
   };
 
   while (state.index < argv.length) {
@@ -50,34 +64,37 @@ export function parseArgs(argv: string[]): CliOptions {
   return state.options;
 }
 
+const ARG_HANDLERS: Record<string, ArgHandler> = {
+  "--claude": (_argv, state) => addSourceFlag(state, SOURCE_FLAGS["--claude"]),
+  "--codex": (_argv, state) => addSourceFlag(state, SOURCE_FLAGS["--codex"]),
+  "--full": (_argv, state) => enableFullMode(state),
+  "--help": (_argv, state) => {
+    state.options.help = true;
+  },
+  "--html": parseHtmlFlag,
+  "--opencode": (_argv, state) => addSourceFlag(state, SOURCE_FLAGS["--opencode"]),
+  "--pi": (_argv, state) => addSourceFlag(state, SOURCE_FLAGS["--pi"]),
+  "--scope": (argv, state) => {
+    state.options.scope = parseScopeValue(argv[state.index + 1], "Missing value for --scope");
+    state.index += 1;
+  },
+  "--section": (argv, state) => {
+    parseSectionValue(argv[state.index + 1], state, "Missing value for --section");
+    state.index += 1;
+  },
+  "-h": (_argv, state) => {
+    state.options.help = true;
+  },
+};
+
 function parseArg(argv: string[], state: ArgParseState): void {
   const arg = argv[state.index];
-
-  switch (arg) {
-    case "--claude":
-      state.options.includeClaude = true;
-      return;
-    case "--scope":
-      state.options.scope = parseScopeValue(argv[state.index + 1], "Missing value for --scope");
-      state.index += 1;
-      return;
-    case "--html":
-      parseHtmlFlag(argv, state);
-      return;
-    case "--full":
-      enableFullMode(state);
-      return;
-    case "--section":
-      parseSectionValue(argv[state.index + 1], state, "Missing value for --section");
-      state.index += 1;
-      return;
-    case "-h":
-    case "--help":
-      state.options.help = true;
-      return;
-    default:
-      parseInlineArg(arg, state);
+  const handler = ARG_HANDLERS[arg];
+  if (handler) {
+    handler(argv, state);
+    return;
   }
+  parseInlineArg(arg, state);
 }
 
 function parseScopeValue(value: string | undefined, missingMessage?: string): Scope {
@@ -105,6 +122,14 @@ function parseInlineArg(arg: string, state: ArgParseState): void {
     return;
   }
   throw new UsageError(`Unknown argument: ${arg}`);
+}
+
+function addSourceFlag(state: ArgParseState, source: SourceId): void {
+  state.options.sources = normalizeSourceList([...(state.options.sources ?? []), source]);
+}
+
+function normalizeSourceList(sources: SourceId[]): SourceId[] {
+  return [...new Set(sources)];
 }
 
 function enableFullMode(state: ArgParseState): void {

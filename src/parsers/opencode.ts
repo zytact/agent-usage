@@ -114,7 +114,22 @@ export async function parseOpencodeRows({
   return sessions;
 }
 
-// fallow-ignore-next-line complexity
+type OpencodeParseContext = {
+  assistantTurns: number;
+  currentEffort?: string;
+  currentModel?: string;
+  cwd?: string;
+  efforts: Record<string, number>;
+  eventMarks: Array<{ effort?: string; model?: string; ts: Date }>;
+  events: Date[];
+  languages: Record<string, number>;
+  modelTokens: ParsedSession["modelTokens"];
+  models: Record<string, number>;
+  requests: ParsedSession["requests"];
+  tokens: ParsedSession["tokens"];
+  userTurns: number;
+};
+
 async function parseSessionRow(
   row: OpencodeSessionRow,
   messages: OpencodeMessageRow[],
@@ -125,230 +140,339 @@ async function parseSessionRow(
     return undefined;
   }
 
-  let cwd = asString(row.directory);
-  let currentModel: string | undefined;
-  let currentEffort: string | undefined;
-
-  const events: Date[] = [];
-  const eventMarks: Array<{ effort?: string; model?: string; ts: Date }> = [];
-  let tokens = zeroTokens();
-  const languages: Record<string, number> = {};
-  const models: Record<string, number> = {};
-  const efforts: Record<string, number> = {};
-  const modelTokens: ParsedSession["modelTokens"] = {};
-  const requests: ParsedSession["requests"] = [];
-  let userTurns = 0;
-  let assistantTurns = 0;
-
-  for (const rawTs of [row.time_created, row.time_updated]) {
-    const ts = parseEpochMs(rawTs);
-    if (ts) {
-      events.push(ts);
-      eventMarks.push({ effort: currentEffort, model: currentModel, ts });
-    }
-  }
-
   const originator = isT3CodeSession(row.title, row.metadata) ? "t3code_desktop" : "opencode";
   const fallbackModel = parseFallbackModel(row.model);
   const fallbackEffort = parseFallbackVariant(row.model);
+  const context = createParseContext(row, fallbackEffort);
 
-  currentEffort = fallbackEffort;
-
-  const title = asString(row.title);
-  if (title) {
-    mergeCounts(languages, inferLanguages(title));
-  }
-
-  const diffPath = join(dirname(dbPath), "storage", "session_diff", `${sessionId}.json`);
-  if (existsSync(diffPath)) {
-    try {
-      mergeCounts(languages, inferLanguages(await readFile(diffPath, "utf8")));
-    } catch {}
-  }
+  await mergeSessionLanguages(context, row, dbPath, sessionId);
 
   for (const messageRow of messages) {
-    for (const rawTs of [messageRow.time_created, messageRow.time_updated]) {
-      const ts = parseEpochMs(rawTs);
-      if (ts) {
-        events.push(ts);
-        eventMarks.push({ effort: currentEffort, model: currentModel, ts });
-      }
-    }
-
-    const rawData = messageRow.data ?? "";
-    mergeCounts(languages, inferLanguages(rawData));
-
-    let data: unknown;
-    try {
-      data = JSON.parse(rawData);
-    } catch {
-      continue;
-    }
-    if (!isRecord(data)) {
-      continue;
-    }
-
-    const timeInfo = isRecord(data.time) ? data.time : undefined;
-    for (const rawTs of [timeInfo?.created, timeInfo?.completed]) {
-      const ts = parseEpochMs(rawTs);
-      if (ts) {
-        events.push(ts);
-        eventMarks.push({ effort: currentEffort, model: currentModel, ts });
-      }
-    }
-
-    const pathInfo = isRecord(data.path) ? data.path : undefined;
-    cwd = asString(pathInfo?.cwd) ?? asString(pathInfo?.root) ?? cwd;
-
-    const effort = asString(data.variant);
-    if (effort) {
-      efforts[effort] = (efforts[effort] ?? 0) + 1;
-      currentEffort = effort;
-      const ts = parseEpochMs(timeInfo?.created);
-      if (ts) {
-        eventMarks.push({ effort: currentEffort, model: currentModel, ts });
-      }
-    }
-
-    const role = asString(data.role);
-    if (role === "user") {
-      userTurns += 1;
-    } else if (role === "assistant") {
-      assistantTurns += 1;
-    }
-    if (role !== "assistant") {
-      continue;
-    }
-
-    const model = asString(data.modelID) ?? fallbackModel;
-    if (model) {
-      models[model] = (models[model] ?? 0) + 1;
-      currentModel = model;
-      for (const rawTs of [timeInfo?.created, timeInfo?.completed, messageRow.time_updated]) {
-        const ts = parseEpochMs(rawTs);
-        if (ts) {
-          eventMarks.push({ effort: currentEffort, model: currentModel, ts });
-        }
-      }
-    }
-
-    const usage = isRecord(data.tokens) ? data.tokens : undefined;
-    const cache = isRecord(usage?.cache) ? usage.cache : undefined;
-    const input = asNumber(usage?.input);
-    const cached = asNumber(cache?.read);
-    const cacheWrite = asNumber(cache?.write);
-    const output = asNumber(usage?.output);
-    const reasoning = asNumber(usage?.reasoning);
-    const total = asNumber(usage?.total) || input + cached + cacheWrite + output + reasoning;
-
-    tokens.input += input;
-    tokens.cached += cached;
-    tokens.cacheWrite += cacheWrite;
-    tokens.output += output;
-    tokens.reasoning += reasoning;
-    tokens.total += total;
-
-    if (model) {
-      const bucket = (modelTokens[model] ??= {
-        billableOutput: 0,
-        cacheWrite: 0,
-        cached: 0,
-        input: 0,
-        output: 0,
-        reasoning: 0,
-        total: 0,
-      });
-      bucket.input += input;
-      bucket.cached += cached;
-      bucket.cacheWrite += cacheWrite;
-      bucket.output += output;
-      bucket.reasoning += reasoning;
-      bucket.billableOutput += output + reasoning;
-      bucket.total += total;
-    }
-
-    addRequest(requests, {
-      effort: currentEffort,
-      model,
+    processMessage(context, messageRow, {
+      fallbackModel,
       originator,
-      repo: repoName(cwd),
       sessionId,
-      source: "opencode",
-      tokens: {
-        cacheWrite,
-        cached,
-        input,
-        output,
-        reasoning,
-        total,
-      },
-      ts: parseEpochMs(timeInfo?.completed) ?? parseEpochMs(messageRow.time_updated),
     });
   }
 
-  if (events.length === 0) {
+  if (context.events.length === 0) {
     return undefined;
   }
 
-  if (tokens.total === 0) {
-    if (fallbackEffort) {
-      efforts[fallbackEffort] = (efforts[fallbackEffort] ?? 0) + 1;
-    }
-    tokens = {
-      cacheWrite: asNumber(row.tokens_cache_write),
-      cached: asNumber(row.tokens_cache_read),
-      input: asNumber(row.tokens_input),
-      output: asNumber(row.tokens_output),
-      reasoning: asNumber(row.tokens_reasoning),
-      total:
-        asNumber(row.tokens_input) +
-        asNumber(row.tokens_cache_read) +
-        asNumber(row.tokens_cache_write) +
-        asNumber(row.tokens_output) +
-        asNumber(row.tokens_reasoning),
-    };
-    if (fallbackModel) {
-      models[fallbackModel] = (models[fallbackModel] ?? 0) + 1;
-      modelTokens[fallbackModel] = {
-        billableOutput: tokens.output + tokens.reasoning,
-        cacheWrite: tokens.cacheWrite,
-        cached: tokens.cached,
-        input: tokens.input,
-        output: tokens.output,
-        reasoning: tokens.reasoning,
-        total: tokens.total,
-      };
-    }
+  applyFallbackUsage(context, row, fallbackEffort, fallbackModel);
+  return buildParsedSession(context, dbPath, originator, sessionId);
+}
+
+function createParseContext(
+  row: OpencodeSessionRow,
+  fallbackEffort: string | undefined,
+): OpencodeParseContext {
+  const context: OpencodeParseContext = {
+    assistantTurns: 0,
+    cwd: asString(row.directory),
+    efforts: {},
+    eventMarks: [],
+    events: [],
+    languages: {},
+    modelTokens: {},
+    models: {},
+    requests: [],
+    tokens: zeroTokens(),
+    userTurns: 0,
+  };
+
+  pushTimestamps(context, [row.time_created, row.time_updated]);
+  context.currentEffort = fallbackEffort;
+  return context;
+}
+
+async function mergeSessionLanguages(
+  context: OpencodeParseContext,
+  row: OpencodeSessionRow,
+  dbPath: string,
+  sessionId: string,
+): Promise<void> {
+  const title = asString(row.title);
+  if (title) {
+    mergeCounts(context.languages, inferLanguages(title));
   }
 
-  events.sort((a, b) => a.getTime() - b.getTime());
-  const allocated = allocateStateTime(eventMarks);
+  const diffPath = join(dirname(dbPath), "storage", "session_diff", `${sessionId}.json`);
+  if (!existsSync(diffPath)) {
+    return;
+  }
+
+  try {
+    mergeCounts(context.languages, inferLanguages(await readFile(diffPath, "utf8")));
+  } catch {}
+}
+
+function applyMessageTimestamps(context: OpencodeParseContext, row: OpencodeMessageRow): void {
+  pushTimestamps(context, [row.time_created, row.time_updated]);
+}
+
+function processMessage(
+  context: OpencodeParseContext,
+  messageRow: OpencodeMessageRow,
+  meta: { fallbackModel?: string; originator: string; sessionId: string },
+): void {
+  applyMessageTimestamps(context, messageRow);
+  const data = parseMessageData(context, messageRow.data ?? "");
+  if (!data) {
+    return;
+  }
+
+  const timeInfo = toRecord(data.time);
+  applyNestedTimestamps(context, timeInfo);
+  updateCwd(context, data);
+  applyEffort(context, data, timeInfo);
+
+  const role = asString(data.role);
+  countRole(context, role);
+  if (role !== "assistant") {
+    return;
+  }
+
+  const model = applyModel(context, data, timeInfo, messageRow, meta.fallbackModel);
+  const usage = usageFromMessage(data);
+  applyUsage(context, usage, model);
+  addRequest(context.requests, {
+    effort: context.currentEffort,
+    model,
+    originator: meta.originator,
+    repo: repoName(context.cwd),
+    sessionId: meta.sessionId,
+    source: "opencode",
+    tokens: usage,
+    ts: parseEpochMs(timeInfo?.completed) ?? parseEpochMs(messageRow.time_updated),
+  });
+}
+
+function parseMessageData(
+  context: OpencodeParseContext,
+  rawData: string,
+): Record<string, any> | undefined {
+  mergeCounts(context.languages, inferLanguages(rawData));
+
+  try {
+    const data: unknown = JSON.parse(rawData);
+    return isRecord(data) ? data : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function applyNestedTimestamps(
+  context: OpencodeParseContext,
+  timeInfo: Record<string, any> | undefined,
+): void {
+  pushTimestamps(context, [timeInfo?.created, timeInfo?.completed]);
+}
+
+function updateCwd(context: OpencodeParseContext, data: Record<string, any>): void {
+  const pathInfo = toRecord(data.path);
+  context.cwd = asString(pathInfo?.cwd) ?? asString(pathInfo?.root) ?? context.cwd;
+}
+
+function applyEffort(
+  context: OpencodeParseContext,
+  data: Record<string, any>,
+  timeInfo: Record<string, any> | undefined,
+): void {
+  const effort = asString(data.variant);
+  if (!effort) {
+    return;
+  }
+
+  context.efforts[effort] = (context.efforts[effort] ?? 0) + 1;
+  context.currentEffort = effort;
+  pushMarks(context, [parseEpochMs(timeInfo?.created)]);
+}
+
+function countRole(context: OpencodeParseContext, role: string | undefined): void {
+  if (role === "user") {
+    context.userTurns += 1;
+  } else if (role === "assistant") {
+    context.assistantTurns += 1;
+  }
+}
+
+function applyModel(
+  context: OpencodeParseContext,
+  data: Record<string, any>,
+  timeInfo: Record<string, any> | undefined,
+  row: OpencodeMessageRow,
+  fallbackModel: string | undefined,
+): string | undefined {
+  const model = asString(data.modelID) ?? fallbackModel;
+  if (!model) {
+    return undefined;
+  }
+
+  context.models[model] = (context.models[model] ?? 0) + 1;
+  context.currentModel = model;
+  pushMarks(context, [
+    parseEpochMs(timeInfo?.created),
+    parseEpochMs(timeInfo?.completed),
+    parseEpochMs(row.time_updated),
+  ]);
+  return model;
+}
+
+function usageFromMessage(data: Record<string, any>): ParsedSession["tokens"] {
+  const usage = toRecord(data.tokens);
+  const cache = toRecord(usage?.cache);
+  const values = {
+    cacheWrite: asNumber(cache?.write),
+    cached: asNumber(cache?.read),
+    input: asNumber(usage?.input),
+    output: asNumber(usage?.output),
+    reasoning: asNumber(usage?.reasoning),
+  };
+
+  return {
+    ...values,
+    total:
+      asNumber(usage?.total) ||
+      values.input + values.cached + values.cacheWrite + values.output + values.reasoning,
+  };
+}
+
+function applyUsage(
+  context: OpencodeParseContext,
+  usage: ParsedSession["tokens"],
+  model: string | undefined,
+): void {
+  context.tokens.input += usage.input;
+  context.tokens.cached += usage.cached;
+  context.tokens.cacheWrite += usage.cacheWrite;
+  context.tokens.output += usage.output;
+  context.tokens.reasoning += usage.reasoning;
+  context.tokens.total += usage.total;
+
+  if (!model) {
+    return;
+  }
+
+  const bucket = (context.modelTokens[model] ??= {
+    billableOutput: 0,
+    cacheWrite: 0,
+    cached: 0,
+    input: 0,
+    output: 0,
+    reasoning: 0,
+    total: 0,
+  });
+  bucket.input += usage.input;
+  bucket.cached += usage.cached;
+  bucket.cacheWrite += usage.cacheWrite;
+  bucket.output += usage.output;
+  bucket.reasoning += usage.reasoning;
+  bucket.billableOutput += usage.output + usage.reasoning;
+  bucket.total += usage.total;
+}
+
+function applyFallbackUsage(
+  context: OpencodeParseContext,
+  row: OpencodeSessionRow,
+  fallbackEffort: string | undefined,
+  fallbackModel: string | undefined,
+): void {
+  if (context.tokens.total !== 0) {
+    return;
+  }
+
+  if (fallbackEffort) {
+    context.efforts[fallbackEffort] = (context.efforts[fallbackEffort] ?? 0) + 1;
+  }
+
+  context.tokens = {
+    cacheWrite: asNumber(row.tokens_cache_write),
+    cached: asNumber(row.tokens_cache_read),
+    input: asNumber(row.tokens_input),
+    output: asNumber(row.tokens_output),
+    reasoning: asNumber(row.tokens_reasoning),
+    total:
+      asNumber(row.tokens_input) +
+      asNumber(row.tokens_cache_read) +
+      asNumber(row.tokens_cache_write) +
+      asNumber(row.tokens_output) +
+      asNumber(row.tokens_reasoning),
+  };
+
+  if (!fallbackModel) {
+    return;
+  }
+
+  context.models[fallbackModel] = (context.models[fallbackModel] ?? 0) + 1;
+  context.modelTokens[fallbackModel] = {
+    billableOutput: context.tokens.output + context.tokens.reasoning,
+    cacheWrite: context.tokens.cacheWrite,
+    cached: context.tokens.cached,
+    input: context.tokens.input,
+    output: context.tokens.output,
+    reasoning: context.tokens.reasoning,
+    total: context.tokens.total,
+  };
+}
+
+function buildParsedSession(
+  context: OpencodeParseContext,
+  dbPath: string,
+  originator: string,
+  sessionId: string,
+): ParsedSession {
+  context.events.sort((a, b) => a.getTime() - b.getTime());
+  const allocated = allocateStateTime(context.eventMarks);
 
   return {
     activeSeconds: allocated.totalSeconds,
-    assistantTurns,
-    cwd,
+    assistantTurns: context.assistantTurns,
+    cwd: context.cwd,
     dayModelActiveSeconds: collapseDayStateSeconds(allocated.byDayStateSeconds),
     dayStateActiveSeconds: allocated.byDayStateSeconds,
-    end: events.at(-1) ?? events[0],
-    efforts,
-    languages,
+    end: context.events.at(-1) ?? context.events[0],
+    efforts: context.efforts,
+    languages: context.languages,
     modelActiveSeconds: collapseStateSeconds(allocated.byStateSeconds),
-    modelTokens,
-    models,
+    modelTokens: context.modelTokens,
+    models: context.models,
     originator,
     path: dbPath,
-    repo: repoName(cwd),
-    requestCount: requests.length,
-    requests,
+    repo: repoName(context.cwd),
+    requestCount: context.requests.length,
+    requests: context.requests,
     sessionId,
     source: "opencode",
     sourceLabel: sessionLabel("opencode", originator),
-    start: events[0],
+    start: context.events[0],
     stateActiveSeconds: allocated.byStateSeconds,
-    tokens,
-    userTurns,
+    tokens: context.tokens,
+    userTurns: context.userTurns,
   };
+}
+
+function pushTimestamps(
+  context: OpencodeParseContext,
+  values: Array<number | string | null | undefined>,
+): void {
+  for (const value of values) {
+    const ts = parseEpochMs(value);
+    if (!ts) {
+      continue;
+    }
+    context.events.push(ts);
+    context.eventMarks.push({ effort: context.currentEffort, model: context.currentModel, ts });
+  }
+}
+
+function pushMarks(context: OpencodeParseContext, timestamps: Array<Date | undefined>): void {
+  for (const ts of timestamps) {
+    if (!ts) {
+      continue;
+    }
+    context.eventMarks.push({ effort: context.currentEffort, model: context.currentModel, ts });
+  }
 }
 
 async function queryJson<T>(dbPath: string, query: string, params: unknown[] = []): Promise<T[]> {
@@ -410,6 +534,10 @@ function parseFallbackVariant(raw: unknown): string | undefined {
 
 function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null;
+}
+
+function toRecord(value: unknown): Record<string, any> | undefined {
+  return isRecord(value) ? value : undefined;
 }
 
 function asNumber(value: unknown): number {

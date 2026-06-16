@@ -18,7 +18,6 @@ describe("runCli", () => {
         help: false,
         html: true,
         htmlPath: "-",
-        includeClaude: false,
         reportMode: "summary",
       },
       {
@@ -27,6 +26,7 @@ describe("runCli", () => {
           availableSections = available;
           return defaults;
         },
+        chooseSources: async (defaults) => defaults,
         clearScreen: () => {},
         collectSessions: async () => [],
         loadPricing: async () => ({}),
@@ -73,13 +73,13 @@ async function runHtmlCli(
       help: false,
       html: true,
       htmlPath,
-      includeClaude: false,
       reportMode: "summary",
       scope: "today",
     },
     {
       chooseAction: async () => undefined,
       chooseSections: async (defaults) => defaults,
+      chooseSources: async (defaults) => defaults,
       clearScreen: () => {},
       collectSessions: async () => [],
       loadPricing: async () => ({}),

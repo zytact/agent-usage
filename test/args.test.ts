@@ -5,7 +5,6 @@ import { parseArgs, UsageError } from "../src/args.js";
 describe("parseArgs", () => {
   it("parses defaults", () => {
     expect(parseArgs([])).toEqual({
-      includeClaude: false,
       html: false,
       help: false,
       reportMode: "summary",
@@ -13,19 +12,20 @@ describe("parseArgs", () => {
   });
 
   it("parses explicit flags", () => {
-    expect(parseArgs(["--claude", "--scope", "1d", "--full", "--html", "report.html"])).toEqual({
-      includeClaude: true,
+    expect(
+      parseArgs(["--claude", "--codex", "--scope", "1d", "--full", "--html", "report.html"]),
+    ).toEqual({
       scope: "1d",
       html: true,
       htmlPath: "report.html",
       help: false,
       reportMode: "full",
+      sources: ["claude", "codex"],
     });
   });
 
   it("parses equals syntax", () => {
     expect(parseArgs(["--scope=30d", "--html=-"])).toEqual({
-      includeClaude: false,
       scope: "30d",
       html: true,
       htmlPath: "-",
@@ -42,7 +42,6 @@ describe("parseArgs", () => {
         "--section=source-sections,token-mix",
       ]),
     ).toEqual({
-      includeClaude: false,
       html: false,
       help: false,
       reportMode: "summary",
@@ -52,7 +51,6 @@ describe("parseArgs", () => {
 
   it("keeps help separate", () => {
     expect(parseArgs(["--help"])).toEqual({
-      includeClaude: false,
       html: false,
       help: true,
       reportMode: "summary",
