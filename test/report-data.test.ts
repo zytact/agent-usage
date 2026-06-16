@@ -49,7 +49,7 @@ describe("buildReport", () => {
     const report = buildReport(
       sessions,
       "30d",
-      true,
+      ["codex", "opencode", "pi", "claude"],
       new Date("2026-06-14T18:45:00+05:30"),
       pricing,
     );
@@ -97,7 +97,7 @@ describe("buildReport", () => {
     const report = buildReport(
       sessions,
       "1d",
-      true,
+      ["codex", "opencode", "pi", "claude"],
       new Date("2026-06-14T18:45:00+05:30"),
       pricing,
     );
@@ -111,7 +111,7 @@ describe("buildReport", () => {
     const report = buildReport(
       sessions,
       "30d",
-      true,
+      ["codex", "opencode", "pi", "claude"],
       new Date("2026-06-14T18:45:00+05:30"),
       pricing,
     );

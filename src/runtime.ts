@@ -6,9 +6,9 @@ import { join, resolve } from "node:path";
 import checkbox, { Separator } from "@inquirer/checkbox";
 import select from "@inquirer/select";
 
-import type { CliOptions } from "./args.js";
+import { DEFAULT_SOURCES, type CliOptions } from "./args.js";
 import { defaultDiscoveryRoots, discoverSessionFiles } from "./discovery.js";
-import type { ParsedSession } from "./domain.js";
+import type { ParsedSession, SourceId } from "./domain.js";
 import { renderHtmlReport, writeHtmlReport } from "./html-report.js";
 import { parseClaudeSessionFile } from "./parsers/claude.js";
 import { parseCodexSessionFile } from "./parsers/codex.js";
@@ -27,14 +27,22 @@ import {
 } from "./sections.js";
 import { renderTerminalReport } from "./terminal-report.js";
 
+const SOURCE_LABELS: Record<SourceId, string> = {
+  claude: "Claude Code",
+  codex: "Codex",
+  opencode: "opencode",
+  pi: "Pi",
+};
+
 export type RuntimeDeps = {
   chooseAction: (items: string[], header: string) => Promise<string | undefined>;
   chooseSections: (
     defaults: SectionKey[],
     available: SectionKey[],
   ) => Promise<SectionKey[] | undefined>;
+  chooseSources: (defaults: SourceId[], available: SourceId[]) => Promise<SourceId[] | undefined>;
   clearScreen: () => void;
-  collectSessions: (includeClaude: boolean, start: Date) => Promise<ParsedSession[]>;
+  collectSessions: (sources: SourceId[], start: Date) => Promise<ParsedSession[]>;
   loadPricing: () => Promise<Record<string, PricingInfo>>;
   now: () => Date;
   openPath: (path: string) => Promise<void>;
@@ -46,6 +54,7 @@ function defaultRuntimeDeps(): RuntimeDeps {
   return {
     chooseAction: promptChoose,
     chooseSections: promptSections,
+    chooseSources: promptSources,
     clearScreen: () => {
       process.stdout.write("\x1bc");
     },
@@ -67,21 +76,23 @@ export async function runCli(
     return 0;
   }
 
+  const sources = await chooseSources(options, deps);
+  if (!sources?.length) {
+    return 0;
+  }
+
   const sections = await chooseReportSections(options, deps, scope);
   if (!sections) {
     return 0;
   }
 
   const ingestScope = options.html ? scope : "30d";
-  const sessions = await deps.collectSessions(
-    options.includeClaude,
-    scopeStart(ingestScope, deps.now()),
-  );
+  const sessions = await deps.collectSessions(sources, scopeStart(ingestScope, deps.now()));
   const pricing = await deps.loadPricing();
 
   return options.html
-    ? renderHtmlOnce(options, deps, sessions, pricing, scope, sections)
-    : runInteractiveReport(options, deps, sessions, pricing, scope, sections);
+    ? renderHtmlOnce(options, deps, sessions, pricing, scope, sections, sources)
+    : runInteractiveReport(options, deps, sessions, pricing, scope, sections, sources);
 }
 
 async function chooseInitialScope(
@@ -92,6 +103,15 @@ async function chooseInitialScope(
     (await deps.chooseAction(["today", "1d", "7d", "30d"], "Pick a time range"))) as
     | Scope
     | undefined;
+}
+
+async function chooseSources(
+  options: CliOptions,
+  deps: RuntimeDeps,
+): Promise<SourceId[] | undefined> {
+  return (
+    options.sources ?? deps.chooseSources(DEFAULT_SOURCES, ["codex", "opencode", "pi", "claude"])
+  );
 }
 
 async function chooseReportSections(
@@ -115,10 +135,11 @@ async function renderHtmlOnce(
   pricing: Record<string, PricingInfo>,
   scope: Scope,
   sections: SectionKey[],
+  sources: SourceId[],
 ): Promise<number> {
   const outputPath = await resolveHtmlPath(options.htmlPath);
   const html = renderHtmlReport(
-    buildReport(sessions, scope, options.includeClaude, deps.now(), pricing),
+    buildReport(sessions, scope, sources, deps.now(), pricing),
     pricing,
     inferSectionModeForScope(scope, sections) === "full" ? "full" : "summary",
     sections,
@@ -144,6 +165,7 @@ async function runInteractiveReport(
   pricing: Record<string, PricingInfo>,
   scope: Scope,
   sections: SectionKey[],
+  sources: SourceId[],
 ): Promise<number> {
   let currentScope = scope;
   while (true) {
@@ -155,6 +177,7 @@ async function runInteractiveReport(
       pricing,
       currentScope,
       activeSections,
+      sources,
     );
     const action = await deps.chooseAction(
       ["Open HTML report", "Change range", "Refresh", "Exit"],
@@ -182,9 +205,10 @@ function writeTerminalReport(
   pricing: Record<string, PricingInfo>,
   scope: Scope,
   sections: SectionKey[],
+  sources: SourceId[],
 ) {
   deps.clearScreen();
-  const report = buildReport(sessions, scope, options.includeClaude, deps.now(), pricing);
+  const report = buildReport(sessions, scope, sources, deps.now(), pricing);
   deps.stdout.write(
     `${renderTerminalReport(
       report,
@@ -237,20 +261,23 @@ async function openHtmlReport(
   await deps.openPath(outputPath);
 }
 
-async function collectSessions(includeClaude: boolean, start: Date): Promise<ParsedSession[]> {
+async function collectSessions(sources: SourceId[], start: Date): Promise<ParsedSession[]> {
   const roots = defaultDiscoveryRoots(homedir());
   const discovered = await discoverSessionFiles(roots, start);
   const cacheDir = await ensureParsedSessionCacheDir();
-  const codexSessions = await parseDiscoveredFiles(
-    discovered.codexFiles,
-    parseCodexSessionFile,
-    cacheDir,
-  );
-  const piSessions = await parseDiscoveredFiles(discovered.piFiles, parsePiSessionFile, cacheDir);
-  const claudeSessions = includeClaude
+  const selected = new Set(sources);
+  const codexSessions = selected.has("codex")
+    ? await parseDiscoveredFiles(discovered.codexFiles, parseCodexSessionFile, cacheDir)
+    : [];
+  const piSessions = selected.has("pi")
+    ? await parseDiscoveredFiles(discovered.piFiles, parsePiSessionFile, cacheDir)
+    : [];
+  const claudeSessions = selected.has("claude")
     ? await parseDiscoveredFiles(discovered.claudeFiles, parseClaudeSessionFile, cacheDir)
     : [];
-  const opencodeSessions = await parseOpencodeDb(discovered.opencodeDbPath, start);
+  const opencodeSessions = selected.has("opencode")
+    ? await parseOpencodeDb(discovered.opencodeDbPath, start)
+    : [];
 
   return [...codexSessions, ...opencodeSessions, ...claudeSessions, ...piSessions];
 }
@@ -370,6 +397,42 @@ async function promptChoose(items: string[], header: string): Promise<string | u
     return await select({
       choices: items.map((item) => ({ name: item, value: item })),
       message: header,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "ExitPromptError") {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+async function promptSources(
+  defaults: SourceId[],
+  available: SourceId[],
+): Promise<SourceId[] | undefined> {
+  const detail = available.filter((source) => !defaults.includes(source));
+  try {
+    return await checkbox({
+      choices: [
+        new Separator("Defaults"),
+        ...defaults.map((source) => ({
+          checked: true,
+          name: SOURCE_LABELS[source],
+          value: source,
+        })),
+        new Separator("Extra"),
+        ...detail.map((source) => ({
+          checked: false,
+          name: SOURCE_LABELS[source],
+          value: source,
+        })),
+      ],
+      instructions: false,
+      loop: false,
+      message: "Pick sources",
+      pageSize: available.length + 2,
+      required: true,
+      shortcuts: { all: null, invert: null },
     });
   } catch (error) {
     if (error instanceof Error && error.name === "ExitPromptError") {

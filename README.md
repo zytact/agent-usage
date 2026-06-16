@@ -4,23 +4,26 @@ Local CLI that reads coding-agent session history and generates a usage dossier 
 
 ## Sources
 
-| Agent       | Location                                       |
-| ----------- | ---------------------------------------------- |
-| Codex       | `~/.codex/sessions/`                           |
-| opencode    | `~/.local/share/opencode/opencode.db`          |
-| Pi          | `~/.pi/agent/sessions/`                        |
-| Claude Code | `~/.claude/projects/` (opt-in with `--claude`) |
+| Agent       | Location                              |
+| ----------- | ------------------------------------- |
+| Codex       | `~/.codex/sessions/`                  |
+| opencode    | `~/.local/share/opencode/opencode.db` |
+| Pi          | `~/.pi/agent/sessions/`               |
+| Claude Code | `~/.claude/projects/`                 |
 
 ## Usage
 
 ```
-agent-usage [--claude] [--scope today|1d|7d|30d] [--full | --section KEY[,KEY...]] [--html [FILE]]
+agent-usage [--codex] [--opencode] [--pi] [--claude] [--scope today|1d|7d|30d] [--full | --section KEY[,KEY...]] [--html [FILE]]
 ```
 
-Run without flags for an interactive terminal report. It will prompt for a time range, then prompt for report sections with the default summary set preselected.
+Run without flags for an interactive terminal report. It will prompt for a time range, then prompt for sources with Codex/opencode/Pi preselected, then prompt for report sections with the default summary set preselected.
 
 | Flag            | Description                                                                                        |
 | --------------- | -------------------------------------------------------------------------------------------------- |
+| `--codex`       | Include Codex sessions                                                                             |
+| `--opencode`    | Include opencode sessions                                                                          |
+| `--pi`          | Include Pi sessions                                                                                |
 | `--claude`      | Include Claude Code sessions                                                                       |
 | `--scope`       | Skip the prompt: `today`, `1d`, `7d`, `30d`                                                        |
 | `--full`        | Show full diagnostic report (per-source sections, distribution tables, daily model breakdown)      |
@@ -47,7 +50,7 @@ vp run build   # pack binary
 
 ## Output
 
-In **summary mode** (default): request summary, daily usage, source shares, model breakdown, token mix, top repos, and per-source sections for Codex, opencode, Pi (and Claude Code if enabled).
+In **summary mode** (default): request summary, daily usage, source shares, model breakdown, token mix, top repos, and per-source sections for the selected sources.
 
 In **full mode**: adds GPT-only request summary, distribution tables (tokens/min, context size), daily model breakdown rows, language stats, and detailed per-source panels.
 

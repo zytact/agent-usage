@@ -1,4 +1,4 @@
-import type { ParsedSession, SessionRequest, TokenUsage } from "./domain.js";
+import type { ParsedSession, SessionRequest, SourceId, TokenUsage } from "./domain.js";
 import {
   coefficientOfVariation,
   mean,
@@ -133,7 +133,7 @@ export type BuiltReport = {
   generatedAt: Date;
   gptOnly: SourceSection;
   gptOnlyRequestSummary: RequestSummarySource;
-  includeClaude: boolean;
+  selectedSources: SourceId[];
   requestSummary: RequestSummarySource;
   requestSummarySessions: ParsedSession[];
   scope: Scope;
@@ -201,7 +201,7 @@ export function aggregateSessions(sessions: ParsedSession[]): ReportStats {
 export function buildReport(
   sessions: ParsedSession[],
   scope: Scope,
-  includeClaude: boolean,
+  selectedSources: SourceId[],
   now: Date,
   pricing: Record<string, PricingInfo> = {},
 ): BuiltReport {
@@ -236,22 +236,28 @@ export function buildReport(
     );
   }
 
+  const selected = new Set(selectedSources);
   const sections: SourceSection[] = [
     makeSection("Combined", filtered, SOURCE_TONES.combined),
     { sessions: [], stats: gptOnlyStats, title: "GPT-only", tone: SOURCE_TONES.gptOnly },
-    makeSection("Codex", buckets.codex, SOURCE_TONES.codex),
-    makeSection("Codex via T3 Code", buckets.codexT3, SOURCE_TONES.t3code),
-    makeSection("Codex other", buckets.codexOther, SOURCE_TONES.other),
-    makeSection("opencode", buckets.opencode, SOURCE_TONES.opencode),
-    makeSection("opencode via T3 Code", buckets.opencodeT3, SOURCE_TONES.t3code),
-    makeSection("opencode other", buckets.opencodeOther, SOURCE_TONES.other),
   ];
 
-  if (includeClaude) {
+  if (selected.has("codex")) {
+    sections.push(makeSection("Codex", buckets.codex, SOURCE_TONES.codex));
+    sections.push(makeSection("Codex via T3 Code", buckets.codexT3, SOURCE_TONES.t3code));
+    sections.push(makeSection("Codex other", buckets.codexOther, SOURCE_TONES.other));
+  }
+  if (selected.has("opencode")) {
+    sections.push(makeSection("opencode", buckets.opencode, SOURCE_TONES.opencode));
+    sections.push(makeSection("opencode via T3 Code", buckets.opencodeT3, SOURCE_TONES.t3code));
+    sections.push(makeSection("opencode other", buckets.opencodeOther, SOURCE_TONES.other));
+  }
+  if (selected.has("claude")) {
     sections.push(makeSection("Claude Code", buckets.claude, SOURCE_TONES.claude));
   }
-
-  sections.push(makeSection("Pi", buckets.pi, SOURCE_TONES.pi));
+  if (selected.has("pi")) {
+    sections.push(makeSection("Pi", buckets.pi, SOURCE_TONES.pi));
+  }
 
   return {
     attributionOverages: attributionOverageRows(filtered),
@@ -264,7 +270,7 @@ export function buildReport(
       distributions: gptOnlyDistributions,
       requests: gptOnlyRequests,
     },
-    includeClaude,
+    selectedSources,
     requestSummary: {
       requests: filtered.flatMap((session) => session.requests),
       sessions: filtered,
@@ -273,7 +279,7 @@ export function buildReport(
     scope,
     scopeTitle: formatScopeTitle(scope, now),
     sections,
-    sourceCount: 3 + (includeClaude ? 1 : 0),
+    sourceCount: selectedSources.length,
   };
 }
 
