@@ -121,29 +121,14 @@ function claudeUsageTokens(usage: Record<string, unknown>): ParsedSession["token
   const cached = asNumber(usage.cache_read_input_tokens);
   const cacheWrite = asNumber(usage.cache_creation_input_tokens);
   const output = asNumber(usage.output_tokens);
-  const reasoning = sumIterationOutput(usage.iterations);
   return {
     cacheWrite,
     cached,
     input,
     output,
-    reasoning,
-    total: asNumber(usage.total_tokens) || input + cached + cacheWrite + output + reasoning,
+    reasoning: 0,
+    total: asNumber(usage.total_tokens) || input + cached + cacheWrite + output,
   };
-}
-
-function sumIterationOutput(value: unknown): number {
-  if (!Array.isArray(value)) {
-    return 0;
-  }
-
-  let total = 0;
-  for (const item of value) {
-    if (isRecord(item)) {
-      total += asNumber(item.output_tokens);
-    }
-  }
-  return total;
 }
 
 function isRealModel(model: string | undefined): model is string {
