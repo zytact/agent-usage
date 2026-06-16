@@ -30,7 +30,7 @@ describe("parseClaudeSessionText", () => {
         cached: 0,
         input: 4,
         output: 862,
-        reasoning: 862,
+        reasoning: 0,
         total: 30179,
       },
       userTurns: 1,
@@ -38,12 +38,12 @@ describe("parseClaudeSessionText", () => {
 
     expect(session?.modelTokens).toEqual({
       "claude-sonnet-4-6": {
-        billableOutput: 1724,
+        billableOutput: 862,
         cacheWrite: 29056,
         cached: 0,
         input: 4,
         output: 862,
-        reasoning: 862,
+        reasoning: 0,
         total: 30179,
       },
     });
@@ -61,7 +61,7 @@ describe("parseClaudeSessionText", () => {
       input: 3,
       model: "claude-sonnet-4-6",
       output: 257,
-      reasoning: 257,
+      reasoning: 0,
       total: 12463,
     });
     expect(session?.requests[1]).toMatchObject({
@@ -70,7 +70,7 @@ describe("parseClaudeSessionText", () => {
       input: 1,
       model: "claude-sonnet-4-6",
       output: 605,
-      reasoning: 605,
+      reasoning: 0,
       total: 17716,
     });
   });
