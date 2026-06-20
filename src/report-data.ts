@@ -1,4 +1,5 @@
 import type { ParsedSession, SessionRequest, SourceId, TokenUsage } from "./domain.js";
+import { originatorLabel } from "./ingest-shared.js";
 import {
   coefficientOfVariation,
   mean,
@@ -113,12 +114,58 @@ export type RequestSummarySource = {
   distributions?: ReturnType<typeof sessionDistributions>;
 };
 
+export type EffortBreakdownRow = {
+  activeSeconds: number;
+  activeSecondsPerRequest?: number;
+  cachedPerRequest: number;
+  contextPerRequest?: number;
+  costBreakdownPerRequest?: CostBreakdown;
+  costPerActiveMinute?: number;
+  costPerRequest?: number;
+  costPerRequestUplift?: number;
+  costPerMinuteUplift?: number;
+  effort: string;
+  inputPerRequest: number;
+  outputPerRequest: number;
+  outputPerRequestUplift?: number;
+  reasoningPerRequest: number;
+  reasoningPerRequestUplift?: number;
+  requests: number;
+  tokensPerRequest: number;
+  tokensPerRequestUplift?: number;
+  contextPerRequestUplift?: number;
+};
+
+export type ModelEffortBreakdown = {
+  effortRows: EffortBreakdownRow[];
+  model: string;
+};
+
+export type EffortMetricCell = {
+  kind: "duration" | "tokens" | "usd";
+  label: string;
+  note: string;
+  value: number | undefined;
+};
+
+type EffortAggregationBucket = {
+  activeSeconds: number;
+  contextCount: number;
+  contextTotal: number;
+  costBreakdown?: CostBreakdown;
+  requestCount: number;
+  tokenInfo: ModelTokenUsage;
+};
+
 export type SourceSection = {
+  kind: "combined" | "gptOnly" | "originator" | "primary";
   sessions: ParsedSession[];
   stats: ReportStats;
   title: string;
   tone: string;
 };
+
+export type CacheWriteAvailability = "known" | "mixed" | "unknown";
 
 export type BuiltReport = {
   attributionOverages: Array<{
@@ -134,6 +181,7 @@ export type BuiltReport = {
   gptOnly: SourceSection;
   gptOnlyRequestSummary: RequestSummarySource;
   selectedSources: SourceId[];
+  showOriginators: boolean;
   requestSummary: RequestSummarySource;
   requestSummarySessions: ParsedSession[];
   scope: Scope;
@@ -204,16 +252,13 @@ export function buildReport(
   selectedSources: SourceId[],
   now: Date,
   pricing: Record<string, PricingInfo> = {},
+  showOriginators = false,
 ): BuiltReport {
   const filtered = filterSessionsByScope(sessions, scope, now);
   const buckets = {
     claude: [] as ParsedSession[],
     codex: [] as ParsedSession[],
-    codexOther: [] as ParsedSession[],
-    codexT3: [] as ParsedSession[],
     opencode: [] as ParsedSession[],
-    opencodeOther: [] as ParsedSession[],
-    opencodeT3: [] as ParsedSession[],
     pi: [] as ParsedSession[],
   };
   const gptOnlyStats = createEmptyStats();
@@ -238,25 +283,36 @@ export function buildReport(
 
   const selected = new Set(selectedSources);
   const sections: SourceSection[] = [
-    makeSection("Combined", filtered, SOURCE_TONES.combined),
-    { sessions: [], stats: gptOnlyStats, title: "GPT-only", tone: SOURCE_TONES.gptOnly },
+    makeSection("Combined", filtered, SOURCE_TONES.combined, "combined"),
+    {
+      kind: "gptOnly",
+      sessions: [],
+      stats: gptOnlyStats,
+      title: "GPT-only",
+      tone: SOURCE_TONES.gptOnly,
+    },
   ];
 
   if (selected.has("codex")) {
-    sections.push(makeSection("Codex", buckets.codex, SOURCE_TONES.codex));
-    sections.push(makeSection("Codex via T3 Code", buckets.codexT3, SOURCE_TONES.t3code));
-    sections.push(makeSection("Codex other", buckets.codexOther, SOURCE_TONES.other));
+    sections.push(makeSection("Codex", buckets.codex, SOURCE_TONES.codex, "primary"));
+    if (showOriginators) {
+      sections.push(...originatorSections("codex", buckets.codex));
+    }
   }
   if (selected.has("opencode")) {
-    sections.push(makeSection("opencode", buckets.opencode, SOURCE_TONES.opencode));
-    sections.push(makeSection("opencode via T3 Code", buckets.opencodeT3, SOURCE_TONES.t3code));
-    sections.push(makeSection("opencode other", buckets.opencodeOther, SOURCE_TONES.other));
+    sections.push(makeSection("opencode", buckets.opencode, SOURCE_TONES.opencode, "primary"));
+    if (showOriginators) {
+      sections.push(...originatorSections("opencode", buckets.opencode));
+    }
   }
   if (selected.has("claude")) {
-    sections.push(makeSection("Claude Code", buckets.claude, SOURCE_TONES.claude));
+    sections.push(makeSection("Claude Code", buckets.claude, SOURCE_TONES.claude, "primary"));
+    if (showOriginators) {
+      sections.push(...originatorSections("claude", buckets.claude));
+    }
   }
   if (selected.has("pi")) {
-    sections.push(makeSection("Pi", buckets.pi, SOURCE_TONES.pi));
+    sections.push(makeSection("Pi", buckets.pi, SOURCE_TONES.pi, "primary"));
   }
 
   return {
@@ -279,6 +335,7 @@ export function buildReport(
     scope,
     scopeTitle: formatScopeTitle(scope, now),
     sections,
+    showOriginators,
     sourceCount: selectedSources.length,
   };
 }
@@ -418,26 +475,16 @@ function addSectionBucket(
   buckets: {
     claude: ParsedSession[];
     codex: ParsedSession[];
-    codexOther: ParsedSession[];
-    codexT3: ParsedSession[];
     opencode: ParsedSession[];
-    opencodeOther: ParsedSession[];
-    opencodeT3: ParsedSession[];
     pi: ParsedSession[];
   },
 ): void {
   switch (session.source) {
     case "codex":
       buckets.codex.push(session);
-      (session.originator === "t3code_desktop" ? buckets.codexT3 : buckets.codexOther).push(
-        session,
-      );
       return;
     case "opencode":
       buckets.opencode.push(session);
-      (session.originator === "t3code_desktop" ? buckets.opencodeT3 : buckets.opencodeOther).push(
-        session,
-      );
       return;
     case "claude":
       buckets.claude.push(session);
@@ -775,6 +822,28 @@ function formatScopeMoment(value: Date): string {
   return `${value.toISOString().slice(0, 10)} ${value.toISOString().slice(11, 16)} UTC`;
 }
 
+export function cacheWriteAvailability(sessions: ParsedSession[]): CacheWriteAvailability {
+  if (sessions.length === 0) {
+    return "known";
+  }
+  let known = 0;
+  let unknown = 0;
+  for (const session of sessions) {
+    if (session.cacheWriteKnown) {
+      known += 1;
+    } else {
+      unknown += 1;
+    }
+  }
+  if (known === 0) {
+    return "unknown";
+  }
+  if (unknown === 0) {
+    return "known";
+  }
+  return "mixed";
+}
+
 export function formatFloat(value: number | undefined): string {
   if (value === undefined || Number.isNaN(value)) {
     return "n/a";
@@ -843,6 +912,61 @@ export function percentRows(
   });
 }
 
+export function effortMetricCells(row: EffortBreakdownRow): EffortMetricCell[] {
+  return [
+    {
+      kind: "usd",
+      label: "Cost/req",
+      note: row.effort === "medium" ? "baseline" : formatUpliftNote(row.costPerRequestUplift),
+      value: row.costPerRequest,
+    },
+    {
+      kind: "usd",
+      label: "Cost/min",
+      note: row.effort === "medium" ? "baseline" : formatUpliftNote(row.costPerMinuteUplift),
+      value: row.costPerActiveMinute,
+    },
+    {
+      kind: "tokens",
+      label: "Tok/req",
+      note: row.effort === "medium" ? "baseline" : formatUpliftNote(row.tokensPerRequestUplift),
+      value: row.tokensPerRequest,
+    },
+    {
+      kind: "tokens",
+      label: "Out/req",
+      note: row.effort === "medium" ? "baseline" : formatUpliftNote(row.outputPerRequestUplift),
+      value: row.outputPerRequest,
+    },
+    {
+      kind: "tokens",
+      label: "Reason/req",
+      note: row.effort === "medium" ? "baseline" : formatUpliftNote(row.reasoningPerRequestUplift),
+      value: row.reasoningPerRequest,
+    },
+    {
+      kind: "tokens",
+      label: "Ctx/req",
+      note: row.effort === "medium" ? "baseline" : formatUpliftNote(row.contextPerRequestUplift),
+      value: row.contextPerRequest,
+    },
+    { kind: "tokens", label: "Fresh/req", note: "uncached input", value: row.inputPerRequest },
+    { kind: "tokens", label: "Cached/req", note: "cache read", value: row.cachedPerRequest },
+    { kind: "duration", label: "Time/req", note: "inferred", value: row.activeSecondsPerRequest },
+  ];
+}
+
+export function effortCostMix(
+  row: EffortBreakdownRow,
+): Array<{ label: string; value: number | undefined }> {
+  return [
+    { label: "input", value: row.costBreakdownPerRequest?.input },
+    { label: "cached", value: row.costBreakdownPerRequest?.cached },
+    { label: "write", value: row.costBreakdownPerRequest?.cacheWrite },
+    { label: "output+reason", value: row.costBreakdownPerRequest?.output },
+  ];
+}
+
 export function modelRows(
   stats: ReportStats,
   pricing: Record<string, PricingInfo>,
@@ -887,6 +1011,231 @@ export function modelRows(
   });
 }
 
+export function modelEffortBreakdowns(
+  sessions: ParsedSession[],
+  pricing: Record<string, PricingInfo>,
+  limit: number,
+): ModelEffortBreakdown[] {
+  const topModels = topEntries(aggregateSessions(sessions).modelUsage, limit).map(({ key }) => key);
+  const modelSet = new Set(topModels);
+  const rowsByModel = aggregateEffortBuckets(sessions, pricing, modelSet);
+
+  return topModels.map((model) => ({
+    effortRows: buildModelEffortRows(rowsByModel.get(model) ?? new Map()),
+    model,
+  }));
+}
+
+function aggregateEffortBuckets(
+  sessions: ParsedSession[],
+  pricing: Record<string, PricingInfo>,
+  modelSet: Set<string>,
+): Map<string, Map<string, EffortAggregationBucket>> {
+  const rowsByModel = new Map<string, Map<string, EffortAggregationBucket>>();
+
+  for (const session of sessions) {
+    addStateSeconds(rowsByModel, session, modelSet);
+    addRequestMetrics(rowsByModel, session, pricing, modelSet);
+  }
+
+  return rowsByModel;
+}
+
+function addStateSeconds(
+  rowsByModel: Map<string, Map<string, EffortAggregationBucket>>,
+  session: ParsedSession,
+  modelSet: Set<string>,
+): void {
+  for (const [key, seconds] of Object.entries(session.stateActiveSeconds)) {
+    const { effort, model } = splitStateKey(key);
+    if (!modelSet.has(model)) {
+      continue;
+    }
+    ensureEffortBucket(ensureEffortMap(rowsByModel, model), effort).activeSeconds += seconds;
+  }
+}
+
+function addRequestMetrics(
+  rowsByModel: Map<string, Map<string, EffortAggregationBucket>>,
+  session: ParsedSession,
+  pricing: Record<string, PricingInfo>,
+  modelSet: Set<string>,
+): void {
+  for (const request of session.requests) {
+    if (!modelSet.has(request.model)) {
+      continue;
+    }
+    const bucket = ensureEffortBucket(ensureEffortMap(rowsByModel, request.model), request.effort);
+    bucket.requestCount += 1;
+    if (request.contextSize > 0) {
+      bucket.contextCount += 1;
+      bucket.contextTotal += request.contextSize;
+    }
+    addRequestTokens(bucket.tokenInfo, request);
+    bucket.costBreakdown = estimateCostBreakdown(request.model, bucket.tokenInfo, pricing);
+  }
+}
+
+function addRequestTokens(tokenInfo: ModelTokenUsage, request: SessionRequest): void {
+  tokenInfo.billableOutput += request.output + request.reasoning;
+  tokenInfo.cacheWrite += request.cacheWrite;
+  tokenInfo.cached += request.cacheRead;
+  tokenInfo.input += request.input;
+  tokenInfo.output += request.output;
+  tokenInfo.reasoning += request.reasoning;
+  tokenInfo.total += request.total;
+}
+
+function buildModelEffortRows(
+  effortMap: Map<string, EffortAggregationBucket>,
+): EffortBreakdownRow[] {
+  const baseline = baselineMetrics(effortMap.get("medium"));
+
+  return [...effortMap.entries()]
+    .sort((a, b) => effortRank(a[0]) - effortRank(b[0]) || a[0].localeCompare(b[0]))
+    .map(([effort, bucket]) => buildEffortBreakdownRow(effort, bucket, baseline));
+}
+
+// fallow-ignore-next-line complexity
+function baselineMetrics(baseline: EffortAggregationBucket | undefined) {
+  return {
+    contextPerRequest:
+      baseline && baseline.contextCount > 0
+        ? baseline.contextTotal / baseline.contextCount
+        : undefined,
+    costPerActiveMinute: metricPerMinute(baseline?.costBreakdown?.total, baseline?.activeSeconds),
+    costPerRequest: metricPerRequest(baseline?.costBreakdown?.total, baseline?.requestCount),
+    outputPerRequest: metricPerRequest(baseline?.tokenInfo.output, baseline?.requestCount),
+    reasoningPerRequest: metricPerRequest(baseline?.tokenInfo.reasoning, baseline?.requestCount),
+    tokensPerRequest: metricPerRequest(baseline?.tokenInfo.total, baseline?.requestCount),
+  };
+}
+
+function buildEffortBreakdownRow(
+  effort: string,
+  bucket: EffortAggregationBucket,
+  baseline: ReturnType<typeof baselineMetrics>,
+): EffortBreakdownRow {
+  const requestCount = bucket.requestCount;
+  const costPerRequest = metricPerRequest(bucket.costBreakdown?.total, requestCount);
+  const costPerActiveMinute = metricPerMinute(bucket.costBreakdown?.total, bucket.activeSeconds);
+  const tokensPerRequest = metricPerRequestOrZero(bucket.tokenInfo.total, requestCount);
+  const outputPerRequest = metricPerRequestOrZero(bucket.tokenInfo.output, requestCount);
+  const reasoningPerRequest = metricPerRequestOrZero(bucket.tokenInfo.reasoning, requestCount);
+  const contextPerRequest =
+    bucket.contextCount > 0 ? bucket.contextTotal / bucket.contextCount : undefined;
+
+  return {
+    activeSeconds: bucket.activeSeconds,
+    activeSecondsPerRequest: metricPerRequest(bucket.activeSeconds, requestCount),
+    cachedPerRequest: metricPerRequestOrZero(bucket.tokenInfo.cached, requestCount),
+    contextPerRequest,
+    contextPerRequestUplift: uplift(contextPerRequest, baseline.contextPerRequest),
+    costBreakdownPerRequest: divideCostBreakdown(bucket.costBreakdown, requestCount),
+    costPerActiveMinute,
+    costPerMinuteUplift: uplift(costPerActiveMinute, baseline.costPerActiveMinute),
+    costPerRequest,
+    costPerRequestUplift: uplift(costPerRequest, baseline.costPerRequest),
+    effort,
+    inputPerRequest: metricPerRequestOrZero(bucket.tokenInfo.input, requestCount),
+    outputPerRequest,
+    outputPerRequestUplift: uplift(outputPerRequest, baseline.outputPerRequest),
+    reasoningPerRequest,
+    reasoningPerRequestUplift: uplift(reasoningPerRequest, baseline.reasoningPerRequest),
+    requests: requestCount,
+    tokensPerRequest,
+    tokensPerRequestUplift: uplift(tokensPerRequest, baseline.tokensPerRequest),
+  };
+}
+
+function ensureEffortMap(
+  rowsByModel: Map<string, Map<string, EffortAggregationBucket>>,
+  model: string,
+) {
+  let effortMap = rowsByModel.get(model);
+  if (!effortMap) {
+    effortMap = new Map();
+    rowsByModel.set(model, effortMap);
+  }
+  return effortMap;
+}
+
+function ensureEffortBucket(effortMap: Map<string, EffortAggregationBucket>, effort: string) {
+  let bucket = effortMap.get(effort);
+  if (!bucket) {
+    bucket = {
+      activeSeconds: 0,
+      contextCount: 0,
+      contextTotal: 0,
+      requestCount: 0,
+      tokenInfo: {
+        billableOutput: 0,
+        cacheWrite: 0,
+        cached: 0,
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        total: 0,
+      },
+    };
+    effortMap.set(effort, bucket);
+  }
+  return bucket;
+}
+
+function metricPerRequest(
+  value: number | undefined,
+  requestCount: number | undefined,
+): number | undefined {
+  return value !== undefined && requestCount && requestCount > 0 ? value / requestCount : undefined;
+}
+
+function metricPerMinute(
+  value: number | undefined,
+  activeSeconds: number | undefined,
+): number | undefined {
+  return value !== undefined && activeSeconds && activeSeconds > 0
+    ? value / (activeSeconds / 60)
+    : undefined;
+}
+
+function metricPerRequestOrZero(value: number, requestCount: number): number {
+  return requestCount > 0 ? value / requestCount : 0;
+}
+
+function divideCostBreakdown(
+  cost: CostBreakdown | undefined,
+  requestCount: number,
+): CostBreakdown | undefined {
+  return cost && requestCount > 0
+    ? {
+        cacheWrite: cost.cacheWrite / requestCount,
+        cached: cost.cached / requestCount,
+        input: cost.input / requestCount,
+        output: cost.output / requestCount,
+        total: cost.total / requestCount,
+      }
+    : undefined;
+}
+
+function uplift(value: number | undefined, baseline: number | undefined): number | undefined {
+  return value !== undefined && baseline !== undefined && baseline > 0
+    ? value / baseline - 1
+    : undefined;
+}
+
+function formatUpliftNote(value: number | undefined): string {
+  if (value === undefined) {
+    return "vs medium n/a";
+  }
+  const sign = value >= 0 ? "+" : "";
+  return `vs medium ${sign}${(value * 100).toFixed(1)}%`;
+}
+
+function effortRank(effort: string): number {
+  return { low: 0, medium: 1, high: 2, unknown: 98 }[effort] ?? 50;
+}
+
 const MODEL_ALIASES: Record<string, string> = {
   "claude-haiku-4-5-20251001": "anthropic/claude-haiku-4.5",
   "claude-opus-4-6": "anthropic/claude-opus-4.6",
@@ -902,8 +1251,49 @@ const MODEL_ALIASES: Record<string, string> = {
   "gpt-5-mini": "openai/gpt-5-mini",
 };
 
-function makeSection(title: string, sessions: ParsedSession[], tone: string): SourceSection {
-  return { sessions, stats: aggregateSessions(sessions), title, tone };
+function originatorSections(source: SourceId, sessions: ParsedSession[]): SourceSection[] {
+  const grouped = new Map<string, ParsedSession[]>();
+
+  for (const session of sessions) {
+    const label = originatorLabel(source, session.originator);
+    if (!label) {
+      continue;
+    }
+    const bucket = grouped.get(label) ?? [];
+    bucket.push(session);
+    grouped.set(label, bucket);
+  }
+
+  return [...grouped.entries()]
+    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+    .map(([label, bucket]) =>
+      makeSection(
+        `${sourceSectionTitle(source)} via ${label}`,
+        bucket,
+        originatorTone(label),
+        "originator",
+      ),
+    );
+}
+
+function originatorTone(label: string): string {
+  if (label === "T3 Code") {
+    return SOURCE_TONES.t3code;
+  }
+  return SOURCE_TONES.other;
+}
+
+function sourceSectionTitle(source: SourceId): string {
+  return { claude: "Claude Code", codex: "Codex", opencode: "opencode", pi: "Pi" }[source];
+}
+
+function makeSection(
+  title: string,
+  sessions: ParsedSession[],
+  tone: string,
+  kind: SourceSection["kind"],
+): SourceSection {
+  return { kind, sessions, stats: aggregateSessions(sessions), title, tone };
 }
 
 function createEmptyStats(): ReportStats {

@@ -80,6 +80,7 @@ function defaultSession(requests: SessionRequest[]): ParsedSession {
   return {
     activeSeconds: 600,
     assistantTurns: requests.length,
+    cacheWriteKnown: false,
     cwd: undefined,
     dayModelActiveSeconds: {},
     dayStateActiveSeconds: {},

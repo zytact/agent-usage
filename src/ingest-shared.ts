@@ -2,6 +2,26 @@ import { basename, extname } from "node:path";
 
 import type { SessionRequest, SourceId, TokenUsage } from "./domain.js";
 
+const ORIGINATOR_LABELS: Partial<Record<SourceId, Record<string, string>>> = {
+  claude: {
+    cli: "CLI",
+    sdk: "SDK",
+    "sdk-cli": "SDK CLI",
+    "sdk-ts": "SDK TS",
+    subagent: "Subagent",
+  },
+  codex: {
+    "codex-tui": "TUI",
+    "codex desktop": "Desktop",
+    t3code_desktop: "T3 Code",
+  },
+  opencode: {
+    opencode: "Direct",
+    subagent: "Subagent",
+    t3code_desktop: "T3 Code",
+  },
+};
+
 const EXTENSION_LANGUAGES: Record<string, string> = {
   ".bash": "Shell",
   ".c": "C",
@@ -80,9 +100,25 @@ export function zeroTokens(): TokenUsage {
   };
 }
 
+export function originatorLabel(
+  source: SourceId,
+  originator: string | undefined,
+): string | undefined {
+  const key = normalizeOriginatorKey(originator);
+  if (!key) {
+    return undefined;
+  }
+  const mapped = ORIGINATOR_LABELS[source]?.[key];
+  if (mapped) {
+    return mapped;
+  }
+  return humanizeOriginator(originator ?? key);
+}
+
 export function sessionLabel(source: SourceId, originator: string | undefined): string {
-  if ((source === "codex" || source === "opencode") && originator === "t3code_desktop") {
-    return "T3 Code";
+  const label = originatorLabel(source, originator);
+  if (label === "T3 Code") {
+    return label;
   }
   if (source === "claude") {
     return "Claude Code";
@@ -94,10 +130,26 @@ export function sessionLabel(source: SourceId, originator: string | undefined): 
 }
 
 function subharnessName(source: SourceId, originator: string | undefined): string {
-  if ((source === "codex" || source === "opencode") && originator === "t3code_desktop") {
+  if (originatorLabel(source, originator) === "T3 Code") {
     return "t3code";
   }
   return source;
+}
+
+function normalizeOriginatorKey(originator: string | undefined): string | undefined {
+  if (!originator) {
+    return undefined;
+  }
+  const value = originator.trim();
+  return value ? value.toLowerCase() : undefined;
+}
+
+function humanizeOriginator(originator: string): string {
+  return originator
+    .trim()
+    .replaceAll(/[_-]+/g, " ")
+    .replaceAll(/\s+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
 export function addRequest(

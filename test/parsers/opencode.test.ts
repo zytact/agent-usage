@@ -99,8 +99,84 @@ describe("parseOpencodeRows", () => {
       userTurns: 0,
     });
   });
+
+  it("infers opencode originators from title and metadata", async () => {
+    const sessions = await parseOpencodeRows({
+      dbPath: "/tmp/opencode.db",
+      messageRows: [
+        assistantMessage("ses_meta_t3", 1718881200000),
+        assistantMessage("ses_title_subagent", 1718881260000),
+        assistantMessage("ses_meta_subagent", 1718881320000),
+      ],
+      sessionRows: [
+        makeSessionRow("ses_meta_t3", {
+          metadata: '{"client":"t3code"}',
+          title: "Regular session",
+        }),
+        makeSessionRow("ses_title_subagent", {
+          title: "Fix bug (@worker-subagent)",
+        }),
+        makeSessionRow("ses_meta_subagent", {
+          metadata: '{"originator":"subagent"}',
+          title: "Regular session",
+        }),
+      ],
+    });
+
+    expect(sessions.map((session) => session.originator)).toEqual([
+      "t3code_desktop",
+      "subagent",
+      "subagent",
+    ]);
+    expect(sessions.map((session) => session.sourceLabel)).toEqual([
+      "T3 Code",
+      "opencode",
+      "opencode",
+    ]);
+    expect(sessions[1]?.requests[0]).toMatchObject({
+      sourceLabel: "opencode",
+      subharness: "opencode",
+    });
+  });
 });
 
 async function readJson(path: string) {
   return JSON.parse(await readFile(path, "utf8"));
+}
+
+function makeSessionRow(
+  id: string,
+  overrides: Partial<{ metadata: string | null; title: string }> = {},
+) {
+  return {
+    directory: "/tmp/demo",
+    id,
+    metadata: null,
+    model: '{"id":"gpt-5","providerID":"opencode","variant":"medium"}',
+    time_created: 1718881200000,
+    time_updated: 1718881205000,
+    title: "Regular session",
+    tokens_cache_read: 0,
+    tokens_cache_write: 0,
+    tokens_input: 0,
+    tokens_output: 0,
+    tokens_reasoning: 0,
+    ...overrides,
+  };
+}
+
+function assistantMessage(session_id: string, time: number) {
+  return {
+    data: JSON.stringify({
+      modelID: "gpt-5",
+      path: { cwd: "/tmp/demo", root: "/tmp/demo" },
+      role: "assistant",
+      time: { completed: time + 1000, created: time },
+      tokens: { cache: { read: 0, write: 0 }, input: 1, output: 2, reasoning: 3, total: 6 },
+      variant: "medium",
+    }),
+    session_id,
+    time_created: time,
+    time_updated: time + 1000,
+  };
 }

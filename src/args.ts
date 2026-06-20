@@ -12,7 +12,7 @@ const SOURCE_FLAGS: Record<string, SourceId> = {
   "--pi": "pi",
 };
 
-export const usageText = `Usage: agent-usage [--codex] [--opencode] [--pi] [--claude] [--scope today|1d|7d|30d] [--full | --section KEY[,KEY...]] [--html [FILE]]
+export const usageText = `Usage: agent-usage [--codex] [--opencode] [--pi] [--claude] [--scope today|1d|7d|30d] [--full | --section KEY[,KEY...]] [--originators] [--html [FILE]]
 
 Options:
   (default)       Preselect Codex, opencode, and Pi usage from local stores
@@ -23,6 +23,7 @@ Options:
   --scope SCOPE   Use a range without prompting: today, 1d, 7d, 30d
   --full          Show full diagnostic report instead of default summary view
   --section KEYS  Show specific sections: comma-separated and repeatable
+  --originators   Show per-originator breakdowns inside per-source sections
   --html [FILE]   Write a standalone HTML report. Omit FILE to decide later.
                   Use --html=- to print HTML to stdout.
   -h, --help      Show this help
@@ -35,6 +36,7 @@ export type CliOptions = {
   help: boolean;
   reportMode: ReportMode;
   sections?: SectionKey[];
+  showOriginators: boolean;
   sources?: SourceId[];
 };
 
@@ -52,7 +54,7 @@ type ArgHandler = (argv: string[], state: ArgParseState) => void;
 export function parseArgs(argv: string[]): CliOptions {
   const state: ArgParseState = {
     index: 0,
-    options: { html: false, help: false, reportMode: "summary" },
+    options: { html: false, help: false, reportMode: "summary", showOriginators: false },
   };
 
   while (state.index < argv.length) {
@@ -73,6 +75,9 @@ const ARG_HANDLERS: Record<string, ArgHandler> = {
   },
   "--html": parseHtmlFlag,
   "--opencode": (_argv, state) => addSourceFlag(state, SOURCE_FLAGS["--opencode"]),
+  "--originators": (_argv, state) => {
+    state.options.showOriginators = true;
+  },
   "--pi": (_argv, state) => addSourceFlag(state, SOURCE_FLAGS["--pi"]),
   "--scope": (argv, state) => {
     state.options.scope = parseScopeValue(argv[state.index + 1], "Missing value for --scope");

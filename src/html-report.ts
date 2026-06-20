@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 
 import type { ReportMode } from "./args.js";
+import { compactMetric, formatEffortMetricValue } from "./effort-format.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
 import {
   ALL_SECTIONS,
@@ -11,9 +12,13 @@ import {
 } from "./sections.js";
 import {
   buildRequestSummaryData,
+  cacheWriteAvailability,
+  effortCostMix,
+  effortMetricCells,
   estimateStatsTotalCost,
   formatFloat,
   formatUsd,
+  modelEffortBreakdowns,
   modelRows,
   percentRows,
   topEntries,
@@ -48,9 +53,7 @@ export function renderHtmlReport(
   const activeSections = new Set(resolvedSections);
   const mode = inferSectionModeForScope(report.scope, resolvedSections);
   const visibleSections = activeSections.has("source-sections")
-    ? report.sections.filter((section) =>
-        mode === "full" ? true : isPrimarySection(section.title),
-      )
+    ? report.sections.filter((section) => shouldShowSection(section, mode, report.showOriginators))
     : [];
 
   return `<!doctype html>
@@ -568,16 +571,41 @@ details.raw-details summary {
 .model-list .track { height: 7px; margin-bottom: 10px; }
 .model-metrics { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .model-metrics div { padding: 9px 10px; background: var(--surface); }
-.model-metrics dt {
+.effort-block {
+  margin-top: 12px;
+  padding: 12px;
+  background: color-mix(in oklch, var(--surface), var(--tone) 6%);
+  border: 1px solid var(--line);
+}
+.effort-head,
+.effort-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.effort-head { margin-bottom: 10px; }
+.effort-head span,
+.effort-top span { color: var(--muted); }
+.effort-head small { color: var(--soft); }
+.effort-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.effort-list li { padding-top: 10px; border-top: 1px solid var(--line); }
+.effort-list li:first-child { padding-top: 0; border-top: 0; }
+.effort-metrics { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
+.effort-metrics div { padding: 8px 9px; background: var(--surface); }
+.effort-cost-split { margin: 8px 0 0; color: var(--soft); font-size: 0.72rem; }
+.model-metrics dt,
+.effort-metrics dt {
   margin: 0;
   color: var(--soft);
   font-size: 0.72rem;
 }
-.model-metrics dd {
+.model-metrics dd,
+.effort-metrics dd {
   margin: 2px 0 0;
   font-weight: 800;
 }
-.model-metrics small {
+.model-metrics small,
+.effort-metrics small {
   display: block;
   margin-top: 2px;
   color: var(--muted);
@@ -617,6 +645,7 @@ details.raw-details summary {
   .metric-pair,
   .source-head dl,
   .model-metrics,
+  .effort-metrics,
   .detail-grid,
   .detail-grid-summary,
   .detail-grid-full,
@@ -659,7 +688,7 @@ details.raw-details summary {
     .join("\n")}
   <footer class="footer">
     <p><strong>Data sources:</strong> ${escapeHtml(sourcesNote)}</p>
-    <p>T3 Code sessions are detected from Codex session metadata: <code>originator=t3code_desktop</code>, and from opencode session titles starting <code>T3 Code</code>.</p>
+    <p>Originator detection: Codex uses session metadata <code>originator</code>; opencode uses session titles and metadata heuristics; Claude Code uses <code>entrypoint</code> plus sidechain/subagent paths.</p>
     ${
       report.attributionOverages.length === 0
         ? ""
@@ -691,6 +720,7 @@ function renderSourceSection(
     .map(([key, value]) => [key.slice(5), humanSeconds(value.activeSeconds)] as const);
   const costs = estimateStatsTotalCost(stats, pricing);
   const effortRows = percentRows(stats.efforts, 5);
+  const writeAvailability = cacheWriteAvailability(section.sessions);
   const models = modelRows(stats, pricing, 5);
   const tokenTotal = Math.max(stats.tokens.total, 1);
 
@@ -713,13 +743,13 @@ function renderSourceSection(
     <p>Total uses provider total when present, else input plus cached plus cache write plus output plus reasoning.</p>
     ${htmlTokenBar("Input", stats.tokens.input, tokenTotal, "input")}
     ${htmlTokenBar("Cached", stats.tokens.cached, tokenTotal, "cached")}
-    ${htmlTokenBar("Cache write", stats.tokens.cacheWrite, tokenTotal, "cache-write")}
+    ${htmlTokenBar("Cache write", stats.tokens.cacheWrite, tokenTotal, "cache-write", displayCacheWrite(stats.tokens.cacheWrite, writeAvailability), writeAvailability === "unknown" ? "not exposed by source" : undefined)}
     ${htmlTokenBar("Output", stats.tokens.output, tokenTotal, "output")}
     ${htmlTokenBar("Reasoning", stats.tokens.reasoning, tokenTotal, "reasoning")}
     ${htmlTokenBar("Total", stats.tokens.total, tokenTotal, "total")}
   </section>
   <div class="detail-grid ${full ? "detail-grid-full" : "detail-grid-summary"}">
-    ${renderModelsPanel(models)}
+    ${renderModelsPanel(models, section, pricing, writeAvailability)}
     ${renderShareList("Reasoning effort", effortRows, "No effort markers")}
     ${renderSimpleList("Top repos", repos)}
     ${
@@ -790,7 +820,7 @@ function renderSelectedChartGrid(
   sections: Set<SectionKey>,
 ): string {
   const sourceRows = report.sections
-    .filter((section) => ["Codex", "opencode", "Claude Code", "Pi"].includes(section.title))
+    .filter((section) => section.kind === "primary")
     .map((section) => ({
       label: section.title,
       tone: section.tone,
@@ -805,7 +835,7 @@ function renderSelectedChartGrid(
     valueLabel: `${row.pct.toFixed(0)}%`,
   }));
   const costRows = report.sections
-    .filter((section) => ["Codex", "opencode", "Claude Code", "Pi"].includes(section.title))
+    .filter((section) => section.kind === "primary")
     .map((section) => ({
       label: section.title,
       tone: section.tone,
@@ -1169,10 +1199,6 @@ function renderSimpleList(
   return `<section class="panel ${panelClass ?? ""}"><h4>${escapeHtml(title)}</h4><ul class="rank-list">${body}</ul></section>`;
 }
 
-function compactMetric(value: number | undefined): string {
-  return value === undefined ? "n/a" : compactTokens(Math.round(value));
-}
-
 function renderShareList(
   title: string,
   rows: ReadonlyArray<{ key: string; label: string; pct: number }>,
@@ -1190,15 +1216,43 @@ function renderShareList(
   return `<section class="panel"><h4>${escapeHtml(title)}</h4><ul class="share-list">${body}</ul></section>`;
 }
 
-function renderModelsPanel(rows: ReturnType<typeof modelRows>): string {
+function renderModelsPanel(
+  rows: ReturnType<typeof modelRows>,
+  section: SourceSection,
+  pricing: Record<string, PricingInfo>,
+  writeAvailability: ReturnType<typeof cacheWriteAvailability>,
+): string {
+  const effortBreakdowns = new Map(
+    modelEffortBreakdowns(section.sessions, pricing, rows.length).map((row) => [
+      row.model,
+      row.effortRows,
+    ]),
+  );
   const body =
     rows.length === 0
       ? '<li class="empty">No model markers</li>'
       : rows
-          .map(
-            (row) =>
-              `<li class="model-row"><div class="model-top"><span title="${escapeHtml(row.key)}">${escapeHtml(row.key)}</span><b>${row.pct.toFixed(0)}%</b></div><div class="track"><i style="width:${Math.max(2, Math.min(100, row.pct)).toFixed(1)}%"></i></div><dl class="model-metrics"><div><dt>Time</dt><dd>${escapeHtml(humanSeconds(row.activeSeconds))}</dd><small>range total</small></div><div><dt>Input</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.input))}</dd><small>${escapeHtml(row.inputRate)}</small></div><div><dt>Cached</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.cached))}</dd><small>cache read</small></div><div><dt>Write</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.cacheWrite))}</dd><small>cache create</small></div><div><dt>Output</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.output))}</dd><small>${escapeHtml(row.outputRate)}</small></div><div><dt>Reason</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.reasoning))}</dd><small>thinking</small></div><div><dt>Est cost</dt><dd>${escapeHtml(row.cost)}</dd><small>range total</small></div></dl></li>`,
-          )
+          .map((row) => {
+            const efforts = effortBreakdowns.get(row.key) ?? [];
+            const effortHtml =
+              efforts.length === 0
+                ? ""
+                : `<div class="effort-block"><div class="effort-head"><span>Effort-normalized</span><small>per request / per active min, medium baseline</small></div><ul class="effort-list">${efforts
+                    .map((effort) => {
+                      const metrics = effortMetricCells(effort)
+                        .map(
+                          (metric) =>
+                            `<div><dt>${escapeHtml(metric.label)}</dt><dd>${escapeHtml(formatEffortMetricValue(metric.kind, metric.value))}</dd><small>${escapeHtml(metric.note)}</small></div>`,
+                        )
+                        .join("");
+                      const costMix = effortCostMix(effort)
+                        .map((item) => `${item.label} ${formatUsd(item.value)}`)
+                        .join(" · ");
+                      return `<li><div class="effort-top"><strong>${escapeHtml(effort.effort)}</strong><span>${escapeHtml(`${effort.requests} req`)}</span></div><dl class="effort-metrics">${metrics}</dl><p class="effort-cost-split">Cost mix/req · ${escapeHtml(costMix)}</p></li>`;
+                    })
+                    .join("")}</ul></div>`;
+            return `<li class="model-row"><div class="model-top"><span title="${escapeHtml(row.key)}">${escapeHtml(row.key)}</span><b>${row.pct.toFixed(0)}%</b></div><div class="track"><i style="width:${Math.max(2, Math.min(100, row.pct)).toFixed(1)}%"></i></div><dl class="model-metrics"><div><dt>Time</dt><dd>${escapeHtml(humanSeconds(row.activeSeconds))}</dd><small>range total</small></div><div><dt>Input</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.input))}</dd><small>${escapeHtml(row.inputRate)}</small></div><div><dt>Cached</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.cached))}</dd><small>cache read</small></div><div><dt>Write</dt><dd>${escapeHtml(displayCacheWrite(row.tokenInfo.cacheWrite, writeAvailability))}</dd><small>${escapeHtml(writeAvailability === "unknown" ? "not exposed" : "cache create")}</small></div><div><dt>Output</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.output))}</dd><small>${escapeHtml(row.outputRate)}</small></div><div><dt>Reason</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.reasoning))}</dd><small>thinking</small></div><div><dt>Est cost</dt><dd>${escapeHtml(row.cost)}</dd><small>range total</small></div></dl>${effortHtml}</li>`;
+          })
           .join("");
   return `<section class="panel-wide model-panel"><h4>Models</h4><ul class="model-list">${body}</ul></section>`;
 }
@@ -1227,9 +1281,23 @@ function formatPercent(value: number | undefined): string {
   return value === undefined ? "n/a" : `${(value * 100).toFixed(1)}%`;
 }
 
-function htmlTokenBar(label: string, value: number, maxValue: number, cls: string): string {
+function htmlTokenBar(
+  label: string,
+  value: number,
+  maxValue: number,
+  cls: string,
+  displayValue = compactTokens(value),
+  note?: string,
+): string {
   const width = maxValue <= 0 ? 0 : Math.max(2, Math.min(100, (value / maxValue) * 100));
-  return `<div class="token-row ${escapeHtml(cls)}"><span>${escapeHtml(label)}</span><div class="track"><i style="width:${width.toFixed(1)}%"></i></div><b>${escapeHtml(compactTokens(value))}</b></div>`;
+  return `<div class="token-row ${escapeHtml(cls)}"><span>${escapeHtml(label)}</span><div class="track"><i style="width:${width.toFixed(1)}%"></i></div><b>${escapeHtml(displayValue)}</b>${note ? `<small>${escapeHtml(note)}</small>` : ""}</div>`;
+}
+
+function displayCacheWrite(
+  value: number,
+  availability: ReturnType<typeof cacheWriteAvailability>,
+): string {
+  return availability === "unknown" ? "n/a" : compactTokens(value);
 }
 
 function pct(value: number | undefined, maxValue: number): string {
@@ -1310,8 +1378,22 @@ function formatCacheRatio(value: number | undefined): string {
   return value === undefined ? "n/a" : `${(value * 100).toFixed(1)}%`;
 }
 
-function isPrimarySection(title: string): boolean {
-  return ["Codex", "opencode", "Claude Code", "Pi"].includes(title);
+function isPrimarySection(section: SourceSection): boolean {
+  return section.kind === "primary";
+}
+
+function shouldShowSection(
+  section: SourceSection,
+  mode: "summary" | "full" | "custom",
+  showOriginators: boolean,
+): boolean {
+  if (section.kind === "combined" || section.kind === "gptOnly") {
+    return false;
+  }
+  if (section.kind === "originator") {
+    return showOriginators;
+  }
+  return mode === "full" ? true : isPrimarySection(section);
 }
 
 function escapeHtml(value: string): string {

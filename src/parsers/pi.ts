@@ -111,6 +111,7 @@ function parsePiMessage(
 
 function finishPiSession(state: PiParseState): ParsedSession | undefined {
   return buildParsedSession(state, {
+    cacheWriteKnown: true,
     efforts: state.effortMarks,
     modelTokens: state.modelTokens,
     source: "pi",

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import checkbox, { Separator } from "@inquirer/checkbox";
+import checkbox from "@inquirer/checkbox";
 import select from "@inquirer/select";
 
 import { DEFAULT_SOURCES, type CliOptions } from "./args.js";
@@ -81,6 +81,13 @@ export async function runCli(
     return 0;
   }
 
+  const showOriginators = shouldPromptForOriginators(options)
+    ? await chooseOriginators(options, deps)
+    : options.showOriginators;
+  if (showOriginators === undefined) {
+    return 0;
+  }
+
   const sections = await chooseReportSections(options, deps, scope);
   if (!sections) {
     return 0;
@@ -91,8 +98,17 @@ export async function runCli(
   const pricing = await deps.loadPricing();
 
   return options.html
-    ? renderHtmlOnce(options, deps, sessions, pricing, scope, sections, sources)
-    : runInteractiveReport(options, deps, sessions, pricing, scope, sections, sources);
+    ? renderHtmlOnce(options, deps, sessions, pricing, scope, sections, sources, showOriginators)
+    : runInteractiveReport(
+        options,
+        deps,
+        sessions,
+        pricing,
+        scope,
+        sections,
+        sources,
+        showOriginators,
+      );
 }
 
 async function chooseInitialScope(
@@ -112,6 +128,21 @@ async function chooseSources(
   return (
     options.sources ?? deps.chooseSources(DEFAULT_SOURCES, ["codex", "opencode", "pi", "claude"])
   );
+}
+
+function shouldPromptForOriginators(options: CliOptions): boolean {
+  return !options.html || options.htmlPath === undefined;
+}
+
+async function chooseOriginators(
+  options: CliOptions,
+  deps: RuntimeDeps,
+): Promise<boolean | undefined> {
+  if (options.showOriginators) {
+    return true;
+  }
+  const choice = await deps.chooseAction(["No", "Yes"], "Show originators in per-source sections?");
+  return choice ? choice === "Yes" : undefined;
 }
 
 async function chooseReportSections(
@@ -136,10 +167,11 @@ async function renderHtmlOnce(
   scope: Scope,
   sections: SectionKey[],
   sources: SourceId[],
+  showOriginators: boolean,
 ): Promise<number> {
   const outputPath = await resolveHtmlPath(options.htmlPath);
   const html = renderHtmlReport(
-    buildReport(sessions, scope, sources, deps.now(), pricing),
+    buildReport(sessions, scope, sources, deps.now(), pricing, showOriginators),
     pricing,
     inferSectionModeForScope(scope, sections) === "full" ? "full" : "summary",
     sections,
@@ -166,8 +198,10 @@ async function runInteractiveReport(
   scope: Scope,
   sections: SectionKey[],
   sources: SourceId[],
+  initialShowOriginators: boolean,
 ): Promise<number> {
   let currentScope = scope;
+  let showOriginators = initialShowOriginators;
   while (true) {
     const activeSections = sanitizeSectionsForScope(currentScope, sections);
     const report = writeTerminalReport(
@@ -178,23 +212,32 @@ async function runInteractiveReport(
       currentScope,
       activeSections,
       sources,
+      showOriginators,
     );
     const action = await deps.chooseAction(
-      ["Open HTML report", "Change range", "Refresh", "Exit"],
+      [
+        "Open HTML report",
+        showOriginators ? "Hide originators" : "Show originators",
+        "Change range",
+        "Refresh",
+        "Exit",
+      ],
       "Choose an action",
     );
-    const nextScope = await handleInteractiveAction(
+    const next = await handleInteractiveAction(
       action,
       deps,
       report,
       pricing,
       options.reportMode,
       activeSections,
+      showOriginators,
     );
-    if (nextScope === "exit") {
+    if (next.exit) {
       return 0;
     }
-    currentScope = nextScope ?? currentScope;
+    currentScope = next.scope ?? currentScope;
+    showOriginators = next.showOriginators ?? showOriginators;
   }
 }
 
@@ -206,9 +249,10 @@ function writeTerminalReport(
   scope: Scope,
   sections: SectionKey[],
   sources: SourceId[],
+  showOriginators: boolean,
 ) {
   deps.clearScreen();
-  const report = buildReport(sessions, scope, sources, deps.now(), pricing);
+  const report = buildReport(sessions, scope, sources, deps.now(), pricing, showOriginators);
   deps.stdout.write(
     `${renderTerminalReport(
       report,
@@ -227,20 +271,28 @@ async function handleInteractiveAction(
   pricing: Record<string, PricingInfo>,
   reportMode: CliOptions["reportMode"],
   sections: SectionKey[],
-): Promise<Scope | "exit" | undefined> {
+  showOriginators: boolean,
+): Promise<{ exit?: boolean; scope?: Scope; showOriginators?: boolean }> {
   if (!action || action === "Exit") {
-    return "exit";
+    return { exit: true };
   }
   if (action === "Refresh") {
-    return undefined;
+    return {};
   }
   if (action === "Change range") {
-    return changeScope(deps);
+    const scope = await changeScope(deps);
+    return scope === "exit" ? { exit: true } : { scope };
+  }
+  if (action === "Show originators") {
+    return { showOriginators: true };
+  }
+  if (action === "Hide originators") {
+    return { showOriginators: false };
   }
   if (action === "Open HTML report") {
     await openHtmlReport(deps, report, pricing, reportMode, sections);
   }
-  return undefined;
+  return { showOriginators };
 }
 
 async function changeScope(deps: RuntimeDeps): Promise<Scope | "exit"> {
@@ -284,10 +336,13 @@ async function collectSessions(sources: SourceId[], start: Date): Promise<Parsed
 
 const PARSE_CONCURRENCY = 8;
 
+const SESSION_CACHE_VERSION = 2;
+
 type SessionCacheRecord = {
   mtimeMs: number;
   parsed: ParsedSession | null;
   size: number;
+  version: number;
 };
 
 async function parseDiscoveredFiles(
@@ -315,7 +370,12 @@ async function loadOrParseSession(
   }
 
   const parsed = await parser(path);
-  await writeSessionCache(cachePath, { mtimeMs, parsed: parsed ?? null, size });
+  await writeSessionCache(cachePath, {
+    mtimeMs,
+    parsed: parsed ?? null,
+    size,
+    version: SESSION_CACHE_VERSION,
+  });
   return parsed;
 }
 
@@ -333,7 +393,7 @@ async function readCachedSession(
 ): Promise<ParsedSession | null | undefined> {
   try {
     const raw = JSON.parse(await readFile(cachePath, "utf8")) as SessionCacheRecord;
-    if (raw.size !== size || raw.mtimeMs !== mtimeMs) {
+    if (raw.version !== SESSION_CACHE_VERSION || raw.size !== size || raw.mtimeMs !== mtimeMs) {
       return undefined;
     }
     return reviveParsedSession(raw.parsed);
@@ -353,6 +413,7 @@ function reviveParsedSession(session: ParsedSession | null): ParsedSession | nul
 
   return {
     ...session,
+    cacheWriteKnown: session.cacheWriteKnown ?? session.source !== "codex",
     end: new Date(session.end),
     requests: session.requests.map((request) => ({ ...request, ts: new Date(request.ts) })),
     start: new Date(session.start),
@@ -414,13 +475,11 @@ async function promptSources(
   try {
     return await checkbox({
       choices: [
-        new Separator("Defaults"),
         ...defaults.map((source) => ({
           checked: true,
           name: SOURCE_LABELS[source],
           value: source,
         })),
-        new Separator("Extra"),
         ...detail.map((source) => ({
           checked: false,
           name: SOURCE_LABELS[source],
@@ -450,7 +509,6 @@ async function promptSections(
   try {
     const selected = await checkbox({
       choices: [
-        new Separator("Defaults"),
         ...defaults.map((section) => ({
           checked: true,
           description:
@@ -458,7 +516,6 @@ async function promptSections(
           name: SECTION_LABELS[section],
           value: section,
         })),
-        new Separator("Extra detail"),
         ...detail.map((section) => ({
           checked: false,
           description:
