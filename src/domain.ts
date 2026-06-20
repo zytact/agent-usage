@@ -33,6 +33,7 @@ export type SessionRequest = {
 export type ParsedSession = {
   activeSeconds: number;
   assistantTurns: number;
+  cacheWriteKnown: boolean;
   cwd?: string;
   dayModelActiveSeconds: Record<string, Record<string, number>>;
   dayStateActiveSeconds: Record<string, Record<string, number>>;

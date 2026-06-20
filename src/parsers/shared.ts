@@ -146,7 +146,10 @@ export function addModelTokens(
 
 export function buildParsedSession(
   state: ParserBaseState,
-  extras: Pick<ParsedSession, "efforts" | "modelTokens" | "source" | "sourceLabel"> &
+  extras: Pick<
+    ParsedSession,
+    "cacheWriteKnown" | "efforts" | "modelTokens" | "source" | "sourceLabel"
+  > &
     Partial<Pick<ParsedSession, "originator">>,
 ): ParsedSession | undefined {
   if (state.events.length === 0) {
@@ -159,6 +162,7 @@ export function buildParsedSession(
   return {
     activeSeconds: allocated.totalSeconds,
     assistantTurns: state.assistantTurns,
+    cacheWriteKnown: extras.cacheWriteKnown,
     cwd: state.cwd,
     dayModelActiveSeconds: collapseDayStateSeconds(allocated.byDayStateSeconds),
     dayStateActiveSeconds: allocated.byDayStateSeconds,

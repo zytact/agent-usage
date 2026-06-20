@@ -9,6 +9,7 @@ import { parseCodexSessionText } from "../src/parsers/codex.js";
 import { parsePiSessionText } from "../src/parsers/pi.js";
 import { buildReport } from "../src/report-data.js";
 import { renderTerminalReport } from "../src/terminal-report.js";
+import { makeRequest, makeSession } from "./fixtures.js";
 
 const pricing = {
   "anthropic/claude-sonnet-4.6": {
@@ -31,7 +32,7 @@ const pricing = {
   },
 };
 
-async function makeReport() {
+async function makeReport(showOriginators = false) {
   const [codexContent, claudeContent, piContent] = await Promise.all([
     readFile(resolve("test/parsers/codex.fixture.jsonl"), "utf8"),
     readFile(resolve("test/parsers/claude.fixture.jsonl"), "utf8"),
@@ -49,6 +50,7 @@ async function makeReport() {
     ["codex", "opencode", "pi", "claude"],
     new Date("2026-06-14T18:45:00+05:30"),
     pricing,
+    showOriginators,
   );
 }
 
@@ -66,6 +68,10 @@ describe("renderers", () => {
     expect(html).not.toContain("Per-day / per-harness / per-model");
     expect(html).toContain("Claude Code");
     expect(html).toContain("<dt>Time</dt>");
+    expect(html).toContain("Effort-normalized");
+    expect(html).toContain("Cost/req");
+    expect(html).toContain("vs medium");
+    expect(html).toContain("not exposed by source");
     expect(html).not.toContain("Codex via T3 Code");
     expect(html).toContain("Cost is an estimate.");
   });
@@ -76,6 +82,13 @@ describe("renderers", () => {
 
     expect(html).toContain("GPT-only request summary");
     expect(html).toContain("Per-day / per-harness / per-model");
+    expect(html).not.toContain("Codex via T3 Code");
+  });
+
+  it("renders originator sections when enabled", async () => {
+    const report = await makeReport(true);
+    const html = renderHtmlReport(report, {}, "summary");
+
     expect(html).toContain("Codex via T3 Code");
   });
 
@@ -105,6 +118,9 @@ describe("renderers", () => {
     expect(output).not.toContain("DAILY MODEL BREAKDOWN");
     expect(output).not.toContain("GPT-ONLY");
     expect(output).toContain("time ");
+    expect(output).toContain("cost/req");
+    expect(output).toContain("vs medium");
+    expect(output).toContain("write n/a");
     expect(output).toContain("est $");
     expect(output).toContain("HIGHLIGHTS");
   });
@@ -119,6 +135,35 @@ describe("renderers", () => {
     expect(output).toContain("DAILY MODEL BREAKDOWN");
     expect(output).toContain("GPT-ONLY");
     expect(output).toContain("Weighted input eq/req");
+  });
+
+  it("hides cache-write totals when availability is mixed", () => {
+    const report = buildReport(
+      [
+        makeSession({
+          cacheWriteKnown: false,
+          requests: [makeRequest({ cacheWrite: 500, model: "openai/gpt-5", total: 500 })],
+          source: "codex",
+          sourceLabel: "Codex",
+        }),
+        makeSession({
+          cacheWriteKnown: true,
+          requests: [makeRequest({ cacheWrite: 250, model: "openai/gpt-5", total: 250 })],
+          sessionId: "session-2",
+          source: "pi",
+          sourceLabel: "Pi",
+        }),
+      ],
+      "7d",
+      ["codex", "pi"],
+      new Date("2026-06-14T18:45:00+05:30"),
+      pricing,
+    );
+    const output = renderTerminalReport(report, pricing);
+
+    expect(output).toContain("Cache write     n/a");
+    expect(output).toContain("write n/a");
+    expect(output).not.toContain("write 750");
   });
 
   it("renders terminal custom section subset", async () => {

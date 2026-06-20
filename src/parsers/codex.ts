@@ -182,9 +182,10 @@ function addCodexRequest(
 function finishCodexSession(state: CodexParseState): ParsedSession | undefined {
   const modelTokens = distributeModelTokens(state.tokens, state.models);
   return buildParsedSession(state, {
+    cacheWriteKnown: false,
     efforts: state.efforts,
     modelTokens,
-    originator: state.originator ?? "unknown",
+    originator: state.originator,
     source: "codex",
     sourceLabel: sessionLabel("codex", state.originator),
   });

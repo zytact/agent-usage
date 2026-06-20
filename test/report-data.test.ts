@@ -6,7 +6,13 @@ import { describe, expect, it } from "vite-plus/test";
 import { parseClaudeSessionText } from "../src/parsers/claude.js";
 import { parseCodexSessionText } from "../src/parsers/codex.js";
 import { parsePiSessionText } from "../src/parsers/pi.js";
-import { buildReport, estimateStatsTotalCost, type PricingInfo } from "../src/report-data.js";
+import {
+  buildReport,
+  estimateStatsTotalCost,
+  modelEffortBreakdowns,
+  type PricingInfo,
+} from "../src/report-data.js";
+import { makeRequest, makeSession } from "./fixtures.js";
 
 const pricing: Record<string, PricingInfo> = {
   "anthropic/claude-sonnet-4.6": {
@@ -60,11 +66,7 @@ describe("buildReport", () => {
       "Combined",
       "GPT-only",
       "Codex",
-      "Codex via T3 Code",
-      "Codex other",
       "opencode",
-      "opencode via T3 Code",
-      "opencode other",
       "Claude Code",
       "Pi",
     ]);
@@ -90,6 +92,43 @@ describe("buildReport", () => {
     expect(report.dailyUsage.costP90).toBeGreaterThan(0);
     expect(report.dailyUsage.costVolatility).toBeDefined();
     expect(report.dailyUsage.costVolatility).toBeGreaterThanOrEqual(0);
+  });
+
+  it("adds originator sections when asked", () => {
+    const sessions = [
+      makeSession({ originator: "t3code_desktop", source: "codex", sourceLabel: "T3 Code" }),
+      makeSession({
+        originator: "Codex Desktop",
+        sessionId: "session-2",
+        source: "codex",
+        sourceLabel: "codex",
+      }),
+      makeSession({
+        originator: "subagent",
+        sessionId: "session-3",
+        source: "claude",
+        sourceLabel: "Claude Code",
+      }),
+    ];
+    const report = buildReport(
+      sessions,
+      "30d",
+      ["codex", "claude"],
+      new Date("2026-06-14T18:45:00+05:30"),
+      pricing,
+      true,
+    );
+
+    expect(report.showOriginators).toBe(true);
+    expect(report.sections.map((section) => section.title)).toEqual([
+      "Combined",
+      "GPT-only",
+      "Codex",
+      "Codex via Desktop",
+      "Codex via T3 Code",
+      "Claude Code",
+      "Claude Code via Subagent",
+    ]);
   });
 
   it("formats last-day scope as rolling 24 hours", async () => {
@@ -118,5 +157,57 @@ describe("buildReport", () => {
     const cost = estimateStatsTotalCost(report.combined.stats, pricing);
 
     expect(cost).toBeGreaterThan(0);
+  });
+
+  it("builds normalized effort breakdowns per model", () => {
+    const requests = [
+      makeRequest({
+        contextSize: 1000,
+        effort: "medium",
+        input: 800,
+        model: "gpt-5",
+        output: 300,
+        reasoning: 40,
+        total: 1340,
+      }),
+      makeRequest({
+        contextSize: 1400,
+        effort: "high",
+        input: 900,
+        model: "gpt-5",
+        output: 360,
+        reasoning: 80,
+        total: 1640,
+      }),
+    ];
+    const session = makeSession({
+      requests,
+      stateActiveSeconds: { "gpt-5::high": 480, "gpt-5::medium": 360 },
+    });
+    const rows = modelEffortBreakdowns([session], pricing, 5);
+    const gpt5 = rows.find((row) => row.model === "gpt-5");
+
+    expect(gpt5?.effortRows[0]).toMatchObject({
+      effort: "medium",
+      requests: 1,
+      tokensPerRequest: 1340,
+      outputPerRequest: 300,
+      reasoningPerRequest: 40,
+      contextPerRequest: 1000,
+      activeSecondsPerRequest: 360,
+      costPerMinuteUplift: 0,
+      costPerRequestUplift: 0,
+      tokensPerRequestUplift: 0,
+    });
+    expect(gpt5?.effortRows[1]).toMatchObject({
+      effort: "high",
+      requests: 1,
+      costPerRequestUplift: 0.2556818181818181,
+      costPerMinuteUplift: -0.058238636363636354,
+      outputPerRequestUplift: 0.19999999999999996,
+      reasoningPerRequestUplift: 1,
+      tokensPerRequestUplift: 0.22388059701492535,
+      contextPerRequestUplift: 0.3999999999999999,
+    });
   });
 });

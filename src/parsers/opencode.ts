@@ -140,7 +140,7 @@ async function parseSessionRow(
     return undefined;
   }
 
-  const originator = isT3CodeSession(row.title, row.metadata) ? "t3code_desktop" : "opencode";
+  const originator = inferOriginator(row.title, row.metadata);
   const fallbackModel = parseFallbackModel(row.model);
   const fallbackEffort = parseFallbackVariant(row.model);
   const context = createParseContext(row, fallbackEffort);
@@ -428,6 +428,7 @@ function buildParsedSession(
   return {
     activeSeconds: allocated.totalSeconds,
     assistantTurns: context.assistantTurns,
+    cacheWriteKnown: true,
     cwd: context.cwd,
     dayModelActiveSeconds: collapseDayStateSeconds(allocated.byDayStateSeconds),
     dayStateActiveSeconds: allocated.byDayStateSeconds,
@@ -497,15 +498,24 @@ async function queryJson<T>(dbPath: string, query: string, params: unknown[] = [
   }
 }
 
-function isT3CodeSession(title: unknown, metadata: unknown): boolean {
+function inferOriginator(title: unknown, metadata: unknown): string {
   const titleText = typeof title === "string" ? title.trim() : "";
   if (/^T3 Code(?:\s|$)/i.test(titleText)) {
-    return true;
+    return "t3code_desktop";
   }
-  if (typeof metadata !== "string") {
-    return false;
+  if (/\(@[^)]*subagent\)/i.test(titleText) || /\bsubagent\b/i.test(titleText)) {
+    return "subagent";
   }
-  return metadata.toLowerCase().includes("t3code");
+  if (typeof metadata === "string") {
+    const lower = metadata.toLowerCase();
+    if (lower.includes("t3code")) {
+      return "t3code_desktop";
+    }
+    if (lower.includes("subagent")) {
+      return "subagent";
+    }
+  }
+  return "opencode";
 }
 
 function parseFallbackModel(raw: unknown): string | undefined {

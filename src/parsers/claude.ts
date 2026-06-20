@@ -22,7 +22,9 @@ export async function parseClaudeSessionFile(path: string): Promise<ParsedSessio
   return parseClaudeSessionText(content, path);
 }
 
-type ClaudeParseState = ModelTokenParserState;
+type ClaudeParseState = ModelTokenParserState & {
+  originator?: string;
+};
 
 export function parseClaudeSessionText(
   content: string,
@@ -55,6 +57,7 @@ function parseClaudeLine(rawLine: string, state: ClaudeParseState): void {
   const { item, ts } = parsed;
   state.sessionId = asString(item.sessionId) ?? state.sessionId;
   state.cwd = asString(item.cwd) ?? state.cwd;
+  state.originator = inferOriginator(item, state.originator);
   countRole(asString(item.type), state);
   parseClaudeMessage(isRecord(item.message) ? item.message : undefined, ts, state);
 }
@@ -82,10 +85,12 @@ function parseClaudeMessage(
 
 function finishClaudeSession(state: ClaudeParseState): ParsedSession | undefined {
   return buildParsedSession(state, {
+    cacheWriteKnown: true,
     efforts: {},
     modelTokens: state.modelTokens,
+    originator: state.originator,
     source: "claude",
-    sourceLabel: sessionLabel("claude", undefined),
+    sourceLabel: sessionLabel("claude", state.originator),
   });
 }
 
@@ -129,6 +134,20 @@ function claudeUsageTokens(usage: Record<string, unknown>): ParsedSession["token
     reasoning: 0,
     total: asNumber(usage.total_tokens) || input + cached + cacheWrite + output,
   };
+}
+
+function inferOriginator(
+  item: Record<string, unknown>,
+  current: string | undefined,
+): string | undefined {
+  if (item.isSidechain === true) {
+    return "subagent";
+  }
+  const entrypoint = asString(item.entrypoint);
+  if (entrypoint) {
+    return entrypoint;
+  }
+  return current;
 }
 
 function isRealModel(model: string | undefined): model is string {

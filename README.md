@@ -14,7 +14,7 @@ Local CLI that reads coding-agent session history and generates a usage dossier 
 ## Usage
 
 ```
-agent-usage [--codex] [--opencode] [--pi] [--claude] [--scope today|1d|7d|30d] [--full | --section KEY[,KEY...]] [--html [FILE]]
+agent-usage [--codex] [--opencode] [--pi] [--claude] [--scope today|1d|7d|30d] [--full | --section KEY[,KEY...]] [--originators] [--html [FILE]]
 ```
 
 Run without flags for an interactive terminal report. It will prompt for a time range, then prompt for sources with Codex/opencode/Pi preselected, then prompt for report sections with the default summary set preselected.
@@ -28,6 +28,7 @@ Run without flags for an interactive terminal report. It will prompt for a time 
 | `--scope`       | Skip the prompt: `today`, `1d`, `7d`, `30d`                                                        |
 | `--full`        | Show full diagnostic report (per-source sections, distribution tables, daily model breakdown)      |
 | `--section`     | Show only selected sections. Repeatable and accepts comma-separated keys.                          |
+| `--originators` | Show per-originator source sections (for example T3 Code, Desktop, CLI, Subagent)                  |
 | `--html [FILE]` | Write a standalone HTML report. Omit `FILE` to open in browser. Use `--html=-` to print to stdout. |
 | `-h, --help`    | Show help                                                                                          |
 

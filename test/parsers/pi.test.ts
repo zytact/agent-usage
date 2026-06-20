@@ -15,6 +15,7 @@ describe("parsePiSessionText", () => {
     expect(session).toMatchObject({
       activeSeconds: 41,
       assistantTurns: 2,
+      cacheWriteKnown: true,
       cwd: "/home/arnab/Projects/scripts",
       efforts: { high: 1, medium: 1 },
       languages: { Python: 1 },

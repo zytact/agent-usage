@@ -8,18 +8,29 @@ describe("parseArgs", () => {
       html: false,
       help: false,
       reportMode: "summary",
+      showOriginators: false,
     });
   });
 
   it("parses explicit flags", () => {
     expect(
-      parseArgs(["--claude", "--codex", "--scope", "1d", "--full", "--html", "report.html"]),
+      parseArgs([
+        "--claude",
+        "--codex",
+        "--scope",
+        "1d",
+        "--full",
+        "--originators",
+        "--html",
+        "report.html",
+      ]),
     ).toEqual({
       scope: "1d",
       html: true,
       htmlPath: "report.html",
       help: false,
       reportMode: "full",
+      showOriginators: true,
       sources: ["claude", "codex"],
     });
   });
@@ -31,6 +42,7 @@ describe("parseArgs", () => {
       htmlPath: "-",
       help: false,
       reportMode: "summary",
+      showOriginators: false,
     });
   });
 
@@ -46,6 +58,7 @@ describe("parseArgs", () => {
       help: false,
       reportMode: "summary",
       sections: ["request-summary", "daily-usage", "source-sections", "token-mix"],
+      showOriginators: false,
     });
   });
 
@@ -54,6 +67,7 @@ describe("parseArgs", () => {
       html: false,
       help: true,
       reportMode: "summary",
+      showOriginators: false,
     });
   });
 

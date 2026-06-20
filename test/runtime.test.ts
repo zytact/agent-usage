@@ -19,9 +19,11 @@ describe("runCli", () => {
         html: true,
         htmlPath: "-",
         reportMode: "summary",
+        showOriginators: false,
       },
       {
-        chooseAction: async () => "today",
+        chooseAction: async (_items, header) =>
+          header === "Show originators in per-source sections?" ? "No" : "today",
         chooseSections: async (defaults, available) => {
           availableSections = available;
           return defaults;
@@ -47,6 +49,74 @@ describe("runCli", () => {
     expect(code).toBe(0);
     expect(stdout).toContain("<!doctype html>");
     expect(stdout).toContain("No sessions found in this range.");
+  });
+
+  it("prompts for originators in interactive html mode", async () => {
+    const prompts: string[] = [];
+
+    await runCli(
+      {
+        help: false,
+        html: true,
+        reportMode: "summary",
+        showOriginators: false,
+      },
+      {
+        chooseAction: async (_items, header) => {
+          prompts.push(header);
+          if (header === "Show originators in per-source sections?") {
+            return "Yes";
+          }
+          return "today";
+        },
+        chooseSections: async (defaults) => defaults,
+        chooseSources: async (defaults) => defaults,
+        clearScreen: () => {},
+        collectSessions: async () => [],
+        loadPricing: async () => ({}),
+        now: () => new Date("2026-06-14T18:45:00+05:30"),
+        openPath: async () => {},
+        stderr: { write: () => true },
+        stdout: { write: () => true },
+      },
+    );
+
+    expect(prompts).toContain("Show originators in per-source sections?");
+  });
+
+  it("prompts for originators in interactive terminal mode", async () => {
+    const prompts: string[] = [];
+
+    await runCli(
+      {
+        help: false,
+        html: false,
+        reportMode: "summary",
+        scope: "today",
+        showOriginators: false,
+        sources: ["codex"],
+      },
+      {
+        chooseAction: async (_items, header) => {
+          prompts.push(header);
+          if (header === "Show originators in per-source sections?") {
+            return "Yes";
+          }
+          return "Exit";
+        },
+        chooseSections: async (defaults) => defaults,
+        chooseSources: async (defaults) => defaults,
+        clearScreen: () => {},
+        collectSessions: async () => [],
+        loadPricing: async () => ({}),
+        now: () => new Date("2026-06-14T18:45:00+05:30"),
+        openPath: async () => {},
+        stderr: { write: () => true },
+        stdout: { write: () => true },
+      },
+    );
+
+    expect(prompts).toContain("Show originators in per-source sections?");
   });
 
   it("writes html file and exits in file mode", async () => {
@@ -75,9 +145,12 @@ async function runHtmlCli(
       htmlPath,
       reportMode: "summary",
       scope: "today",
+      showOriginators: false,
     },
     {
-      chooseAction: async () => undefined,
+      chooseAction: async () => {
+        throw new Error("should not prompt during html runs");
+      },
       chooseSections: async (defaults) => defaults,
       chooseSources: async (defaults) => defaults,
       clearScreen: () => {},

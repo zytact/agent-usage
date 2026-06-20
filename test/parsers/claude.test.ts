@@ -74,4 +74,79 @@ describe("parseClaudeSessionText", () => {
       total: 17716,
     });
   });
+
+  it("infers claude originator from entrypoint", () => {
+    const session = parseClaudeSessionText(
+      [
+        JSON.stringify({
+          cwd: "/tmp/demo",
+          entrypoint: "sdk-cli",
+          sessionId: "claude-sdk-cli",
+          timestamp: "2026-06-20T10:00:00.000Z",
+          type: "user",
+        }),
+        JSON.stringify({
+          entrypoint: "sdk-cli",
+          message: {
+            model: "claude-sonnet-4-6",
+            role: "assistant",
+            usage: {
+              cache_creation_input_tokens: 3,
+              cache_read_input_tokens: 2,
+              input_tokens: 1,
+              output_tokens: 4,
+              total_tokens: 10,
+            },
+          },
+          sessionId: "claude-sdk-cli",
+          timestamp: "2026-06-20T10:00:10.000Z",
+          type: "assistant",
+        }),
+      ].join("\n"),
+      "claude-sdk-cli.jsonl",
+    );
+
+    expect(session).toMatchObject({
+      cacheWriteKnown: true,
+      originator: "sdk-cli",
+      sourceLabel: "Claude Code",
+    });
+  });
+
+  it("prefers subagent when claude sidechain flag is present", () => {
+    const session = parseClaudeSessionText(
+      [
+        JSON.stringify({
+          cwd: "/tmp/demo",
+          isSidechain: true,
+          sessionId: "claude-subagent",
+          timestamp: "2026-06-20T10:00:00.000Z",
+          type: "user",
+        }),
+        JSON.stringify({
+          isSidechain: true,
+          message: {
+            model: "claude-sonnet-4-6",
+            role: "assistant",
+            usage: {
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+              input_tokens: 1,
+              output_tokens: 2,
+              total_tokens: 3,
+            },
+          },
+          sessionId: "claude-subagent",
+          timestamp: "2026-06-20T10:00:10.000Z",
+          type: "assistant",
+        }),
+      ].join("\n"),
+      "claude-subagent.jsonl",
+    );
+
+    expect(session).toMatchObject({
+      originator: "subagent",
+      sourceLabel: "Claude Code",
+    });
+  });
 });

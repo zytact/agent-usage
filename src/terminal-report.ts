@@ -1,4 +1,5 @@
 import type { ReportMode } from "./args.js";
+import { formatEffortMetricValue } from "./effort-format.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
 import {
   ALL_SECTIONS,
@@ -9,9 +10,13 @@ import {
 } from "./sections.js";
 import {
   buildRequestSummaryData,
+  cacheWriteAvailability,
+  effortCostMix,
+  effortMetricCells,
   formatFloat,
   estimateStatsTotalCost,
   formatUsd,
+  modelEffortBreakdowns,
   modelRows,
   summarizeDistribution,
   topEntries,
@@ -52,7 +57,9 @@ export function renderTerminalReport(
   lines.push("");
 
   if (activeSections.has("source-sections")) {
-    for (const section of report.sections.filter((item) => shouldShowSection(item.title, mode))) {
+    for (const section of report.sections.filter((item) =>
+      shouldShowSection(item, mode, report.showOriginators),
+    )) {
       lines.push(
         ...renderSection(section, pricing, activeSections.has("source-section-languages")),
       );
@@ -120,7 +127,13 @@ function renderSelectedSummary(
     { key: "source-share", render: () => renderSourceShares(report) },
     {
       key: "model-breakdown",
-      render: () => renderModelList(modelRows(report.combined.stats, pricing, 6)),
+      render: () =>
+        renderModelList(
+          modelRows(report.combined.stats, pricing, 6),
+          report.combined,
+          pricing,
+          cacheWriteAvailability(report.combined.sessions),
+        ),
     },
     { key: "token-mix", render: () => renderTokenBreakdown(report.combined.stats) },
     {
@@ -149,6 +162,7 @@ function renderSection(
   full: boolean,
 ): string[] {
   const { stats, title } = section;
+  const writeAvailability = cacheWriteAvailability(section.sessions);
   const lines = [
     title.toUpperCase(),
     `  Active time     ${humanSeconds(stats.activeSeconds)}`,
@@ -157,7 +171,7 @@ function renderSection(
     `  Est cost        ${formatUsd(estimateStatsTotalCost(stats, pricing))}`,
     `  Input           ${compactTokens(stats.tokens.input)}`,
     `  Cached          ${compactTokens(stats.tokens.cached)}`,
-    `  Cache write     ${compactTokens(stats.tokens.cacheWrite)}`,
+    `  Cache write     ${displayCacheWrite(stats.tokens.cacheWrite, writeAvailability)}`,
     `  Output          ${compactTokens(stats.tokens.output)}`,
     `  Reasoning       ${compactTokens(stats.tokens.reasoning)}`,
     `  Total           ${compactTokens(stats.tokens.total)}`,
@@ -169,7 +183,7 @@ function renderSection(
       topEntries(stats.repos, 4).map(({ key, value }) => [key, humanSeconds(value)]),
     ),
   );
-  lines.push(...renderModelList(modelRows(stats, pricing, 5)));
+  lines.push(...renderModelList(modelRows(stats, pricing, 5), section, pricing, writeAvailability));
   lines.push(
     ...renderTopList(
       "Reasoning effort",
@@ -191,7 +205,7 @@ function renderSourceShares(report: BuiltReport): string[] {
   return renderTopList(
     "Source share",
     report.sections
-      .filter((section) => isPrimarySection(section.title))
+      .filter((section) => isPrimarySection(section))
       .map(
         (section) => [section.title, humanSeconds(section.stats.activeSeconds)] as [string, string],
       ),
@@ -221,18 +235,49 @@ function renderTopList(title: string, rows: Array<[string, string]>): string[] {
   return lines;
 }
 
-function renderModelList(rows: ReturnType<typeof modelRows>): string[] {
+function renderModelList(
+  rows: ReturnType<typeof modelRows>,
+  section: SourceSection,
+  pricing: Record<string, PricingInfo>,
+  writeAvailability: ReturnType<typeof cacheWriteAvailability>,
+): string[] {
   const lines = ["  Models"];
   if (rows.length === 0) {
     lines.push("    none");
     return lines;
   }
+  const effortBreakdowns = new Map(
+    modelEffortBreakdowns(section.sessions, pricing, rows.length).map((row) => [
+      row.model,
+      row.effortRows,
+    ]),
+  );
   for (const row of rows) {
     lines.push(
-      `    - ${row.key} · ${row.pct.toFixed(0)}% · time ${humanSeconds(row.activeSeconds)} · in ${compactTokens(row.tokenInfo.input)} (${row.inputRate}) · cached ${compactTokens(row.tokenInfo.cached)} · write ${compactTokens(row.tokenInfo.cacheWrite)} · out ${compactTokens(row.tokenInfo.output)} (${row.outputRate}) · reason ${compactTokens(row.tokenInfo.reasoning)} · est ${row.cost}`,
+      `    - ${row.key} · ${row.pct.toFixed(0)}% · time ${humanSeconds(row.activeSeconds)} · in ${compactTokens(row.tokenInfo.input)} (${row.inputRate}) · cached ${compactTokens(row.tokenInfo.cached)} · write ${displayCacheWrite(row.tokenInfo.cacheWrite, writeAvailability)} · out ${compactTokens(row.tokenInfo.output)} (${row.outputRate}) · reason ${compactTokens(row.tokenInfo.reasoning)} · est ${row.cost}`,
     );
+    for (const effort of effortBreakdowns.get(row.key) ?? []) {
+      const metrics = effortMetricCells(effort)
+        .map(
+          (metric) =>
+            `${metric.label.toLowerCase()} ${formatEffortMetricValue(metric.kind, metric.value)} (${metric.note})`,
+        )
+        .join(" · ");
+      const costMix = effortCostMix(effort)
+        .map((item) => `${item.label} ${formatUsd(item.value)}`)
+        .join(" · ");
+      lines.push(`      · ${effort.effort} · ${effort.requests} req · ${metrics}`);
+      lines.push(`        cost mix/req · ${costMix}`);
+    }
   }
   return lines;
+}
+
+function displayCacheWrite(
+  value: number,
+  availability: ReturnType<typeof cacheWriteAvailability>,
+): string {
+  return availability === "known" ? compactTokens(value) : "n/a";
 }
 
 function renderRequestSummary(
@@ -285,12 +330,22 @@ function renderCompactDistribution(
   ];
 }
 
-function isPrimarySection(title: string): boolean {
-  return ["Codex", "opencode", "Claude Code", "Pi"].includes(title);
+function isPrimarySection(section: SourceSection): boolean {
+  return section.kind === "primary";
 }
 
-function shouldShowSection(title: string, mode: "summary" | "full" | "custom"): boolean {
-  return mode === "full" ? true : isPrimarySection(title);
+function shouldShowSection(
+  section: SourceSection,
+  mode: "summary" | "full" | "custom",
+  showOriginators: boolean,
+): boolean {
+  if (section.kind === "combined" || section.kind === "gptOnly") {
+    return false;
+  }
+  if (section.kind === "originator") {
+    return showOriginators;
+  }
+  return mode === "full" ? true : isPrimarySection(section);
 }
 
 function renderDistributionSummary(
