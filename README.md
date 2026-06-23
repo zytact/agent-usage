@@ -17,7 +17,9 @@ Local CLI that reads coding-agent session history and generates a usage dossier 
 agent-usage [--codex] [--opencode] [--pi] [--claude] [--scope today|1d|7d|30d] [--full | --section KEY[,KEY...]] [--originators] [--html [FILE]]
 ```
 
-Run without flags for an interactive terminal report. It will prompt for a time range, then prompt for sources with Codex/opencode/Pi preselected, then prompt for report sections with the default summary set preselected.
+Run without flags for an interactive terminal report. It will prompt for a time range, then prompt for sources with nothing preselected, then prompt for report sections with the default summary set preselected.
+
+In non-interactive flag mode, pass at least one source flag: `--codex`, `--opencode`, `--pi`, or `--claude`.
 
 | Flag            | Description                                                                                        |
 | --------------- | -------------------------------------------------------------------------------------------------- |
