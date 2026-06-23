@@ -4,7 +4,7 @@ import { normalizeSectionList, validateSectionsForScope, type SectionKey } from 
 
 export type ReportMode = "summary" | "full";
 
-export const DEFAULT_SOURCES: SourceId[] = ["codex", "opencode", "pi"];
+export const DEFAULT_SOURCES: SourceId[] = [];
 const SOURCE_FLAGS: Record<string, SourceId> = {
   "--claude": "claude",
   "--codex": "codex",
@@ -15,7 +15,8 @@ const SOURCE_FLAGS: Record<string, SourceId> = {
 export const usageText = `Usage: agent-usage [--codex] [--opencode] [--pi] [--claude] [--scope today|1d|7d|30d] [--full | --section KEY[,KEY...]] [--originators] [--html [FILE]]
 
 Options:
-  (default)       Preselect Codex, opencode, and Pi usage from local stores
+  (interactive)   Prompt for range, sources, and sections. No sources preselected.
+  (flag mode)     In non-interactive runs, pass --codex, --opencode, --pi, or --claude
   --codex         Include Codex usage from ~/.codex/sessions
   --opencode      Include opencode usage from ~/.local/share/opencode/opencode.db
   --pi            Include Pi usage from ~/.pi/agent/sessions

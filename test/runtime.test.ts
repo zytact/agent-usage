@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vite-plus/test";
 
+import { UsageError } from "../src/args.js";
 import { runCli } from "../src/runtime.js";
 import { useTempDirs } from "./fixtures.js";
 
@@ -20,6 +21,7 @@ describe("runCli", () => {
         htmlPath: "-",
         reportMode: "summary",
         showOriginators: false,
+        sources: ["codex"],
       },
       {
         chooseAction: async (_items, header) =>
@@ -28,7 +30,9 @@ describe("runCli", () => {
           availableSections = available;
           return defaults;
         },
-        chooseSources: async (defaults) => defaults,
+        chooseSources: async () => {
+          throw new Error("should not prompt for sources");
+        },
         clearScreen: () => {},
         collectSessions: async () => [],
         loadPricing: async () => ({}),
@@ -51,8 +55,8 @@ describe("runCli", () => {
     expect(stdout).toContain("No sessions found in this range.");
   });
 
-  it("prompts for originators in interactive html mode", async () => {
-    const prompts: string[] = [];
+  it("prompts for sources in interactive html mode", async () => {
+    let prompted = false;
 
     await runCli(
       {
@@ -62,15 +66,13 @@ describe("runCli", () => {
         showOriginators: false,
       },
       {
-        chooseAction: async (_items, header) => {
-          prompts.push(header);
-          if (header === "Show originators in per-source sections?") {
-            return "Yes";
-          }
-          return "today";
-        },
+        chooseAction: async (_items, header) =>
+          header === "Show originators in per-source sections?" ? "Yes" : "today",
         chooseSections: async (defaults) => defaults,
-        chooseSources: async (defaults) => defaults,
+        chooseSources: async () => {
+          prompted = true;
+          return ["codex"];
+        },
         clearScreen: () => {},
         collectSessions: async () => [],
         loadPricing: async () => ({}),
@@ -81,7 +83,46 @@ describe("runCli", () => {
       },
     );
 
-    expect(prompts).toContain("Show originators in per-source sections?");
+    expect(prompted).toBe(true);
+  });
+
+  it("does not preselect sources in interactive mode", async () => {
+    let defaults: string[] = [];
+
+    const code = await runCli(
+      {
+        help: false,
+        html: false,
+        reportMode: "summary",
+        showOriginators: false,
+      },
+      {
+        chooseAction: async (_items, header) => {
+          if (header === "Pick a time range") {
+            return "today";
+          }
+          if (header === "Show originators in per-source sections?") {
+            return "No";
+          }
+          return "Exit";
+        },
+        chooseSections: async (sectionDefaults) => sectionDefaults,
+        chooseSources: async (sourceDefaults) => {
+          defaults = sourceDefaults;
+          return ["codex"];
+        },
+        clearScreen: () => {},
+        collectSessions: async () => [],
+        loadPricing: async () => ({}),
+        now: () => new Date("2026-06-14T18:45:00+05:30"),
+        openPath: async () => {},
+        stderr: { write: () => true },
+        stdout: { write: () => true },
+      },
+    );
+
+    expect(code).toBe(0);
+    expect(defaults).toEqual([]);
   });
 
   it("prompts for originators in interactive terminal mode", async () => {
@@ -105,7 +146,9 @@ describe("runCli", () => {
           return "Exit";
         },
         chooseSections: async (defaults) => defaults,
-        chooseSources: async (defaults) => defaults,
+        chooseSources: async () => {
+          throw new Error("should not prompt for sources");
+        },
         clearScreen: () => {},
         collectSessions: async () => [],
         loadPricing: async () => ({}),
@@ -117,6 +160,40 @@ describe("runCli", () => {
     );
 
     expect(prompts).toContain("Show originators in per-source sections?");
+  });
+
+  it("requires source flags in non-interactive flag mode", async () => {
+    await expect(
+      runCli(
+        {
+          help: false,
+          html: true,
+          htmlPath: "-",
+          reportMode: "summary",
+          scope: "today",
+          showOriginators: false,
+        },
+        {
+          chooseAction: async () => {
+            throw new Error("should not prompt");
+          },
+          chooseSections: async (defaults) => defaults,
+          chooseSources: async () => {
+            throw new Error("should not prompt");
+          },
+          clearScreen: () => {},
+          collectSessions: async () => [],
+          interactive: false,
+          loadPricing: async () => ({}),
+          now: () => new Date("2026-06-14T18:45:00+05:30"),
+          openPath: async () => {},
+          stderr: { write: () => true },
+          stdout: { write: () => true },
+        },
+      ),
+    ).rejects.toThrowError(
+      new UsageError("Missing source flag. Use --codex, --opencode, --pi, or --claude"),
+    );
   });
 
   it("writes html file and exits in file mode", async () => {
@@ -146,13 +223,16 @@ async function runHtmlCli(
       reportMode: "summary",
       scope: "today",
       showOriginators: false,
+      sources: ["codex"],
     },
     {
       chooseAction: async () => {
         throw new Error("should not prompt during html runs");
       },
       chooseSections: async (defaults) => defaults,
-      chooseSources: async (defaults) => defaults,
+      chooseSources: async () => {
+        throw new Error("should not prompt for sources");
+      },
       clearScreen: () => {},
       collectSessions: async () => [],
       loadPricing: async () => ({}),

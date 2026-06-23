@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import checkbox from "@inquirer/checkbox";
 import select from "@inquirer/select";
 
-import { DEFAULT_SOURCES, type CliOptions } from "./args.js";
+import { DEFAULT_SOURCES, UsageError, type CliOptions } from "./args.js";
 import { defaultDiscoveryRoots, discoverSessionFiles } from "./discovery.js";
 import type { ParsedSession, SourceId } from "./domain.js";
 import { renderHtmlReport, writeHtmlReport } from "./html-report.js";
@@ -34,6 +34,10 @@ const SOURCE_LABELS: Record<SourceId, string> = {
   pi: "Pi",
 };
 
+const AVAILABLE_SOURCES: SourceId[] = ["codex", "opencode", "pi", "claude"];
+const MISSING_SOURCE_FLAG_MESSAGE =
+  "Missing source flag. Use --codex, --opencode, --pi, or --claude";
+
 export type RuntimeDeps = {
   chooseAction: (items: string[], header: string) => Promise<string | undefined>;
   chooseSections: (
@@ -43,6 +47,7 @@ export type RuntimeDeps = {
   chooseSources: (defaults: SourceId[], available: SourceId[]) => Promise<SourceId[] | undefined>;
   clearScreen: () => void;
   collectSessions: (sources: SourceId[], start: Date) => Promise<ParsedSession[]>;
+  interactive?: boolean;
   loadPricing: () => Promise<Record<string, PricingInfo>>;
   now: () => Date;
   openPath: (path: string) => Promise<void>;
@@ -59,6 +64,7 @@ function defaultRuntimeDeps(): RuntimeDeps {
       process.stdout.write("\x1bc");
     },
     collectSessions,
+    interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
     loadPricing: () => loadPricingMap(),
     now: () => new Date(),
     openPath,
@@ -71,6 +77,10 @@ export async function runCli(
   options: CliOptions,
   deps: RuntimeDeps = defaultRuntimeDeps(),
 ): Promise<number> {
+  if (!options.sources && deps.interactive === false) {
+    throw new UsageError(MISSING_SOURCE_FLAG_MESSAGE);
+  }
+
   const scope = await chooseInitialScope(options, deps);
   if (!scope) {
     return 0;
@@ -125,9 +135,13 @@ async function chooseSources(
   options: CliOptions,
   deps: RuntimeDeps,
 ): Promise<SourceId[] | undefined> {
-  return (
-    options.sources ?? deps.chooseSources(DEFAULT_SOURCES, ["codex", "opencode", "pi", "claude"])
-  );
+  if (options.sources) {
+    return options.sources;
+  }
+  if (deps.interactive === false) {
+    throw new UsageError(MISSING_SOURCE_FLAG_MESSAGE);
+  }
+  return deps.chooseSources(DEFAULT_SOURCES, AVAILABLE_SOURCES);
 }
 
 function shouldPromptForOriginators(options: CliOptions): boolean {
