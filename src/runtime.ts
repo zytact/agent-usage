@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import checkbox from "@inquirer/checkbox";
 import select from "@inquirer/select";
@@ -52,7 +53,7 @@ export type RuntimeDeps = {
   now: () => Date;
   openPath: (path: string) => Promise<void>;
   stderr: Pick<NodeJS.WriteStream, "write">;
-  stdout: Pick<NodeJS.WriteStream, "write">;
+  stdout: Pick<NodeJS.WriteStream, "write"> & { isTTY?: boolean };
 };
 
 function defaultRuntimeDeps(): RuntimeDeps {
@@ -197,7 +198,7 @@ async function renderHtmlOnce(
   }
 
   await writeHtmlReport(outputPath, html);
-  deps.stdout.write(`HTML report: ${outputPath}\n`);
+  deps.stdout.write(`HTML report: ${formatHtmlReportLink(outputPath, deps.stdout)}\n`);
   if (!options.htmlPath) {
     await deps.openPath(outputPath);
   }
@@ -323,8 +324,19 @@ async function openHtmlReport(
 ): Promise<void> {
   const outputPath = await resolveHtmlPath();
   await writeHtmlReport(outputPath, renderHtmlReport(report, pricing, reportMode, sections));
-  deps.stdout.write(`HTML report: ${outputPath}\n`);
+  deps.stdout.write(`HTML report: ${formatHtmlReportLink(outputPath, deps.stdout)}\n`);
   await deps.openPath(outputPath);
+}
+
+function formatHtmlReportLink(
+  outputPath: string,
+  stdout: Pick<NodeJS.WriteStream, "write"> & { isTTY?: boolean },
+): string {
+  if (!stdout.isTTY) {
+    return outputPath;
+  }
+  const url = pathToFileURL(outputPath).href;
+  return `\u001B]8;;${url}\u001B\\${outputPath}\u001B]8;;\u001B\\`;
 }
 
 async function collectSessions(sources: SourceId[], start: Date): Promise<ParsedSession[]> {
