@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -11,10 +11,7 @@ const tempDirs = useTempDirs();
 
 describe("discoverSessionFiles", () => {
   it("finds nested jsonl sources and db path", async () => {
-    const home = await mkdtemp(join(tmpdir(), "agent-usage-discovery-"));
-    tempDirs.push(home);
-
-    const roots = defaultDiscoveryRoots(home);
+    const roots = await makeDiscoveryRoots();
     await mkdir(join(roots.codexDir, "2026", "06", "14"), { recursive: true });
     await mkdir(join(roots.piDir, "repo"), { recursive: true });
     await mkdir(join(roots.claudeDir, "project-a"), { recursive: true });
@@ -51,4 +48,33 @@ describe("discoverSessionFiles", () => {
       ],
     });
   });
+
+  it("skips files before the scope cutoff", async () => {
+    const roots = await makeDiscoveryRoots();
+    await mkdir(join(roots.codexDir, "2026", "06", "12"), { recursive: true });
+    await mkdir(join(roots.codexDir, "2026", "06", "14"), { recursive: true });
+    await mkdir(join(roots.piDir, "repo"), { recursive: true });
+
+    await writeFile(join(roots.codexDir, "2026", "06", "12", "old.jsonl"), "");
+    await writeFile(join(roots.codexDir, "2026", "06", "14", "new.jsonl"), "");
+    const oldPiFile = join(roots.piDir, "repo", "old-pi.jsonl");
+    const newPiFile = join(roots.piDir, "repo", "new-pi.jsonl");
+    await writeFile(oldPiFile, "");
+    await writeFile(newPiFile, "");
+    await utimes(oldPiFile, new Date("2026-06-12T00:00:00Z"), new Date("2026-06-12T00:00:00Z"));
+    await utimes(newPiFile, new Date("2026-06-14T12:00:00Z"), new Date("2026-06-14T12:00:00Z"));
+
+    const discovered = await discoverSessionFiles(roots, new Date("2026-06-14T00:00:00Z"));
+
+    expect(discovered.codexFiles.map((file) => file.path)).toEqual([
+      join(roots.codexDir, "2026", "06", "14", "new.jsonl"),
+    ]);
+    expect(discovered.piFiles.map((file) => file.path)).toEqual([newPiFile]);
+  });
 });
+
+async function makeDiscoveryRoots(): Promise<ReturnType<typeof defaultDiscoveryRoots>> {
+  const home = await mkdtemp(join(tmpdir(), "agent-usage-discovery-"));
+  tempDirs.push(home);
+  return defaultDiscoveryRoots(home);
+}

@@ -2,6 +2,7 @@ import { writeFile } from "node:fs/promises";
 
 import type { ReportMode } from "./args.js";
 import { compactMetric, formatEffortMetricValue } from "./effort-format.js";
+import { shouldShowSection } from "./render-shared.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
 import {
   ALL_SECTIONS,
@@ -37,33 +38,7 @@ const SOURCE_NOTES = {
   pi: "Pi: ~/.pi/agent/sessions",
 } as const;
 
-export function renderHtmlReport(
-  report: BuiltReport,
-  pricing: Record<string, PricingInfo>,
-  reportMode: ReportMode = "summary",
-  sections: SectionKey[] = reportMode === "full" ? ALL_SECTIONS : DEFAULT_SECTIONS,
-): string {
-  const resolvedSections = sanitizeSectionsForScope(report.scope, sections);
-  const combinedCost = estimateStatsTotalCost(report.combined.stats, pricing);
-  const noData =
-    report.combined.stats.sessionCount === 0
-      ? '<p class="notice">No sessions found in this range.</p>'
-      : "";
-  const sourcesNote = report.selectedSources.map((source) => SOURCE_NOTES[source]).join(" · ");
-  const activeSections = new Set(resolvedSections);
-  const mode = inferSectionModeForScope(report.scope, resolvedSections);
-  const visibleSections = activeSections.has("source-sections")
-    ? report.sections.filter((section) => shouldShowSection(section, mode, report.showOriginators))
-    : [];
-
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agent usage report · ${escapeHtml(report.scopeTitle)}</title>
-<style>
-:root {
+const REPORT_CSS = `:root {
   color-scheme: dark;
   --bg: oklch(0.075 0 0);
   --surface: oklch(0.135 0.010 258);
@@ -655,12 +630,58 @@ details.raw-details summary {
 }
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto; }
+}`;
+
+export function renderHtmlReport(
+  report: BuiltReport,
+  pricing: Record<string, PricingInfo>,
+  reportMode: ReportMode = "summary",
+  sections: SectionKey[] = reportMode === "full" ? ALL_SECTIONS : DEFAULT_SECTIONS,
+): string {
+  const resolvedSections = sanitizeSectionsForScope(report.scope, sections);
+  const activeSections = new Set(resolvedSections);
+  const mode = inferSectionModeForScope(report.scope, resolvedSections);
+  return renderHtmlDocument({
+    activeSections,
+    mode,
+    pricing,
+    report,
+  });
 }
+
+type HtmlReportView = {
+  activeSections: Set<SectionKey>;
+  mode: "summary" | "full" | "custom";
+  pricing: Record<string, PricingInfo>;
+  report: BuiltReport;
+};
+
+function renderHtmlDocument(view: HtmlReportView): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent usage report · ${escapeHtml(view.report.scopeTitle)}</title>
+<style>
+${REPORT_CSS}
 </style>
 </head>
 <body>
 <main>
-  <header class="hero">
+  ${renderHero(view.report, view.mode)}
+  ${renderCombinedSummary(view.report, view.pricing)}
+  ${renderNoDataNotice(view.report)}
+  ${renderSelectedOverview(view.report, view.pricing, view.activeSections, view.mode === "full")}
+  ${renderVisibleSourceSections(view)}
+  ${renderFooter(view.report)}
+</main>
+</body>
+</html>`;
+}
+
+function renderHero(report: BuiltReport, mode: HtmlReportView["mode"]): string {
+  return `<header class="hero">
     <section class="hero-main">
       <p class="eyebrow">Local usage dossier</p>
       <h1>Agent usage report</h1>
@@ -672,33 +693,55 @@ details.raw-details summary {
       <div><p>Sources</p><b>${report.sourceCount} local stores</b></div>
       <div><p>Mode</p><b>${mode === "full" ? "Full" : mode === "summary" ? "Summary" : "Custom"}</b></div>
     </aside>
-  </header>
-  <dl class="summary-grid" aria-label="Combined summary">
+  </header>`;
+}
+
+function renderCombinedSummary(report: BuiltReport, pricing: Record<string, PricingInfo>): string {
+  const combinedCost = estimateStatsTotalCost(report.combined.stats, pricing);
+  return `<dl class="summary-grid" aria-label="Combined summary">
     ${htmlMetric("Active time", humanSeconds(report.combined.stats.activeSeconds))}
     ${htmlMetric("Sessions", String(report.combined.stats.sessionCount))}
     ${htmlMetric("Tokens", compactTokens(report.combined.stats.tokens.total), "provider total when present")}
     ${htmlMetric("Estimated cost", formatUsd(combinedCost), "models.dev rate card when available")}
-  </dl>
-  ${noData}
-  ${renderSelectedOverview(report, pricing, activeSections, mode === "full")}
-  ${visibleSections
+  </dl>`;
+}
+
+function renderNoDataNotice(report: BuiltReport): string {
+  return report.combined.stats.sessionCount === 0
+    ? '<p class="notice">No sessions found in this range.</p>'
+    : "";
+}
+
+function renderVisibleSourceSections(view: HtmlReportView): string {
+  if (!view.activeSections.has("source-sections")) {
+    return "";
+  }
+
+  return view.report.sections
+    .filter((section) => shouldShowSection(section, view.mode, view.report.showOriginators))
     .map((section) =>
-      renderSourceSection(section, pricing, activeSections.has("source-section-languages")),
+      renderSourceSection(
+        section,
+        view.pricing,
+        view.activeSections.has("source-section-languages"),
+      ),
     )
-    .join("\n")}
-  <footer class="footer">
+    .join("\n");
+}
+
+function renderFooter(report: BuiltReport): string {
+  const sourcesNote = report.selectedSources.map((source) => SOURCE_NOTES[source]).join(" · ");
+  const attributionWarning =
+    report.attributionOverages.length === 0
+      ? ""
+      : `<p>${escapeHtml(`Attribution warning: ${report.attributionOverages.length} sessions exceeded deduped parent active time.`)}</p>`;
+
+  return `<footer class="footer">
     <p><strong>Data sources:</strong> ${escapeHtml(sourcesNote)}</p>
     <p>Originator detection: Codex uses session metadata <code>originator</code>; opencode uses session titles and metadata heuristics; Claude Code uses <code>entrypoint</code> plus sidechain/subagent paths.</p>
-    ${
-      report.attributionOverages.length === 0
-        ? ""
-        : `<p>${escapeHtml(`Attribution warning: ${report.attributionOverages.length} sessions exceeded deduped parent active time.`)}</p>`
-    }
+    ${attributionWarning}
     <p>Cost is an estimate. Missing pricing data appears as n/a. This file is self-contained and reads no network resources.</p>
-  </footer>
-</main>
-</body>
-</html>`;
+  </footer>`;
 }
 
 export async function writeHtmlReport(path: string, html: string): Promise<void> {
@@ -1376,24 +1419,6 @@ function formatContextMetric(value: number | undefined): string {
 
 function formatCacheRatio(value: number | undefined): string {
   return value === undefined ? "n/a" : `${(value * 100).toFixed(1)}%`;
-}
-
-function isPrimarySection(section: SourceSection): boolean {
-  return section.kind === "primary";
-}
-
-function shouldShowSection(
-  section: SourceSection,
-  mode: "summary" | "full" | "custom",
-  showOriginators: boolean,
-): boolean {
-  if (section.kind === "combined" || section.kind === "gptOnly") {
-    return false;
-  }
-  if (section.kind === "originator") {
-    return showOriginators;
-  }
-  return mode === "full" ? true : isPrimarySection(section);
 }
 
 function escapeHtml(value: string): string {

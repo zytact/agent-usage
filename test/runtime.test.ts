@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
 import { UsageError } from "../src/args.js";
-import { runCli } from "../src/runtime.js";
+import { runCli, type RuntimeDeps } from "../src/runtime.js";
 import { useTempDirs } from "./fixtures.js";
 
 const tempDirs = useTempDirs();
@@ -23,7 +23,7 @@ describe("runCli", () => {
         showOriginators: false,
         sources: ["codex"],
       },
-      {
+      testDeps({
         chooseAction: async (_items, header) =>
           header === "Show originators in per-source sections?" ? "No" : "today",
         chooseSections: async (defaults, available) => {
@@ -33,14 +33,7 @@ describe("runCli", () => {
         chooseSources: async () => {
           throw new Error("should not prompt for sources");
         },
-        clearScreen: () => {},
-        collectSessions: async () => [],
-        loadPricing: async () => ({}),
-        now: () => new Date("2026-06-14T18:45:00+05:30"),
-        openPath: async () => {},
-        stderr: { write: () => true },
-        stdout: { write: () => true },
-      },
+      }),
     );
 
     expect(code).toBe(0);
@@ -65,7 +58,7 @@ describe("runCli", () => {
         reportMode: "summary",
         showOriginators: false,
       },
-      {
+      testDeps({
         chooseAction: async (_items, header) =>
           header === "Show originators in per-source sections?" ? "Yes" : "today",
         chooseSections: async (defaults) => defaults,
@@ -73,14 +66,7 @@ describe("runCli", () => {
           prompted = true;
           return ["codex"];
         },
-        clearScreen: () => {},
-        collectSessions: async () => [],
-        loadPricing: async () => ({}),
-        now: () => new Date("2026-06-14T18:45:00+05:30"),
-        openPath: async () => {},
-        stderr: { write: () => true },
-        stdout: { write: () => true },
-      },
+      }),
     );
 
     expect(prompted).toBe(true);
@@ -96,7 +82,7 @@ describe("runCli", () => {
         reportMode: "summary",
         showOriginators: false,
       },
-      {
+      testDeps({
         chooseAction: async (_items, header) => {
           if (header === "Pick a time range") {
             return "today";
@@ -111,14 +97,7 @@ describe("runCli", () => {
           defaults = sourceDefaults;
           return ["codex"];
         },
-        clearScreen: () => {},
-        collectSessions: async () => [],
-        loadPricing: async () => ({}),
-        now: () => new Date("2026-06-14T18:45:00+05:30"),
-        openPath: async () => {},
-        stderr: { write: () => true },
-        stdout: { write: () => true },
-      },
+      }),
     );
 
     expect(code).toBe(0);
@@ -137,7 +116,7 @@ describe("runCli", () => {
         showOriginators: false,
         sources: ["codex"],
       },
-      {
+      testDeps({
         chooseAction: async (_items, header) => {
           prompts.push(header);
           if (header === "Show originators in per-source sections?") {
@@ -149,14 +128,7 @@ describe("runCli", () => {
         chooseSources: async () => {
           throw new Error("should not prompt for sources");
         },
-        clearScreen: () => {},
-        collectSessions: async () => [],
-        loadPricing: async () => ({}),
-        now: () => new Date("2026-06-14T18:45:00+05:30"),
-        openPath: async () => {},
-        stderr: { write: () => true },
-        stdout: { write: () => true },
-      },
+      }),
     );
 
     expect(prompts).toContain("Show originators in per-source sections?");
@@ -173,7 +145,7 @@ describe("runCli", () => {
           scope: "today",
           showOriginators: false,
         },
-        {
+        testDeps({
           chooseAction: async () => {
             throw new Error("should not prompt");
           },
@@ -181,19 +153,46 @@ describe("runCli", () => {
           chooseSources: async () => {
             throw new Error("should not prompt");
           },
-          clearScreen: () => {},
-          collectSessions: async () => [],
           interactive: false,
-          loadPricing: async () => ({}),
-          now: () => new Date("2026-06-14T18:45:00+05:30"),
-          openPath: async () => {},
-          stderr: { write: () => true },
-          stdout: { write: () => true },
-        },
+        }),
       ),
     ).rejects.toThrowError(
       new UsageError("Missing source flag. Use --codex, --opencode, --pi, or --claude"),
     );
+  });
+
+  it("passes no-cache through to session collection", async () => {
+    let useCache: boolean | undefined;
+
+    const code = await runCli(
+      {
+        help: false,
+        html: true,
+        htmlPath: "-",
+        noCache: true,
+        reportMode: "summary",
+        scope: "today",
+        showOriginators: false,
+        sources: ["codex"],
+      },
+      testDeps({
+        chooseAction: async () => {
+          throw new Error("should not prompt");
+        },
+        chooseSections: async (defaults) => defaults,
+        chooseSources: async () => {
+          throw new Error("should not prompt for sources");
+        },
+        clearScreen: () => {},
+        collectSessions: async (_sources, _start, options) => {
+          useCache = options?.useCache;
+          return [];
+        },
+      }),
+    );
+
+    expect(code).toBe(0);
+    expect(useCache).toBe(false);
   });
 
   it("writes html file and exits in file mode", async () => {
@@ -255,4 +254,20 @@ async function runHtmlCli(
   );
 
   return { code, stdout };
+}
+
+function testDeps(overrides: Partial<RuntimeDeps> = {}): RuntimeDeps {
+  return {
+    chooseAction: async () => "today",
+    chooseSections: async (defaults) => defaults,
+    chooseSources: async () => ["codex"],
+    clearScreen: () => {},
+    collectSessions: async () => [],
+    loadPricing: async () => ({}),
+    now: () => new Date("2026-06-14T18:45:00+05:30"),
+    openPath: async () => {},
+    stderr: { write: () => true },
+    stdout: { write: () => true },
+    ...overrides,
+  };
 }
