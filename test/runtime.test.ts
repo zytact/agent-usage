@@ -208,11 +208,22 @@ describe("runCli", () => {
     expect(stdout).toContain(outputPath);
     expect(await readFile(outputPath, "utf8")).toContain("Agent usage report");
   });
+
+  it("wraps html report paths in OSC 8 hyperlinks for TTY output", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "agent-usage runtime-"));
+    tempDirs.push(dir);
+    const outputPath = join(dir, "report file.html");
+    const { stdout } = await runHtmlCli(outputPath, async () => {}, true);
+
+    expect(stdout).toContain(`HTML report: \u001B]8;;file://${outputPath.replaceAll(" ", "%20")}`);
+    expect(stdout).toContain(`\u001B\\${outputPath}\u001B]8;;\u001B\\`);
+  });
 });
 
 async function runHtmlCli(
   htmlPath: string,
   openPath: () => Promise<void> = async () => {},
+  stdoutIsTTY = false,
 ): Promise<{ code: number; stdout: string }> {
   let stdout = "";
   const code = await runCli(
@@ -239,7 +250,7 @@ async function runHtmlCli(
       now: () => new Date("2026-06-14T18:45:00+05:30"),
       openPath,
       stderr: { write: () => true },
-      stdout: { write: (chunk: string) => ((stdout += chunk), true) },
+      stdout: { isTTY: stdoutIsTTY, write: (chunk: string) => ((stdout += chunk), true) },
     },
   );
 
