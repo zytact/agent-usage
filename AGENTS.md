@@ -7,6 +7,12 @@ vp run fallow
 
 to verify them.
 
+## Ubiquitous language
+
+This repo has a domain glossary at `UBIQUITOUS_LANGUAGE.md`.
+
+Read it when working on domain terminology, product concepts, naming, business rules, user-facing language, or when interpreting ambiguous terms. Prefer the canonical terms defined there, and avoid aliases listed as discouraged.
+
 <!--VITE PLUS START-->
 
 # Using Vite+, the Unified Toolchain for the Web
