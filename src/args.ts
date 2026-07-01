@@ -12,7 +12,7 @@ const SOURCE_FLAGS: Record<string, SourceId> = {
   "--pi": "pi",
 };
 
-export const usageText = `Usage: agent-usage [--codex] [--opencode] [--pi] [--claude] [--scope today|1d|7d|30d] [--full | --section KEY[,KEY...]] [--originators] [--html [FILE]]
+export const usageText = `Usage: agent-usage [--codex] [--opencode] [--pi] [--claude] [--scope today|1d|7d|30d] [--full | --section KEY[,KEY...]] [--originators] [--html [FILE]] [--no-cache]
 
 Options:
   (interactive)   Prompt for range, sources, and sections. No sources preselected.
@@ -27,6 +27,7 @@ Options:
   --originators   Show per-originator breakdowns inside per-source sections
   --html [FILE]   Write a standalone HTML report. Omit FILE to decide later.
                   Use --html=- to print HTML to stdout.
+  --no-cache      Reparse session files instead of using the parsed-session cache
   -h, --help      Show this help
 `;
 
@@ -35,6 +36,7 @@ export type CliOptions = {
   html: boolean;
   htmlPath?: string;
   help: boolean;
+  noCache?: boolean;
   reportMode: ReportMode;
   sections?: SectionKey[];
   showOriginators: boolean;
@@ -55,7 +57,13 @@ type ArgHandler = (argv: string[], state: ArgParseState) => void;
 export function parseArgs(argv: string[]): CliOptions {
   const state: ArgParseState = {
     index: 0,
-    options: { html: false, help: false, reportMode: "summary", showOriginators: false },
+    options: {
+      html: false,
+      help: false,
+      noCache: false,
+      reportMode: "summary",
+      showOriginators: false,
+    },
   };
 
   while (state.index < argv.length) {
@@ -75,6 +83,9 @@ const ARG_HANDLERS: Record<string, ArgHandler> = {
     state.options.help = true;
   },
   "--html": parseHtmlFlag,
+  "--no-cache": (_argv, state) => {
+    state.options.noCache = true;
+  },
   "--opencode": (_argv, state) => addSourceFlag(state, SOURCE_FLAGS["--opencode"]),
   "--originators": (_argv, state) => {
     state.options.showOriginators = true;

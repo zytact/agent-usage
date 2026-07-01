@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { parseArgs, UsageError } from "../src/args.js";
+import { parseArgs, UsageError, usageText } from "../src/args.js";
 
 describe("parseArgs", () => {
   it("parses defaults", () => {
     expect(parseArgs([])).toEqual({
       html: false,
       help: false,
+      noCache: false,
       reportMode: "summary",
       showOriginators: false,
     });
@@ -29,6 +30,7 @@ describe("parseArgs", () => {
       html: true,
       htmlPath: "report.html",
       help: false,
+      noCache: false,
       reportMode: "full",
       showOriginators: true,
       sources: ["claude", "codex"],
@@ -41,9 +43,24 @@ describe("parseArgs", () => {
       html: true,
       htmlPath: "-",
       help: false,
+      noCache: false,
       reportMode: "summary",
       showOriginators: false,
     });
+  });
+
+  it("parses no-cache flag", () => {
+    expect(parseArgs(["--no-cache"])).toEqual({
+      html: false,
+      help: false,
+      noCache: true,
+      reportMode: "summary",
+      showOriginators: false,
+    });
+  });
+
+  it("documents no-cache in the usage synopsis", () => {
+    expect(usageText).toContain("[--no-cache]");
   });
 
   it("parses sections", () => {
@@ -56,6 +73,7 @@ describe("parseArgs", () => {
     ).toEqual({
       html: false,
       help: false,
+      noCache: false,
       reportMode: "summary",
       sections: ["request-summary", "daily-usage", "source-sections", "token-mix"],
       showOriginators: false,
@@ -66,6 +84,7 @@ describe("parseArgs", () => {
     expect(parseArgs(["--help"])).toEqual({
       html: false,
       help: true,
+      noCache: false,
       reportMode: "summary",
       showOriginators: false,
     });

@@ -255,65 +255,15 @@ export function buildReport(
   showOriginators = false,
 ): BuiltReport {
   const filtered = filterSessionsByScope(sessions, scope, now);
-  const buckets = {
-    claude: [] as ParsedSession[],
-    codex: [] as ParsedSession[],
-    opencode: [] as ParsedSession[],
-    pi: [] as ParsedSession[],
-  };
-  const gptOnlyStats = createEmptyStats();
-  const gptOnlyRequests: SessionRequest[] = [];
-  const gptOnlyDistributions = emptySessionDistributions();
-
-  for (const session of filtered) {
-    addSectionBucket(session, buckets);
-    const gptOnly = buildModelFilteredSummary(session, isGptModel);
-    if (!gptOnly) {
-      continue;
-    }
-    mergeFilteredSessionStats(gptOnlyStats, gptOnly, session);
-    gptOnlyRequests.push(...gptOnly.requests);
-    addSessionDistributions(
-      gptOnlyDistributions,
-      gptOnly.activeSeconds,
-      gptOnly.tokens,
-      gptOnly.requests,
-    );
-  }
-
-  const selected = new Set(selectedSources);
-  const sections: SourceSection[] = [
-    makeSection("Combined", filtered, SOURCE_TONES.combined, "combined"),
-    {
-      kind: "gptOnly",
-      sessions: [],
-      stats: gptOnlyStats,
-      title: "GPT-only",
-      tone: SOURCE_TONES.gptOnly,
-    },
-  ];
-
-  if (selected.has("codex")) {
-    sections.push(makeSection("Codex", buckets.codex, SOURCE_TONES.codex, "primary"));
-    if (showOriginators) {
-      sections.push(...originatorSections("codex", buckets.codex));
-    }
-  }
-  if (selected.has("opencode")) {
-    sections.push(makeSection("opencode", buckets.opencode, SOURCE_TONES.opencode, "primary"));
-    if (showOriginators) {
-      sections.push(...originatorSections("opencode", buckets.opencode));
-    }
-  }
-  if (selected.has("claude")) {
-    sections.push(makeSection("Claude Code", buckets.claude, SOURCE_TONES.claude, "primary"));
-    if (showOriginators) {
-      sections.push(...originatorSections("claude", buckets.claude));
-    }
-  }
-  if (selected.has("pi")) {
-    sections.push(makeSection("Pi", buckets.pi, SOURCE_TONES.pi, "primary"));
-  }
+  const buckets = bucketSessionsBySource(filtered);
+  const gptOnly = buildGptOnlySummary(filtered);
+  const sections = buildSourceSections(
+    filtered,
+    buckets,
+    gptOnly.stats,
+    selectedSources,
+    showOriginators,
+  );
 
   return {
     attributionOverages: attributionOverageRows(filtered),
@@ -323,8 +273,8 @@ export function buildReport(
     generatedAt: now,
     gptOnly: sections[1],
     gptOnlyRequestSummary: {
-      distributions: gptOnlyDistributions,
-      requests: gptOnlyRequests,
+      distributions: gptOnly.distributions,
+      requests: gptOnly.requests,
     },
     selectedSources,
     requestSummary: {
@@ -338,6 +288,96 @@ export function buildReport(
     showOriginators,
     sourceCount: selectedSources.length,
   };
+}
+
+type SourceBuckets = Record<SourceId, ParsedSession[]>;
+
+function bucketSessionsBySource(sessions: ParsedSession[]): SourceBuckets {
+  const buckets: SourceBuckets = {
+    claude: [],
+    codex: [],
+    opencode: [],
+    pi: [],
+  };
+
+  for (const session of sessions) {
+    addSectionBucket(session, buckets);
+  }
+
+  return buckets;
+}
+
+function buildGptOnlySummary(sessions: ParsedSession[]): {
+  distributions: ReturnType<typeof emptySessionDistributions>;
+  requests: SessionRequest[];
+  stats: ReportStats;
+} {
+  const stats = createEmptyStats();
+  const requests: SessionRequest[] = [];
+  const distributions = emptySessionDistributions();
+
+  for (const session of sessions) {
+    const gptOnly = buildModelFilteredSummary(session, isGptModel);
+    if (!gptOnly) {
+      continue;
+    }
+    mergeFilteredSessionStats(stats, gptOnly, session);
+    requests.push(...gptOnly.requests);
+    addSessionDistributions(distributions, gptOnly.activeSeconds, gptOnly.tokens, gptOnly.requests);
+  }
+
+  return { distributions, requests, stats };
+}
+
+function buildSourceSections(
+  filtered: ParsedSession[],
+  buckets: SourceBuckets,
+  gptOnlyStats: ReportStats,
+  selectedSources: SourceId[],
+  showOriginators: boolean,
+): SourceSection[] {
+  const selected = new Set(selectedSources);
+  const sections: SourceSection[] = [
+    makeSection("Combined", filtered, SOURCE_TONES.combined, "combined"),
+    {
+      kind: "gptOnly",
+      sessions: [],
+      stats: gptOnlyStats,
+      title: "GPT-only",
+      tone: SOURCE_TONES.gptOnly,
+    },
+  ];
+
+  appendSelectedSourceSection(sections, selected, "codex", "Codex", buckets, showOriginators);
+  appendSelectedSourceSection(sections, selected, "opencode", "opencode", buckets, showOriginators);
+  appendSelectedSourceSection(
+    sections,
+    selected,
+    "claude",
+    "Claude Code",
+    buckets,
+    showOriginators,
+  );
+  appendSelectedSourceSection(sections, selected, "pi", "Pi", buckets, false);
+
+  return sections;
+}
+
+function appendSelectedSourceSection(
+  sections: SourceSection[],
+  selected: Set<SourceId>,
+  source: SourceId,
+  title: string,
+  buckets: SourceBuckets,
+  showOriginators: boolean,
+): void {
+  if (!selected.has(source)) {
+    return;
+  }
+  sections.push(makeSection(title, buckets[source], SOURCE_TONES[source], "primary"));
+  if (showOriginators) {
+    sections.push(...originatorSections(source, buckets[source]));
+  }
 }
 
 function buildDailyUsageSummary(

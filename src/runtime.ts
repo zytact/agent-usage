@@ -47,7 +47,11 @@ export type RuntimeDeps = {
   ) => Promise<SectionKey[] | undefined>;
   chooseSources: (defaults: SourceId[], available: SourceId[]) => Promise<SourceId[] | undefined>;
   clearScreen: () => void;
-  collectSessions: (sources: SourceId[], start: Date) => Promise<ParsedSession[]>;
+  collectSessions: (
+    sources: SourceId[],
+    start: Date,
+    options?: CollectSessionsOptions,
+  ) => Promise<ParsedSession[]>;
   interactive?: boolean;
   loadPricing: () => Promise<Record<string, PricingInfo>>;
   now: () => Date;
@@ -105,7 +109,9 @@ export async function runCli(
   }
 
   const ingestScope = options.html ? scope : "30d";
-  const sessions = await deps.collectSessions(sources, scopeStart(ingestScope, deps.now()));
+  const sessions = await deps.collectSessions(sources, scopeStart(ingestScope, deps.now()), {
+    useCache: !options.noCache,
+  });
   const pricing = await deps.loadPricing();
 
   return options.html
@@ -339,23 +345,32 @@ function formatHtmlReportLink(
   return `\u001B]8;;${url}\u001B\\${outputPath}\u001B]8;;\u001B\\`;
 }
 
-async function collectSessions(sources: SourceId[], start: Date): Promise<ParsedSession[]> {
+type CollectSessionsOptions = {
+  useCache?: boolean;
+};
+
+async function collectSessions(
+  sources: SourceId[],
+  start: Date,
+  options: CollectSessionsOptions = {},
+): Promise<ParsedSession[]> {
   const roots = defaultDiscoveryRoots(homedir());
   const discovered = await discoverSessionFiles(roots, start);
   const cacheDir = await ensureParsedSessionCacheDir();
   const selected = new Set(sources);
-  const codexSessions = selected.has("codex")
-    ? await parseDiscoveredFiles(discovered.codexFiles, parseCodexSessionFile, cacheDir)
-    : [];
-  const piSessions = selected.has("pi")
-    ? await parseDiscoveredFiles(discovered.piFiles, parsePiSessionFile, cacheDir)
-    : [];
-  const claudeSessions = selected.has("claude")
-    ? await parseDiscoveredFiles(discovered.claudeFiles, parseClaudeSessionFile, cacheDir)
-    : [];
-  const opencodeSessions = selected.has("opencode")
-    ? await parseOpencodeDb(discovered.opencodeDbPath, start)
-    : [];
+  const useCache = options.useCache ?? true;
+  const [codexSessions, piSessions, claudeSessions, opencodeSessions] = await Promise.all([
+    selected.has("codex")
+      ? parseDiscoveredFiles(discovered.codexFiles, parseCodexSessionFile, cacheDir, useCache)
+      : [],
+    selected.has("pi")
+      ? parseDiscoveredFiles(discovered.piFiles, parsePiSessionFile, cacheDir, useCache)
+      : [],
+    selected.has("claude")
+      ? parseDiscoveredFiles(discovered.claudeFiles, parseClaudeSessionFile, cacheDir, useCache)
+      : [],
+    selected.has("opencode") ? parseOpencodeDb(discovered.opencodeDbPath, start) : [],
+  ]);
 
   return [...codexSessions, ...opencodeSessions, ...claudeSessions, ...piSessions];
 }
@@ -375,9 +390,10 @@ async function parseDiscoveredFiles(
   files: Awaited<ReturnType<typeof discoverSessionFiles>>["codexFiles"],
   parser: (path: string) => Promise<ParsedSession | undefined>,
   cacheDir: string,
+  useCache: boolean,
 ): Promise<ParsedSession[]> {
   const parsed = await mapWithConcurrency(files, PARSE_CONCURRENCY, async (file) =>
-    loadOrParseSession(file.path, file.size, file.mtimeMs, cacheDir, parser),
+    loadOrParseSession(file.path, file.size, file.mtimeMs, cacheDir, parser, useCache),
   );
   return parsed.filter((value): value is ParsedSession => value !== undefined);
 }
@@ -388,11 +404,14 @@ async function loadOrParseSession(
   mtimeMs: number,
   cacheDir: string,
   parser: (path: string) => Promise<ParsedSession | undefined>,
+  useCache: boolean,
 ): Promise<ParsedSession | undefined> {
   const cachePath = join(cacheDir, `${hashPath(path)}.json`);
-  const cached = await readCachedSession(cachePath, size, mtimeMs);
-  if (cached !== undefined) {
-    return cached ?? undefined;
+  if (useCache) {
+    const cached = await readCachedSession(cachePath, size, mtimeMs);
+    if (cached !== undefined) {
+      return cached ?? undefined;
+    }
   }
 
   const parsed = await parser(path);

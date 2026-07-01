@@ -1,5 +1,6 @@
 import type { ReportMode } from "./args.js";
 import { formatEffortMetricValue } from "./effort-format.js";
+import { isPrimarySection, shouldShowSection } from "./render-shared.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
 import {
   ALL_SECTIONS,
@@ -328,24 +329,6 @@ function renderCompactDistribution(
     `    median ${formatFloat(summary.median)}`,
     `    p90    ${formatFloat(summary.p90)}`,
   ];
-}
-
-function isPrimarySection(section: SourceSection): boolean {
-  return section.kind === "primary";
-}
-
-function shouldShowSection(
-  section: SourceSection,
-  mode: "summary" | "full" | "custom",
-  showOriginators: boolean,
-): boolean {
-  if (section.kind === "combined" || section.kind === "gptOnly") {
-    return false;
-  }
-  if (section.kind === "originator") {
-    return showOriginators;
-  }
-  return mode === "full" ? true : isPrimarySection(section);
 }
 
 function renderDistributionSummary(
