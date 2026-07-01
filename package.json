@@ -13,7 +13,7 @@
     "build": "vp pack",
     "check": "vp check",
     "test": "vp test run",
-    "prepare": "vp config",
+    "prepare": "vp config && vp pack",
     "fallow": "fallow",
     "typecheck": "tsc --noEmit"
   },
