@@ -738,7 +738,7 @@ function renderFooter(report: BuiltReport): string {
 
   return `<footer class="footer">
     <p><strong>Data sources:</strong> ${escapeHtml(sourcesNote)}</p>
-    <p>Originator detection: Codex uses session metadata <code>originator</code>; opencode uses session titles and metadata heuristics; Claude Code uses <code>entrypoint</code> plus sidechain/subagent paths.</p>
+    <p>Originator detection: Codex uses explicit subagent metadata (<code>thread_source</code>, <code>parent_thread_id</code>, or <code>source.subagent</code>) before session <code>originator</code>; Pi uses session <code>originator</code> / <code>thread_source</code> and treats <code>parentSession</code> as subagent lineage; opencode uses session titles and metadata heuristics; Claude Code uses <code>entrypoint</code> plus sidechain/subagent paths.</p>
     ${attributionWarning}
     <p>Cost is an estimate. Missing pricing data appears as n/a. This file is self-contained and reads no network resources.</p>
   </footer>`;

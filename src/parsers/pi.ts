@@ -24,6 +24,7 @@ export async function parsePiSessionFile(path: string): Promise<ParsedSession | 
 
 type PiParseState = ModelTokenParserState & {
   effortMarks: Record<string, number>;
+  originator?: string;
 };
 
 export function parsePiSessionText(
@@ -59,6 +60,7 @@ function parsePiLine(rawLine: string, state: PiParseState): void {
   if (item.type === "session") {
     state.sessionId = asString(item.id) ?? state.sessionId;
     state.cwd = asString(item.cwd) ?? state.cwd;
+    state.originator = inferPiOriginator(item) ?? state.originator;
     return;
   }
   if (item.type === "model_change") {
@@ -100,6 +102,7 @@ function parsePiMessage(
     addRequest(state.requests, {
       effort: state.currentEffort,
       model: tokenModel,
+      originator: state.originator,
       repo: repoName(state.cwd),
       sessionId: finalSessionId(state.sessionId, state.path),
       source: "pi",
@@ -114,9 +117,23 @@ function finishPiSession(state: PiParseState): ParsedSession | undefined {
     cacheWriteKnown: true,
     efforts: state.effortMarks,
     modelTokens: state.modelTokens,
+    originator: state.originator,
     source: "pi",
-    sourceLabel: sessionLabel("pi", undefined),
+    sourceLabel: sessionLabel("pi", state.originator),
   });
+}
+
+function inferPiOriginator(item: Record<string, unknown>): string | undefined {
+  const originator = asString(item.originator);
+  const threadSource = asString(item.thread_source);
+  if (isSubagentText(originator) || isSubagentText(threadSource) || asString(item.parentSession)) {
+    return "subagent";
+  }
+  return originator ?? threadSource;
+}
+
+function isSubagentText(value: string | undefined): boolean {
+  return value?.toLowerCase().includes("subagent") ?? false;
 }
 
 function setCurrentModel(

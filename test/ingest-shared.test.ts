@@ -14,7 +14,13 @@ describe("originator labels", () => {
   it("maps codex originators", () => {
     expect(originatorLabel("codex", "codex-tui")).toBe("TUI");
     expect(originatorLabel("codex", "Codex Desktop")).toBe("Desktop");
+    expect(originatorLabel("codex", "subagent")).toBe("Subagent");
     expect(originatorLabel("codex", "t3code_desktop")).toBe("T3 Code");
+  });
+
+  it("maps pi originators", () => {
+    expect(originatorLabel("pi", "direct")).toBe("Direct");
+    expect(originatorLabel("pi", "subagent")).toBe("Subagent");
   });
 
   it("maps opencode originators", () => {

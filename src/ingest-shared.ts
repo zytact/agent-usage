@@ -13,12 +13,17 @@ const ORIGINATOR_LABELS: Partial<Record<SourceId, Record<string, string>>> = {
   codex: {
     "codex-tui": "TUI",
     "codex desktop": "Desktop",
+    subagent: "Subagent",
     t3code_desktop: "T3 Code",
   },
   opencode: {
     opencode: "Direct",
     subagent: "Subagent",
     t3code_desktop: "T3 Code",
+  },
+  pi: {
+    direct: "Direct",
+    subagent: "Subagent",
   },
 };
 

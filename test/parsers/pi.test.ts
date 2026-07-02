@@ -89,4 +89,37 @@ describe("parsePiSessionText", () => {
       uncachedInput: 425,
     });
   });
+
+  it("classifies pi parent sessions as subagent originators", () => {
+    const session = parsePiSessionText(
+      [
+        JSON.stringify({
+          type: "session",
+          id: "pi-subagent",
+          timestamp: "2026-04-24T22:36:00.000Z",
+          cwd: "/repo",
+          originator: "direct",
+          parentSession: "/parent.jsonl",
+        }),
+        JSON.stringify({
+          type: "message",
+          timestamp: "2026-04-24T22:36:01.000Z",
+          message: {
+            role: "assistant",
+            model: "gpt-5.4",
+            usage: { input: 10, output: 5, totalTokens: 15 },
+          },
+        }),
+      ].join("\n"),
+    );
+
+    expect(session).toMatchObject({
+      originator: "subagent",
+      sourceLabel: "Pi",
+    });
+    expect(session?.requests[0]).toMatchObject({
+      sourceLabel: "Pi",
+      subharness: "pi",
+    });
+  });
 });
