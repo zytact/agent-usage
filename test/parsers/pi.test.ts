@@ -34,7 +34,7 @@ describe("parsePiSessionText", () => {
         cached: 100,
         input: 1850,
         output: 152,
-        reasoning: 0,
+        reasoning: 15,
         total: 2127,
       },
       userTurns: 1,
@@ -49,12 +49,12 @@ describe("parsePiSessionText", () => {
 
     expect(session?.modelTokens).toEqual({
       "gpt-5.4": {
-        billableOutput: 50,
+        billableOutput: 65,
         cacheWrite: 25,
         cached: 100,
         input: 400,
         output: 50,
-        reasoning: 0,
+        reasoning: 15,
         total: 575,
       },
       "gpt-5.4-mini": {
@@ -85,6 +85,7 @@ describe("parsePiSessionText", () => {
       input: 400,
       model: "gpt-5.4",
       output: 50,
+      reasoning: 15,
       total: 575,
       uncachedInput: 425,
     });

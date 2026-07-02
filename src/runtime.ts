@@ -377,7 +377,7 @@ async function collectSessions(
 
 const PARSE_CONCURRENCY = 8;
 
-const SESSION_CACHE_VERSION = 2;
+const SESSION_CACHE_VERSION = 3;
 
 type SessionCacheRecord = {
   mtimeMs: number;

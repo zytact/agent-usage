@@ -173,12 +173,13 @@ function piUsageTokens(usage: Record<string, unknown>): ParsedSession["tokens"] 
   const cached = asNumber(usage.cacheRead);
   const cacheWrite = asNumber(usage.cacheWrite);
   const output = asNumber(usage.output);
+  const reasoning = asNumber(usage.reasoning);
   return {
     cacheWrite,
     cached,
     input,
     output,
-    reasoning: 0,
-    total: asNumber(usage.totalTokens) || input + cached + cacheWrite + output,
+    reasoning,
+    total: asNumber(usage.totalTokens) || input + cached + cacheWrite + output + reasoning,
   };
 }
