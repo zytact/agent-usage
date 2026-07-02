@@ -24,6 +24,7 @@ export async function parsePiSessionFile(path: string): Promise<ParsedSession | 
 
 type PiParseState = ModelTokenParserState & {
   effortMarks: Record<string, number>;
+  originator?: string;
 };
 
 export function parsePiSessionText(
@@ -59,6 +60,7 @@ function parsePiLine(rawLine: string, state: PiParseState): void {
   if (item.type === "session") {
     state.sessionId = asString(item.id) ?? state.sessionId;
     state.cwd = asString(item.cwd) ?? state.cwd;
+    state.originator = inferPiOriginator(item, state.path) ?? state.originator;
     return;
   }
   if (item.type === "model_change") {
@@ -100,6 +102,7 @@ function parsePiMessage(
     addRequest(state.requests, {
       effort: state.currentEffort,
       model: tokenModel,
+      originator: state.originator,
       repo: repoName(state.cwd),
       sessionId: finalSessionId(state.sessionId, state.path),
       source: "pi",
@@ -114,9 +117,32 @@ function finishPiSession(state: PiParseState): ParsedSession | undefined {
     cacheWriteKnown: true,
     efforts: state.effortMarks,
     modelTokens: state.modelTokens,
+    originator: state.originator,
     source: "pi",
-    sourceLabel: sessionLabel("pi", undefined),
+    sourceLabel: sessionLabel("pi", state.originator),
   });
+}
+
+function inferPiOriginator(item: Record<string, unknown>, path: string): string | undefined {
+  const originator = asString(item.originator);
+  const threadSource = asString(item.thread_source);
+  if (
+    isSubagentText(originator) ||
+    isSubagentText(threadSource) ||
+    asString(item.parentSession) ||
+    isSubagentSessionPath(path)
+  ) {
+    return "subagent";
+  }
+  return originator ?? threadSource;
+}
+
+function isSubagentSessionPath(path: string): boolean {
+  return /\/[a-f0-9]{8}\/run-\d+\/session\.jsonl$/i.test(path);
+}
+
+function isSubagentText(value: string | undefined): boolean {
+  return value?.toLowerCase().includes("subagent") ?? false;
 }
 
 function setCurrentModel(
@@ -147,12 +173,13 @@ function piUsageTokens(usage: Record<string, unknown>): ParsedSession["tokens"] 
   const cached = asNumber(usage.cacheRead);
   const cacheWrite = asNumber(usage.cacheWrite);
   const output = asNumber(usage.output);
+  const reasoning = asNumber(usage.reasoning);
   return {
     cacheWrite,
     cached,
     input,
     output,
-    reasoning: 0,
-    total: asNumber(usage.totalTokens) || input + cached + cacheWrite + output,
+    reasoning,
+    total: asNumber(usage.totalTokens) || input + cached + cacheWrite + output + reasoning,
   };
 }

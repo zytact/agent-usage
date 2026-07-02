@@ -85,7 +85,28 @@ function parseSessionMeta(
   }
   state.sessionId = asString(payload.id) ?? state.sessionId;
   state.cwd = asString(payload.cwd) ?? state.cwd;
-  state.originator = asString(payload.originator) ?? state.originator;
+  state.originator = inferCodexOriginator(payload) ?? state.originator;
+}
+
+function inferCodexOriginator(payload: Record<string, unknown>): string | undefined {
+  if (isCodexSubagent(payload)) {
+    return "subagent";
+  }
+  return asString(payload.originator);
+}
+
+function isCodexSubagent(payload: Record<string, unknown>): boolean {
+  if (asString(payload.thread_source)?.toLowerCase() === "subagent") {
+    return true;
+  }
+  if (asString(payload.parent_thread_id)) {
+    return true;
+  }
+  const source = payload.source;
+  if (isRecord(source) && source.subagent !== undefined) {
+    return true;
+  }
+  return false;
 }
 
 function parseTurnContext(

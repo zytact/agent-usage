@@ -95,4 +95,48 @@ describe("parseCodexSessionText", () => {
       total: 1760,
     });
   });
+
+  it("prefers explicit codex subagent metadata over desktop originator", () => {
+    const session = parseCodexSessionText(
+      [
+        JSON.stringify({
+          timestamp: "2026-06-14T12:00:00.000Z",
+          type: "session_meta",
+          payload: {
+            id: "codex-subagent",
+            cwd: "/repo",
+            originator: "Codex Desktop",
+            parent_thread_id: "parent",
+            source: { subagent: "review" },
+            thread_source: "subagent",
+          },
+        }),
+        JSON.stringify({
+          timestamp: "2026-06-14T12:00:01.000Z",
+          type: "turn_context",
+          payload: { model: "gpt-5", effort: "medium" },
+        }),
+        JSON.stringify({
+          timestamp: "2026-06-14T12:00:02.000Z",
+          type: "event_msg",
+          payload: {
+            type: "token_count",
+            info: {
+              total_token_usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
+              last_token_usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
+            },
+          },
+        }),
+      ].join("\n"),
+    );
+
+    expect(session).toMatchObject({
+      originator: "subagent",
+      sourceLabel: "codex",
+    });
+    expect(session?.requests[0]).toMatchObject({
+      sourceLabel: "codex",
+      subharness: "codex",
+    });
+  });
 });

@@ -358,7 +358,7 @@ function buildSourceSections(
     buckets,
     showOriginators,
   );
-  appendSelectedSourceSection(sections, selected, "pi", "Pi", buckets, false);
+  appendSelectedSourceSection(sections, selected, "pi", "Pi", buckets, showOriginators);
 
   return sections;
 }

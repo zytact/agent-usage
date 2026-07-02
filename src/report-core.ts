@@ -187,6 +187,9 @@ export function collapseDayStateSeconds(
 }
 
 export function humanSeconds(total: number): string {
+  if (total > 0 && total < 60) {
+    return "<1m";
+  }
   const hours = Math.floor(total / 3600);
   const mins = Math.floor((total % 3600) / 60);
   if (hours > 0) {

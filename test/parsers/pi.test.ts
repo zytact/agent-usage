@@ -34,7 +34,7 @@ describe("parsePiSessionText", () => {
         cached: 100,
         input: 1850,
         output: 152,
-        reasoning: 0,
+        reasoning: 15,
         total: 2127,
       },
       userTurns: 1,
@@ -49,12 +49,12 @@ describe("parsePiSessionText", () => {
 
     expect(session?.modelTokens).toEqual({
       "gpt-5.4": {
-        billableOutput: 50,
+        billableOutput: 65,
         cacheWrite: 25,
         cached: 100,
         input: 400,
         output: 50,
-        reasoning: 0,
+        reasoning: 15,
         total: 575,
       },
       "gpt-5.4-mini": {
@@ -85,8 +85,69 @@ describe("parsePiSessionText", () => {
       input: 400,
       model: "gpt-5.4",
       output: 50,
+      reasoning: 15,
       total: 575,
       uncachedInput: 425,
+    });
+  });
+
+  it("classifies pi parent sessions as subagent originators", () => {
+    const session = parsePiSessionText(
+      [
+        JSON.stringify({
+          type: "session",
+          id: "pi-subagent",
+          timestamp: "2026-04-24T22:36:00.000Z",
+          cwd: "/repo",
+          originator: "direct",
+          parentSession: "/parent.jsonl",
+        }),
+        JSON.stringify({
+          type: "message",
+          timestamp: "2026-04-24T22:36:01.000Z",
+          message: {
+            role: "assistant",
+            model: "gpt-5.4",
+            usage: { input: 10, output: 5, totalTokens: 15 },
+          },
+        }),
+      ].join("\n"),
+    );
+
+    expect(session).toMatchObject({
+      originator: "subagent",
+      sourceLabel: "Pi",
+    });
+    expect(session?.requests[0]).toMatchObject({
+      sourceLabel: "Pi",
+      subharness: "pi",
+    });
+  });
+
+  it("classifies pi subagent extension session paths as subagent originators", () => {
+    const session = parsePiSessionText(
+      [
+        JSON.stringify({
+          type: "session",
+          id: "pi-path-subagent",
+          timestamp: "2026-07-02T13:55:11.507Z",
+          cwd: "/repo",
+        }),
+        JSON.stringify({
+          type: "message",
+          timestamp: "2026-07-02T13:55:12.000Z",
+          message: {
+            role: "assistant",
+            model: "gpt-5.4",
+            usage: { input: 10, output: 5, totalTokens: 15 },
+          },
+        }),
+      ].join("\n"),
+      "/home/me/.pi/agent/sessions/--repo--/2026-07-02T13-51-21-377Z_parent/7c6b9b8e/run-0/session.jsonl",
+    );
+
+    expect(session).toMatchObject({
+      originator: "subagent",
     });
   });
 });

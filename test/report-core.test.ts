@@ -104,7 +104,8 @@ describe("report-core", () => {
   });
 
   it("formats durations and token counts", () => {
-    expect(humanSeconds(59)).toBe("0m");
+    expect(humanSeconds(0)).toBe("0m");
+    expect(humanSeconds(59)).toBe("<1m");
     expect(humanSeconds(3_720)).toBe("1h 2m");
     expect(compactTokens(999)).toBe("999");
     expect(compactTokens(12_300)).toBe("12.3k");
