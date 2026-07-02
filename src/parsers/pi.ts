@@ -60,7 +60,7 @@ function parsePiLine(rawLine: string, state: PiParseState): void {
   if (item.type === "session") {
     state.sessionId = asString(item.id) ?? state.sessionId;
     state.cwd = asString(item.cwd) ?? state.cwd;
-    state.originator = inferPiOriginator(item) ?? state.originator;
+    state.originator = inferPiOriginator(item, state.path) ?? state.originator;
     return;
   }
   if (item.type === "model_change") {
@@ -123,13 +123,22 @@ function finishPiSession(state: PiParseState): ParsedSession | undefined {
   });
 }
 
-function inferPiOriginator(item: Record<string, unknown>): string | undefined {
+function inferPiOriginator(item: Record<string, unknown>, path: string): string | undefined {
   const originator = asString(item.originator);
   const threadSource = asString(item.thread_source);
-  if (isSubagentText(originator) || isSubagentText(threadSource) || asString(item.parentSession)) {
+  if (
+    isSubagentText(originator) ||
+    isSubagentText(threadSource) ||
+    asString(item.parentSession) ||
+    isSubagentSessionPath(path)
+  ) {
     return "subagent";
   }
   return originator ?? threadSource;
+}
+
+function isSubagentSessionPath(path: string): boolean {
+  return /\/[a-f0-9]{8}\/run-\d+\/session\.jsonl$/i.test(path);
 }
 
 function isSubagentText(value: string | undefined): boolean {

@@ -122,4 +122,31 @@ describe("parsePiSessionText", () => {
       subharness: "pi",
     });
   });
+
+  it("classifies pi subagent extension session paths as subagent originators", () => {
+    const session = parsePiSessionText(
+      [
+        JSON.stringify({
+          type: "session",
+          id: "pi-path-subagent",
+          timestamp: "2026-07-02T13:55:11.507Z",
+          cwd: "/repo",
+        }),
+        JSON.stringify({
+          type: "message",
+          timestamp: "2026-07-02T13:55:12.000Z",
+          message: {
+            role: "assistant",
+            model: "gpt-5.4",
+            usage: { input: 10, output: 5, totalTokens: 15 },
+          },
+        }),
+      ].join("\n"),
+      "/home/me/.pi/agent/sessions/--repo--/2026-07-02T13-51-21-377Z_parent/7c6b9b8e/run-0/session.jsonl",
+    );
+
+    expect(session).toMatchObject({
+      originator: "subagent",
+    });
+  });
 });
