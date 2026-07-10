@@ -1,6 +1,7 @@
 import type { PricingInfo } from "./report-data.js";
 
-const MODELS_DEV_URL = "https://raw.githubusercontent.com/anomalyco/models.dev/dev/models.json";
+const MODELS_DEV_URL = "https://models.dev/api.json";
+const TOKENS_PER_MILLION = 1_000_000;
 
 export async function loadPricingMap(
   fetchImpl: typeof fetch = fetch,
@@ -14,24 +15,30 @@ export async function loadPricingMap(
     }
 
     const payload: unknown = await response.json();
-    const data = isRecord(payload) && Array.isArray(payload.data) ? payload.data : [];
     const out: Record<string, PricingInfo> = {};
 
-    for (const item of data) {
-      if (!isRecord(item)) {
+    if (!isRecord(payload)) {
+      return out;
+    }
+
+    for (const [providerId, provider] of Object.entries(payload)) {
+      if (!isRecord(provider) || !isRecord(provider.models)) {
         continue;
       }
-      const pricing = isRecord(item.pricing) ? item.pricing : {};
-      const id = asString(item.id);
-      if (!id) {
-        continue;
+
+      for (const [modelId, model] of Object.entries(provider.models)) {
+        if (!isRecord(model) || !isRecord(model.cost)) {
+          continue;
+        }
+
+        const cost = model.cost;
+        out[`${providerId}/${modelId}`] = {
+          cacheRead: perToken(cost.cache_read),
+          cacheWrite: perToken(cost.cache_write),
+          completion: perToken(cost.output),
+          prompt: perToken(cost.input),
+        };
       }
-      out[id] = {
-        cacheRead: asNumber(pricing.input_cache_read),
-        cacheWrite: asNumber(pricing.input_cache_write),
-        completion: asNumber(pricing.completion),
-        prompt: asNumber(pricing.prompt),
-      };
     }
 
     return out;
@@ -44,11 +51,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function asString(value: unknown): string | undefined {
-  return typeof value === "string" && value ? value : undefined;
-}
-
-function asNumber(value: unknown): number | undefined {
+function perToken(value: unknown): number | undefined {
   const num = Number(value);
-  return Number.isFinite(num) ? num : undefined;
+  return Number.isFinite(num) ? num / TOKENS_PER_MILLION : undefined;
 }
