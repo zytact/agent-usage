@@ -16,32 +16,33 @@ import { aggregateSessions } from "../src/report-data.js";
 import { makeRequest, makeSession } from "./fixtures.js";
 
 describe("pricing", () => {
-  it("loads pricing rows from models.dev payload shape", async () => {
+  it("loads current models.dev rates and converts per-million costs to per-token rates", async () => {
     const pricing = await loadPricingMap(
       async () =>
         new Response(
           JSON.stringify({
-            data: [
-              {
-                id: "openai/gpt-5",
-                pricing: {
-                  completion: "0.00001",
-                  input_cache_read: "0.000000125",
-                  input_cache_write: "0.00000125",
-                  prompt: "0.00000125",
+            openai: {
+              models: {
+                "gpt-5.6-sol": {
+                  cost: {
+                    cache_read: 0.5,
+                    cache_write: 6.25,
+                    input: 5,
+                    output: 30,
+                  },
                 },
               },
-            ],
+            },
           }),
         ),
     );
 
     expect(pricing).toEqual({
-      "openai/gpt-5": {
-        cacheRead: 0.000000125,
-        cacheWrite: 0.00000125,
-        completion: 0.00001,
-        prompt: 0.00000125,
+      "openai/gpt-5.6-sol": {
+        cacheRead: 0.0000005,
+        cacheWrite: 0.00000625,
+        completion: 0.00003,
+        prompt: 0.000005,
       },
     });
   });
@@ -71,6 +72,7 @@ describe("pricing", () => {
     );
 
     expect(resolveModelId("gpt-5.4")).toBe("openai/gpt-5.4");
+    expect(resolveModelId("gpt-5.6-sol")).toBe("openai/gpt-5.6-sol");
     expect(cost).toEqual({
       cacheWrite: 14,
       cached: 2.5,
