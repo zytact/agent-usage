@@ -60,7 +60,8 @@ describe("renderers", () => {
     const html = renderHtmlReport(report, {}, "summary");
 
     expect(html).toContain("<!doctype html>");
-    expect(html).toContain("color-scheme: dark");
+    expect(html).toContain("color-scheme: light dark");
+    expect(html).toContain("@media (prefers-color-scheme: light)");
     expect(html).toContain("Agent usage report");
     expect(html).toContain("Combined request summary");
     expect(html).toContain("Per-day tokens and cost");

@@ -39,7 +39,7 @@ const SOURCE_NOTES = {
 } as const;
 
 const REPORT_CSS = `:root {
-  color-scheme: dark;
+  color-scheme: light dark;
   --bg: oklch(0.075 0 0);
   --surface: oklch(0.135 0.010 258);
   --surface-2: oklch(0.175 0.014 258);
@@ -1035,6 +1035,27 @@ details.raw-details summary:focus-visible {
   }
   .source-head .metric:first-child { border-top: 0; }
   h1 { font-size: 2.25rem; }
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: oklch(0.955 0.004 265);
+    --canvas: oklch(0.982 0.003 265);
+    --surface: oklch(0.995 0.002 265);
+    --surface-2: oklch(0.935 0.006 265);
+    --line: oklch(0.70 0.012 265);
+    --line-soft: color-mix(in oklch, var(--line), transparent 28%);
+    --ink: oklch(0.205 0.012 265);
+    --muted: oklch(0.405 0.018 265);
+    --soft: oklch(0.47 0.022 265);
+    --primary: oklch(0.54 0.20 24);
+    --primary-soft: oklch(0.63 0.16 24);
+    --accent: oklch(0.53 0.13 72);
+    --input: oklch(0.54 0.17 5);
+    --cache: oklch(0.50 0.105 205);
+    --output: oklch(0.53 0.13 72);
+    --total: oklch(0.54 0.20 24);
+    --track: oklch(0.87 0.018 24);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   *,

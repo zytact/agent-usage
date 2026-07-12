@@ -15,6 +15,14 @@ colors:
   ink: "oklch(0.96 0.006 24)"
   muted: "oklch(0.73 0.008 265)"
   soft: "oklch(0.59 0.01 265)"
+  light-void: "oklch(0.955 0.004 265)"
+  light-canvas: "oklch(0.982 0.003 265)"
+  light-surface: "oklch(0.995 0.002 265)"
+  light-surface-raised: "oklch(0.935 0.006 265)"
+  light-divider: "oklch(0.70 0.012 265)"
+  light-ink: "oklch(0.205 0.012 265)"
+  light-muted: "oklch(0.405 0.018 265)"
+  light-soft: "oklch(0.47 0.022 265)"
 typography:
   display:
     fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
@@ -83,21 +91,21 @@ components:
 
 **Creative North Star: "Precision Observatory"**
 
-The usage dossier should feel like a carefully tuned instrument viewed in a quiet workspace. Neutral-black foundations reduce glare while the restrained coral signal color creates moments of energy and orientation. The composition combines Raycast's confidence and atmospheric depth with DeepSWE's sharp, editorial structure.
+The usage dossier should feel like a carefully tuned instrument viewed in a quiet workspace. Neutral foundations adapt to the browser's light or dark preference while the restrained coral signal color creates moments of energy and orientation. The composition combines Raycast's confidence and atmospheric depth with DeepSWE's sharp, editorial structure.
 
 Information remains dense, but never cramped. Large totals establish the overall shape, compact labels support comparison, and layered surfaces group related data without turning every value into a floating card. The system explicitly rejects terminal-themed dashboards, generic SaaS analytics grids, decorative glassmorphism, and dense monitoring-console aesthetics.
 
 **Key Characteristics:**
 
 - Precise numerical hierarchy with tabular figures
-- Neutral-black layers with one scarce coral signal color
+- Adaptive neutral layers with one scarce coral signal color
 - Sharp, continuous surfaces organized by thin editorial rules
 - Compact analytical density with generous section rhythm
 - State motion only, with reduced-motion parity
 
 ## Colors
 
-The palette is neutral black and restrained, with coral used as a deliberate signal and supporting data hues reserved for categorical distinction. Structural surfaces must not carry a visible red tint.
+The palette is restrained and neutral in both light and dark modes, with coral used as a deliberate signal and supporting data hues reserved for categorical distinction. Structural surfaces must not carry a visible red tint. The standalone report declares support for both color schemes and uses `prefers-color-scheme: light` to select its light tokens, leaving dark as the default fallback.
 
 ### Primary
 
@@ -110,7 +118,7 @@ The palette is neutral black and restrained, with coral used as a deliberate sig
 - **Cache Cyan:** Cached-token data and cache-related categorical marks.
 - **Output Gold:** Output-token data and attention values that require a distinct non-error hue.
 
-### Neutral
+### Dark Neutral
 
 - **Void:** The outermost browser background.
 - **Canvas:** The report canvas and atmospheric backdrop.
@@ -121,11 +129,24 @@ The palette is neutral black and restrained, with coral used as a deliberate sig
 - **Muted:** Supporting labels and explanatory text.
 - **Soft:** Tertiary metadata that remains legible at AA contrast.
 
+### Light Neutral
+
+- **Light Void:** The light outer browser background.
+- **Light Canvas:** The near-white report backdrop.
+- **Light Surface:** Primary grouped content regions.
+- **Light Raised Surface:** Nested analytical regions and table headers.
+- **Light Divider:** Structural separators that remain visible without dominating.
+- **Light Ink:** Primary text and important values.
+- **Light Muted:** Supporting labels and explanatory text.
+- **Light Soft:** Tertiary metadata that remains legible at AA contrast.
+
 ### Named Rules
 
 **The Signal Rarity Rule.** Signal Coral should occupy less than 10% of the visible surface. Its scarcity gives it meaning.
 
-**The Black Foundation Rule.** Canvas, surfaces, dividers, and neutral text use neutral-black ramps. Red never tints the entire interface.
+**The Adaptive Foundation Rule.** Canvas, surfaces, dividers, and neutral text use a coordinated near-black or near-white ramp chosen from the browser preference. Red never tints the entire interface.
+
+**The Browser Preference Rule.** Theme selection follows `prefers-color-scheme`. Do not add a JavaScript theme bootstrap or persist a separate setting unless the product later introduces an explicit user control.
 
 **The Data Owns Color Rule.** Supporting hues distinguish data categories. They do not decorate headings, containers, or prose.
 
@@ -157,7 +178,7 @@ Structural UI uses square corners. Panels, controls, tables, metric cells, track
 
 ## Elevation
 
-The system uses tonal layering as its primary depth mechanism. Surfaces are separated through lightness, restrained outlines, and local atmospheric color. Shadows are absent from ordinary containers and reserved for transient interactive overlays if those are introduced later.
+The system uses tonal layering as its primary depth mechanism. In both themes, surfaces are separated through lightness, restrained outlines, and local atmospheric color. Shadows are absent from ordinary containers and reserved for transient interactive overlays if those are introduced later.
 
 ### Named Rules
 
@@ -211,7 +232,8 @@ The system uses tonal layering as its primary depth mechanism. Surfaces are sepa
 - **Do** group related metrics into continuous surfaces with quiet dividers.
 - **Do** preserve tabular figures, explicit units, and text labels alongside every color encoding.
 - **Do** use square corners consistently across structural UI.
-- **Do** maintain WCAG 2.2 AA contrast and reduced-motion behavior.
+- **Do** maintain WCAG 2.2 AA contrast in both themes and reduced-motion behavior.
+- **Do** let the browser preference choose the initial and active theme.
 
 ### Don't:
 
@@ -221,3 +243,4 @@ The system uses tonal layering as its primary depth mechanism. Surfaces are sepa
 - **Don't** reproduce dense monitoring consoles that users must decode before reading their own activity.
 - **Don't** round panels, controls, tables, metric cells, tracks, or disclosure rows.
 - **Don't** use color as the only way to distinguish a data category.
+- **Don't** assume a dark viewing environment or use JavaScript when the CSS preference query is sufficient.
