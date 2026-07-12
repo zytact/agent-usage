@@ -16,6 +16,8 @@ Agent Usage turns local coding-agent session history into a coherent usage dossi
 
 Precise, calm, technical, and quietly engaging. The product should feel expertly instrumented without becoming clinical, sterile, or visually monotonous.
 
+Its visual identity is black-first and sharply structured. Red is a scarce signal for data, focus, and orientation, never a tint applied across the full interface. Square geometry and thin rules give the dossier an editorial, instrument-like character without drifting into terminal aesthetics.
+
 ## Anti-references
 
 - Terminal-themed dashboards with sharp neon-on-black styling, faux command prompts, scan lines, or hacker aesthetics.
@@ -30,6 +32,7 @@ Precise, calm, technical, and quietly engaging. The product should feel expertly
 3. Balance density with calm. Preserve diagnostic detail while using rhythm, grouping, and progressive disclosure to prevent overload.
 4. Reward close inspection. Small moments of polish and responsive feedback should make the dossier pleasant without distracting from the task.
 5. Preserve analytical trust. Labels, comparisons, units, and visual encodings must remain consistent and unambiguous.
+6. Keep the foundation neutral. Black and gray establish the interface; red appears only where it communicates signal or state.
 
 ## Accessibility & Inclusion
 

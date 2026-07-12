@@ -7,14 +7,14 @@ colors:
   focus-crimson: "oklch(0.72 0.16 5)"
   cache-cyan: "oklch(0.76 0.12 205)"
   output-gold: "oklch(0.79 0.14 82)"
-  void: "oklch(0.105 0.012 24)"
-  canvas: "oklch(0.125 0.014 24)"
-  surface: "oklch(0.155 0.016 24)"
-  surface-raised: "oklch(0.19 0.019 24)"
-  divider: "oklch(0.285 0.025 24)"
+  void: "oklch(0.085 0.003 265)"
+  canvas: "oklch(0.105 0.004 265)"
+  surface: "oklch(0.14 0.005 265)"
+  surface-raised: "oklch(0.18 0.006 265)"
+  divider: "oklch(0.31 0.009 265)"
   ink: "oklch(0.96 0.006 24)"
-  muted: "oklch(0.73 0.018 24)"
-  soft: "oklch(0.59 0.025 24)"
+  muted: "oklch(0.73 0.008 265)"
+  soft: "oklch(0.59 0.01 265)"
 typography:
   display:
     fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
@@ -44,10 +44,10 @@ typography:
     fontWeight: 600
     lineHeight: 1.35
 rounded:
-  control: "8px"
-  surface: "14px"
-  feature: "16px"
-  pill: "999px"
+  control: "0"
+  surface: "0"
+  feature: "0"
+  track: "0"
 spacing:
   xs: "6px"
   sm: "10px"
@@ -73,7 +73,7 @@ components:
   data-track:
     backgroundColor: "{colors.surface-raised}"
     textColor: "{colors.signal-coral}"
-    rounded: "{rounded.pill}"
+    rounded: "{rounded.track}"
     height: "7px"
 ---
 
@@ -83,21 +83,21 @@ components:
 
 **Creative North Star: "Precision Observatory"**
 
-The usage dossier should feel like a carefully tuned instrument viewed in a quiet workspace. Its near-black, red-tinted canvas reduces glare while the restrained coral signal color creates moments of energy and orientation. The composition borrows Raycast's confidence, atmospheric depth, and controlled polish without copying its marketing-page scale.
+The usage dossier should feel like a carefully tuned instrument viewed in a quiet workspace. Neutral-black foundations reduce glare while the restrained coral signal color creates moments of energy and orientation. The composition combines Raycast's confidence and atmospheric depth with DeepSWE's sharp, editorial structure.
 
 Information remains dense, but never cramped. Large totals establish the overall shape, compact labels support comparison, and layered surfaces group related data without turning every value into a floating card. The system explicitly rejects terminal-themed dashboards, generic SaaS analytics grids, decorative glassmorphism, and dense monitoring-console aesthetics.
 
 **Key Characteristics:**
 
 - Precise numerical hierarchy with tabular figures
-- Red-tinted near-black layers with one coral signal color
-- Rounded, continuous surfaces instead of sharp terminal grids
+- Neutral-black layers with one scarce coral signal color
+- Sharp, continuous surfaces organized by thin editorial rules
 - Compact analytical density with generous section rhythm
 - State motion only, with reduced-motion parity
 
 ## Colors
 
-The palette is dark and restrained, with coral used as a deliberate signal and supporting data hues reserved for categorical distinction.
+The palette is neutral black and restrained, with coral used as a deliberate signal and supporting data hues reserved for categorical distinction. Structural surfaces must not carry a visible red tint.
 
 ### Primary
 
@@ -125,6 +125,8 @@ The palette is dark and restrained, with coral used as a deliberate signal and s
 
 **The Signal Rarity Rule.** Signal Coral should occupy less than 10% of the visible surface. Its scarcity gives it meaning.
 
+**The Black Foundation Rule.** Canvas, surfaces, dividers, and neutral text use neutral-black ramps. Red never tints the entire interface.
+
 **The Data Owns Color Rule.** Supporting hues distinguish data categories. They do not decorate headings, containers, or prose.
 
 ## Typography
@@ -142,6 +144,10 @@ The palette is dark and restrained, with coral used as a deliberate signal and s
 - **Title** (650, 1rem, 1.35): Panel and visualization titles.
 - **Body** (450, 0.9375rem, 1.55): Explanatory content, capped at 72ch where prose is continuous.
 - **Label** (600, 0.78rem, 1.35): Metric labels, table headers, and metadata. Sentence case is mandatory.
+
+### Geometry
+
+Structural UI uses square corners. Panels, controls, tables, metric cells, tracks, disclosure rows, and inline code all use a zero radius. Circles are reserved for genuinely radial data visualizations and small status indicators.
 
 ### Named Rules
 
@@ -161,21 +167,21 @@ The system uses tonal layering as its primary depth mechanism. Surfaces are sepa
 
 ### Dossier Header
 
-- **Shape:** A composed feature surface with gently curved corners (16px).
-- **Background:** A dark red surface with localized coral atmosphere, never glass blur.
+- **Shape:** A composed feature surface with square corners.
+- **Background:** A neutral-black surface with a small localized coral atmosphere, never a red wash or glass blur.
 - **Structure:** Title and purpose on the left, compact report context on the right. Context cells share one continuous container.
 - **Responsive treatment:** Collapse to one column and keep context in a two-column strip on narrow screens.
 
 ### Metric Strip
 
-- **Shape:** One continuous grouped surface (14px), not four detached cards.
+- **Shape:** One continuous square-cornered grouped surface, not four detached cards.
 - **Dividers:** Quiet one-pixel separators create scanning lanes.
 - **Values:** Large tabular figures with muted labels and tertiary notes.
 - **Responsive treatment:** Two columns on medium screens and one column on narrow screens.
 
 ### Cards / Containers
 
-- **Corner Style:** Gently curved (14px), with feature surfaces capped at 16px.
+- **Corner Style:** Square. Structural containers use zero corner radius.
 - **Background:** Surface for major regions and Raised Surface for nested analytical content.
 - **Shadow Strategy:** None at rest. Follow the Layer Before Lift Rule.
 - **Border:** One quiet divider outline is allowed only when it defines a major region.
@@ -183,7 +189,7 @@ The system uses tonal layering as its primary depth mechanism. Surfaces are sepa
 
 ### Data Tracks
 
-- **Style:** Rounded tracks (999px) at 6px to 8px high, with categorical fills and a visible minimum value.
+- **Style:** Square tracks at 6px to 8px high, with categorical fills and a visible minimum value.
 - **State:** Color is always paired with a nearby text label and value.
 
 ### Tables
@@ -204,7 +210,7 @@ The system uses tonal layering as its primary depth mechanism. Surfaces are sepa
 - **Do** use Signal Coral sparingly for primary chart marks and orientation cues.
 - **Do** group related metrics into continuous surfaces with quiet dividers.
 - **Do** preserve tabular figures, explicit units, and text labels alongside every color encoding.
-- **Do** use 14px section corners and 16px feature corners consistently.
+- **Do** use square corners consistently across structural UI.
 - **Do** maintain WCAG 2.2 AA contrast and reduced-motion behavior.
 
 ### Don't:
@@ -213,5 +219,5 @@ The system uses tonal layering as its primary depth mechanism. Surfaces are sepa
 - **Don't** build generic SaaS analytics pages from repeated floating cards and oversized vanity metrics.
 - **Don't** use decorative glassmorphism, gratuitous gradients, or motion that competes with the data.
 - **Don't** reproduce dense monitoring consoles that users must decode before reading their own activity.
-- **Don't** pair wide soft shadows with one-pixel borders or exceed 16px corner radii on cards and sections.
+- **Don't** round panels, controls, tables, metric cells, tracks, or disclosure rows.
 - **Don't** use color as the only way to distinguish a data category.

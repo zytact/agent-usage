@@ -629,15 +629,15 @@ details.raw-details summary {
   .token-row { grid-template-columns: 74px minmax(0, 1fr) 62px; gap: 10px; }
 }
 :root {
-  --bg: oklch(0.105 0.012 24);
-  --canvas: oklch(0.125 0.014 24);
-  --surface: oklch(0.155 0.016 24);
-  --surface-2: oklch(0.19 0.019 24);
-  --line: oklch(0.285 0.025 24);
+  --bg: oklch(0.085 0.003 265);
+  --canvas: oklch(0.105 0.004 265);
+  --surface: oklch(0.14 0.005 265);
+  --surface-2: oklch(0.18 0.006 265);
+  --line: oklch(0.31 0.009 265);
   --line-soft: color-mix(in oklch, var(--line), transparent 42%);
   --ink: oklch(0.96 0.006 24);
-  --muted: oklch(0.73 0.018 24);
-  --soft: oklch(0.59 0.025 24);
+  --muted: oklch(0.73 0.008 265);
+  --soft: oklch(0.59 0.01 265);
   --primary: oklch(0.68 0.21 24);
   --primary-soft: oklch(0.74 0.14 24);
   --accent: oklch(0.79 0.14 82);
@@ -647,24 +647,23 @@ details.raw-details summary {
   --total: oklch(0.68 0.21 24);
   --track: oklch(0.225 0.02 24);
   --notice-bg: color-mix(in oklch, var(--surface), var(--accent) 9%);
-  --radius-control: 8px;
-  --radius-surface: 14px;
-  --radius-feature: 16px;
+  --radius-control: 0;
+  --radius-surface: 0;
+  --radius-feature: 0;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 html { background: var(--bg); }
 body {
   min-width: 320px;
   background:
-    radial-gradient(ellipse 60% 34rem at 50% -12rem, color-mix(in oklch, var(--primary), transparent 72%), transparent),
-    radial-gradient(ellipse 42% 28rem at 88% 8rem, color-mix(in oklch, var(--input), transparent 91%), transparent),
+    radial-gradient(ellipse 34% 22rem at 18% -8rem, color-mix(in oklch, var(--primary), transparent 88%), transparent),
     linear-gradient(180deg, var(--bg), var(--canvas) 32rem, var(--bg));
   font-weight: 450;
   font-feature-settings: "tnum" 1, "cv02" 1, "cv03" 1, "cv04" 1;
 }
 main {
-  width: min(1280px, calc(100% - 40px));
-  padding: 32px 0 56px;
+  width: min(1180px, calc(100% - 48px));
+  padding: 42px 0 64px;
 }
 .hero,
 .summary-grid,
@@ -676,11 +675,11 @@ main {
   border-radius: var(--radius-surface);
 }
 .hero {
-  grid-template-columns: minmax(0, 1.6fr) minmax(310px, 0.8fr);
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.72fr);
   gap: 0;
   overflow: hidden;
   background:
-    radial-gradient(circle at 12% 10%, color-mix(in oklch, var(--primary), transparent 78%), transparent 19rem),
+    radial-gradient(circle at 7% 4%, color-mix(in oklch, var(--primary), transparent 88%), transparent 15rem),
     var(--surface);
 }
 .hero-main,
@@ -688,10 +687,10 @@ main {
 .hero-side div { background: transparent; }
 .hero-main {
   display: flex;
-  min-height: 280px;
+  min-height: 310px;
   flex-direction: column;
   justify-content: end;
-  padding: 38px 40px;
+  padding: 44px 46px;
 }
 .hero-side {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -710,7 +709,7 @@ main {
   display: flex;
   gap: 9px;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 22px;
   color: var(--muted);
   font-size: 0.78rem;
 }
@@ -722,14 +721,14 @@ main {
   content: "";
 }
 h1 {
-  max-width: 12ch;
-  font-size: 3.5rem;
+  max-width: 13ch;
+  font-size: 3.75rem;
   font-weight: 650;
   letter-spacing: -0.035em;
 }
 .hero-copy {
   max-width: 62ch;
-  margin-top: 18px;
+  margin-top: 22px;
   color: color-mix(in oklch, var(--muted), var(--ink) 8%);
   text-wrap: pretty;
 }
@@ -746,7 +745,7 @@ h1 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0;
   overflow: hidden;
-  margin-top: 16px;
+  margin-top: 12px;
   background: var(--surface);
 }
 .summary-grid .metric {
@@ -774,7 +773,7 @@ h1 {
 .activity-strip,
 .data-panel,
 .source-block,
-.footer { margin-top: 16px; }
+.footer { margin-top: 12px; }
 .activity-strip {
   grid-template-columns: 260px minmax(0, 1fr);
   gap: 30px;
@@ -793,20 +792,23 @@ h1 {
 }
 .bars { gap: 5px; height: 88px; }
 .bars span {
-  border-radius: 3px 3px 1px 1px;
+  border-radius: 0;
   background: linear-gradient(180deg, var(--primary-soft), var(--primary));
 }
 .chart-grid {
-  gap: 16px;
-  margin-top: 16px;
-  border: 0;
-  background: transparent;
-}
-.chart-panel {
+  gap: 0;
+  overflow: hidden;
+  margin-top: 12px;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-surface);
+  background: var(--line-soft);
+}
+.chart-panel {
+  border: 0;
+  border-radius: 0;
   background: var(--surface);
 }
+.chart-panel + .chart-panel { border-left: 1px solid var(--line-soft); }
 .chart-panel h2,
 .chart-panel h3 { margin-bottom: 18px; }
 .ring {
@@ -823,7 +825,7 @@ h1 {
 .bar-track,
 .dist-track,
 .stack-track,
-.track { border-radius: 999px; }
+.track { border-radius: 0; }
 .bar-track i,
 .dist-track i,
 .stack-track i,
@@ -833,8 +835,8 @@ h1 {
 .metric-pair,
 .panel,
 .panel-wide {
-  border: 1px solid transparent;
-  border-radius: 10px;
+  border: 0;
+  border-radius: var(--radius-control);
   background: var(--surface-2);
 }
 .dist-card { padding: 16px; }
@@ -855,7 +857,7 @@ h1 {
   background: transparent;
 }
 .daily-viz > section {
-  border-radius: 10px;
+  border-radius: 0;
   background: var(--surface-2);
 }
 details.raw-details {
@@ -887,7 +889,7 @@ details.raw-details summary:focus-visible {
   gap: 0;
   overflow: hidden;
   border: 1px solid var(--line-soft);
-  border-radius: 10px;
+  border-radius: 0;
   background: transparent;
 }
 .request-grid .metric {
@@ -902,6 +904,11 @@ details.raw-details summary:focus-visible {
 .data-table th,
 .data-table td { border-color: var(--line-soft); }
 .data-table thead { background: var(--surface-2); }
+.data-table thead th {
+  padding-top: 11px;
+  padding-bottom: 11px;
+  color: color-mix(in oklch, var(--muted), var(--ink) 10%);
+}
 .data-table tbody tr { transition: background 180ms var(--ease-out); }
 .data-table tbody tr:hover { background: color-mix(in oklch, var(--surface-2), transparent 30%); }
 .source-block {
@@ -911,13 +918,13 @@ details.raw-details summary:focus-visible {
 .source-head {
   grid-template-columns: minmax(0, 1fr) minmax(400px, 0.9fr);
   gap: 0;
-  background: color-mix(in oklch, var(--surface), var(--tone) 4%);
+  background: var(--surface);
 }
 .source-head > div,
 .source-head dl { background: transparent; }
 .source-head > div {
   display: flex;
-  min-height: 150px;
+  min-height: 168px;
   flex-direction: column;
   justify-content: end;
   padding: 26px;
@@ -946,15 +953,16 @@ details.raw-details summary:focus-visible {
   border-color: var(--line-soft);
 }
 .detail-grid {
-  gap: 10px;
-  padding: 10px;
+  gap: 1px;
+  padding: 1px 0 0;
+  border-top: 1px solid var(--line-soft);
   background: color-mix(in oklch, var(--surface), var(--bg) 12%);
 }
-.model-panel { background: color-mix(in oklch, var(--surface-2), var(--tone) 5%); }
+.model-panel { background: var(--surface-2); }
 .model-metrics { gap: 6px; background: transparent; }
 .model-metrics div,
 .effort-metrics div {
-  border-radius: 7px;
+  border-radius: 0;
   background: color-mix(in oklch, var(--surface), var(--surface-2) 44%);
 }
 .effort-block {
@@ -968,7 +976,7 @@ details.raw-details summary:focus-visible {
 }
 .footer code {
   padding: 2px 5px;
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--surface-2);
   color: color-mix(in oklch, var(--muted), var(--ink) 12%);
 }
@@ -988,9 +996,13 @@ details.raw-details summary:focus-visible {
     border-top: 1px solid var(--line-soft);
     border-left: 0;
   }
+  .chart-panel + .chart-panel {
+    border-top: 1px solid var(--line-soft);
+    border-left: 0;
+  }
 }
 @media (max-width: 760px) {
-  main { width: min(100% - 20px, 1280px); padding: 10px 0 30px; }
+  main { width: min(100% - 20px, 1180px); padding: 10px 0 30px; }
   .hero-main { min-height: 235px; padding: 28px 24px; }
   h1 { font-size: 2.6rem; }
   .hero-side { grid-template-columns: repeat(2, minmax(0, 1fr)); }
