@@ -60,7 +60,7 @@ In **full mode**: adds GPT-only request summary, distribution tables (tokens/min
 
 Section keys: `request-summary`, `gpt-only-request-summary`, `daily-usage`, `daily-breakdown`, `source-share`, `model-breakdown`, `token-mix`, `top-repos`, `source-sections`, `source-section-languages`.
 
-The **HTML report** is self-contained (no external resources). It uses a dark "pre-dawn flight deck" design system with cobalt instrumentation and amber attention marks.
+The **HTML report** is self-contained (no external resources). It uses a calm, dark analytical design with layered red-black surfaces and restrained coral signals.
 
 ## Design
 

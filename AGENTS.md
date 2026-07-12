@@ -1,3 +1,5 @@
+# AGENTS.md
+
 At the end of a successful change, run:
 
 ```sh
@@ -12,6 +14,10 @@ to verify them.
 This repo has a domain glossary at `UBIQUITOUS_LANGUAGE.md`.
 
 Read it when working on domain terminology, product concepts, naming, business rules, user-facing language, or when interpreting ambiguous terms. Prefer the canonical terms defined there, and avoid aliases listed as discouraged.
+
+# Impeccable
+
+Use impeccable skill when making UI changes
 
 <!--VITE PLUS START-->
 

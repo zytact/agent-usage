@@ -1,180 +1,217 @@
 ---
-name: Agent Usage Report
-description: A dense local usage dossier for coding-agent activity.
+name: Agent Usage
+description: A calm, precise usage dossier for local coding-agent activity.
 colors:
-  bg: "oklch(0.075 0 0)"
-  surface: "oklch(0.135 0.010 258)"
-  surface-2: "oklch(0.175 0.014 258)"
-  line: "oklch(0.285 0.020 258)"
-  ink: "oklch(0.940 0.010 258)"
-  muted: "oklch(0.720 0.018 258)"
-  soft: "oklch(0.560 0.030 258)"
-  primary: "oklch(0.681 0.132 258.4)"
-  accent: "oklch(0.760 0.150 70)"
-  input: "oklch(0.690 0.130 300)"
-  cache: "oklch(0.760 0.115 205)"
-  output: "oklch(0.780 0.145 82)"
-  total: "oklch(0.681 0.132 258.4)"
+  signal-coral: "oklch(0.68 0.21 24)"
+  signal-coral-soft: "oklch(0.74 0.14 24)"
+  focus-crimson: "oklch(0.72 0.16 5)"
+  cache-cyan: "oklch(0.76 0.12 205)"
+  output-gold: "oklch(0.79 0.14 82)"
+  void: "oklch(0.105 0.012 24)"
+  canvas: "oklch(0.125 0.014 24)"
+  surface: "oklch(0.155 0.016 24)"
+  surface-raised: "oklch(0.19 0.019 24)"
+  divider: "oklch(0.285 0.025 24)"
+  ink: "oklch(0.96 0.006 24)"
+  muted: "oklch(0.73 0.018 24)"
+  soft: "oklch(0.59 0.025 24)"
 typography:
   display:
-    fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
     fontSize: "2.75rem"
-    fontWeight: 800
+    fontWeight: 650
     lineHeight: 1.02
-    letterSpacing: "-0.025em"
+    letterSpacing: "-0.035em"
+  headline:
+    fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontSize: "1.5rem"
+    fontWeight: 650
+    lineHeight: 1.15
+    letterSpacing: "-0.02em"
+  title:
+    fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontSize: "1rem"
+    fontWeight: 650
+    lineHeight: 1.35
   body:
-    fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
-    fontSize: "15px"
-    fontWeight: 500
+    fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontSize: "0.9375rem"
+    fontWeight: 450
     lineHeight: 1.55
   label:
-    fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
-    fontSize: "0.82rem"
-    fontWeight: 700
-    lineHeight: 1.2
+    fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontSize: "0.78rem"
+    fontWeight: 600
+    lineHeight: 1.35
 rounded:
-  none: "0px"
+  control: "8px"
+  surface: "14px"
+  feature: "16px"
+  pill: "999px"
 spacing:
-  sm: "8px"
+  xs: "6px"
+  sm: "10px"
   md: "16px"
   lg: "24px"
-  xl: "30px"
+  xl: "32px"
 components:
-  report-panel:
+  dossier-header:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.none}"
+    rounded: "{rounded.feature}"
+    padding: "32px"
+  metric-strip:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.surface}"
+    padding: "18px 20px"
+  data-surface:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.surface}"
     padding: "24px"
-  metric-cell:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.none}"
-    padding: "18px"
+  data-track:
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.signal-coral}"
+    rounded: "{rounded.pill}"
+    height: "7px"
 ---
 
-# Design System: Agent Usage Report
+# Design System: Agent Usage
 
-## 1. Overview
+## Overview
 
-**Creative North Star: "Pre-dawn flight deck"**
+**Creative North Star: "Precision Observatory"**
 
-This system is a tactical report surface for local agent activity. It uses a near-black architectural ground, cobalt instrumentation, and amber attention marks to make dense data readable without becoming a terminal costume.
+The usage dossier should feel like a carefully tuned instrument viewed in a quiet workspace. Its near-black, red-tinted canvas reduces glare while the restrained coral signal color creates moments of energy and orientation. The composition borrows Raycast's confidence, atmospheric depth, and controlled polish without copying its marketing-page scale.
 
-The layout is compact and segmented. Panels feel like joined pieces of one instrument board, divided by fine tonal lines instead of floating cards or decorative shadows.
+Information remains dense, but never cramped. Large totals establish the overall shape, compact labels support comparison, and layered surfaces group related data without turning every value into a floating card. The system explicitly rejects terminal-themed dashboards, generic SaaS analytics grids, decorative glassmorphism, and dense monitoring-console aesthetics.
 
 **Key Characteristics:**
 
-- Dense but scannable.
-- Dark, precise, and low glare.
-- Cobalt primary with amber emphasis.
-- Flat at rest, with depth created through tonal layers.
-- Product UI first, visual identity second.
+- Precise numerical hierarchy with tabular figures
+- Red-tinted near-black layers with one coral signal color
+- Rounded, continuous surfaces instead of sharp terminal grids
+- Compact analytical density with generous section rhythm
+- State motion only, with reduced-motion parity
 
-## 2. Colors
+## Colors
 
-The palette is restrained: pure near-black base, cool cobalt primary, amber accent, and a small semantic token set for token buckets.
+The palette is dark and restrained, with coral used as a deliberate signal and supporting data hues reserved for categorical distinction.
 
 ### Primary
 
-- **Cobalt Instrument Glow** (`oklch(0.681 0.132 258.4)`): primary trace color for report identity, total tokens, and core emphasis.
+- **Signal Coral:** The product signature, used for primary chart marks, current emphasis, and small orientation cues.
+- **Soft Signal Coral:** A quieter companion for secondary chart marks and tinted information surfaces.
 
 ### Secondary
 
-- **Amber Attention Mark** (`oklch(0.760 0.150 70)`): used sparingly for range labels, warnings, and source context.
-
-### Tertiary
-
-- **Input Violet** (`oklch(0.690 0.130 300)`): input token bars only.
-- **Cache Cyan** (`oklch(0.760 0.115 205)`): cached token bars only.
-- **Output Ochre** (`oklch(0.780 0.145 82)`): output token bars only.
+- **Focus Crimson:** Input and reasoning data, plus visible keyboard focus where interactive controls exist.
+- **Cache Cyan:** Cached-token data and cache-related categorical marks.
+- **Output Gold:** Output-token data and attention values that require a distinct non-error hue.
 
 ### Neutral
 
-- **Black Deck** (`oklch(0.075 0 0)`): page background.
-- **Panel Steel** (`oklch(0.135 0.010 258)`): primary panel surface.
-- **Raised Panel Steel** (`oklch(0.175 0.014 258)`): nested detail panels.
-- **Instrument Line** (`oklch(0.285 0.020 258)`): dividers and panel borders.
-- **Readable Ink** (`oklch(0.940 0.010 258)`): body text and primary numbers.
-- **Muted Telemetry** (`oklch(0.720 0.018 258)`): secondary labels and explanatory copy.
+- **Void:** The outermost browser background.
+- **Canvas:** The report canvas and atmospheric backdrop.
+- **Surface:** Primary grouped content regions.
+- **Raised Surface:** Nested analytical regions and table headers.
+- **Divider:** Structural separators and quiet outlines.
+- **Ink:** Primary text and important values.
+- **Muted:** Supporting labels and explanatory text.
+- **Soft:** Tertiary metadata that remains legible at AA contrast.
 
 ### Named Rules
 
-**The No Purple SaaS Rule.** Purple gradients are prohibited. Cobalt is a functional instrument color, not a gradient decoration.
+**The Signal Rarity Rule.** Signal Coral should occupy less than 10% of the visible surface. Its scarcity gives it meaning.
 
-**The One Accent Rule.** Amber appears only where the eye needs to land. If it covers more than a few labels or badges, the report is too loud.
+**The Data Owns Color Rule.** Supporting hues distinguish data categories. They do not decorate headings, containers, or prose.
 
-## 3. Typography
+## Typography
 
-**Display Font:** system UI sans stack.
-**Body Font:** system UI sans stack.
-**Label/Mono Font:** system UI sans stack with tabular numerals where data alignment matters.
+**Display Font:** Inter (with the native system sans stack)
+**Body Font:** Inter (with the native system sans stack)
+**Label/Mono Font:** The same sans family with tabular numeral features for data
 
-**Character:** Familiar product typography. No terminal face, no novelty mono, no display drama inside data panels.
+**Character:** One disciplined sans family keeps the standalone report fast and self-contained. Weight, size, spacing, and tabular numerals create hierarchy without a decorative display face.
 
 ### Hierarchy
 
-- **Display** (800, 2.75rem, 1.02): report title only.
-- **Headline** (800, 2rem, 1.05): source active-time figures.
-- **Title** (750, 1rem, 1.25): panel titles and section labels.
-- **Body** (500, 15px, 1.55): report descriptions and explanatory copy, capped around 72ch.
-- **Label** (700, 0.82rem, 1.2): metric labels, source labels, and compact UI captions.
+- **Display** (650, 2.75rem, 1.02): The dossier title only.
+- **Headline** (650, 1.5rem, 1.15): Source names and major analytical sections.
+- **Title** (650, 1rem, 1.35): Panel and visualization titles.
+- **Body** (450, 0.9375rem, 1.55): Explanatory content, capped at 72ch where prose is continuous.
+- **Label** (600, 0.78rem, 1.35): Metric labels, table headers, and metadata. Sentence case is mandatory.
 
 ### Named Rules
 
-**The No Terminal Type Rule.** Do not use monospace as the primary voice. Tabular numerals are allowed for alignment, but the report must not look like an ANSI terminal dump.
+**The Numerical Cadence Rule.** Every comparable numeric value uses tabular figures and a consistent unit treatment.
 
-## 4. Elevation
+**The One Family Rule.** Do not introduce a display face or monospace styling to manufacture technical character.
 
-The report is flat by default. Depth comes from tonal layering, 1px boundaries, and joined grid seams. Shadows are intentionally absent so the dashboard feels local, crisp, and printable.
+## Elevation
+
+The system uses tonal layering as its primary depth mechanism. Surfaces are separated through lightness, restrained outlines, and local atmospheric color. Shadows are absent from ordinary containers and reserved for transient interactive overlays if those are introduced later.
 
 ### Named Rules
 
-**The Joined Surface Rule.** Related data should connect edge to edge with shared dividers. Do not scatter unrelated floating cards across the canvas.
+**The Layer Before Lift Rule.** Use tonal separation before shadow. A static report section never floats above the canvas.
 
-## 5. Components
+## Components
 
-### Buttons
+### Dossier Header
 
-No persistent buttons are part of the current report. If added later, use square or near-square corners, cobalt fill for the primary action, readable white text, and a visible focus outline.
+- **Shape:** A composed feature surface with gently curved corners (16px).
+- **Background:** A dark red surface with localized coral atmosphere, never glass blur.
+- **Structure:** Title and purpose on the left, compact report context on the right. Context cells share one continuous container.
+- **Responsive treatment:** Collapse to one column and keep context in a two-column strip on narrow screens.
 
-### Chips
+### Metric Strip
 
-Use filled or bordered chips only for filters or source state. Keep labels short and avoid saturated inactive states.
+- **Shape:** One continuous grouped surface (14px), not four detached cards.
+- **Dividers:** Quiet one-pixel separators create scanning lanes.
+- **Values:** Large tabular figures with muted labels and tertiary notes.
+- **Responsive treatment:** Two columns on medium screens and one column on narrow screens.
 
 ### Cards / Containers
 
-- **Corner Style:** square, no rounding (`0px`).
-- **Background:** panel steel for primary sections, raised panel steel for detail cells.
-- **Shadow Strategy:** none.
-- **Border:** 1px instrument line.
-- **Internal Padding:** 18px for metric cells, 22px to 24px for panels, 30px for the report hero.
+- **Corner Style:** Gently curved (14px), with feature surfaces capped at 16px.
+- **Background:** Surface for major regions and Raised Surface for nested analytical content.
+- **Shadow Strategy:** None at rest. Follow the Layer Before Lift Rule.
+- **Border:** One quiet divider outline is allowed only when it defines a major region.
+- **Internal Padding:** 16px for dense units, 24px for major sections, and 32px for the dossier header.
 
-### Inputs / Fields
+### Data Tracks
 
-No input fields are part of the current static report. If added later, use panel steel background, instrument line border, cobalt focus ring, and readable placeholder text.
+- **Style:** Rounded tracks (999px) at 6px to 8px high, with categorical fills and a visible minimum value.
+- **State:** Color is always paired with a nearby text label and value.
 
-### Navigation
+### Tables
 
-No navigation is part of the static report. Repeated source sections serve as the navigation rhythm: Combined, Codex, Claude Code when enabled, and Pi.
+- **Style:** Open rows with horizontal separators, a Raised Surface header, and tabular numeric columns.
+- **Density:** Standard rows use 10px vertical padding; dense diagnostic rows use 8px.
+- **Responsive treatment:** Tables remain semantically intact and gain horizontal scrolling when columns cannot collapse safely.
 
-### Token Bars
+### Disclosure Rows
 
-Token bars are the signature component. Each row has a fixed label column, a proportional track, and a tabular numeric value. Input, cached, output, and total always use their assigned colors.
+- **Style:** Native details and summary elements with a generous focus target and a clear hover or focus-visible surface shift.
+- **Motion:** State feedback lasts 180ms and becomes instant under reduced-motion preferences.
 
-## 6. Do's and Don'ts
+## Do's and Don'ts
 
 ### Do:
 
-- **Do** keep the report dense, with clear seams and compact rank lists.
-- **Do** use OKLCH tokens directly in CSS.
-- **Do** reserve amber for labels and attention marks.
-- **Do** keep estimates honest: missing pricing data must read as `n/a`.
-- **Do** keep the HTML standalone, with no external fonts, scripts, or assets.
+- **Do** use Signal Coral sparingly for primary chart marks and orientation cues.
+- **Do** group related metrics into continuous surfaces with quiet dividers.
+- **Do** preserve tabular figures, explicit units, and text labels alongside every color encoding.
+- **Do** use 14px section corners and 16px feature corners consistently.
+- **Do** maintain WCAG 2.2 AA contrast and reduced-motion behavior.
 
 ### Don't:
 
-- **Don't** use generic SaaS card grids, purple gradients, decorative glass panels, terminal-type novelty, console/ANSI clones, or overly playful marketing visuals.
-- **Don't** use decorative shadows or frosted panels.
-- **Don't** add rounded 32px cards or pill-shaped report panels.
-- **Don't** use gradient text.
-- **Don't** let long model names overflow their container.
+- **Don't** create terminal-themed dashboards with sharp neon-on-black styling, faux command prompts, scan lines, or hacker aesthetics.
+- **Don't** build generic SaaS analytics pages from repeated floating cards and oversized vanity metrics.
+- **Don't** use decorative glassmorphism, gratuitous gradients, or motion that competes with the data.
+- **Don't** reproduce dense monitoring consoles that users must decode before reading their own activity.
+- **Don't** pair wide soft shadows with one-pixel borders or exceed 16px corner radii on cards and sections.
+- **Don't** use color as the only way to distinguish a data category.

@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-12T09:00:00.000Z",
+  "title": "Design System: Agent Usage",
+  "extensions": {
+    "colorMeta": {
+      "signal-coral": {
+        "role": "primary",
+        "displayName": "Signal Coral",
+        "canonical": "oklch(0.68 0.21 24)",
+        "tonalRamp": [
+          "oklch(0.15 0.05 24)",
+          "oklch(0.25 0.08 24)",
+          "oklch(0.36 0.11 24)",
+          "oklch(0.48 0.15 24)",
+          "oklch(0.60 0.19 24)",
+          "oklch(0.70 0.18 24)",
+          "oklch(0.82 0.12 24)",
+          "oklch(0.94 0.04 24)"
+        ]
+      },
+      "focus-crimson": {
+        "role": "secondary",
+        "displayName": "Focus Crimson",
+        "canonical": "oklch(0.72 0.16 5)",
+        "tonalRamp": [
+          "oklch(0.15 0.04 5)",
+          "oklch(0.25 0.07 5)",
+          "oklch(0.36 0.10 5)",
+          "oklch(0.48 0.13 5)",
+          "oklch(0.60 0.16 5)",
+          "oklch(0.72 0.16 5)",
+          "oklch(0.84 0.10 5)",
+          "oklch(0.95 0.03 5)"
+        ]
+      },
+      "void": {
+        "role": "neutral",
+        "displayName": "Void",
+        "canonical": "oklch(0.105 0.012 24)",
+        "tonalRamp": [
+          "oklch(0.10 0.012 24)",
+          "oklch(0.18 0.014 24)",
+          "oklch(0.30 0.014 24)",
+          "oklch(0.42 0.014 24)",
+          "oklch(0.56 0.012 24)",
+          "oklch(0.70 0.010 24)",
+          "oklch(0.84 0.008 24)",
+          "oklch(0.96 0.004 24)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Quiet Surface",
+        "canonical": "oklch(0.155 0.016 24)",
+        "tonalRamp": [
+          "oklch(0.11 0.012 24)",
+          "oklch(0.17 0.016 24)",
+          "oklch(0.28 0.018 24)",
+          "oklch(0.40 0.018 24)",
+          "oklch(0.54 0.016 24)",
+          "oklch(0.68 0.012 24)",
+          "oklch(0.82 0.008 24)",
+          "oklch(0.95 0.004 24)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Dossier Display", "purpose": "The usage dossier title only." },
+      "body": {
+        "displayName": "Interface Body",
+        "purpose": "Explanations, labels, and dense analytical content."
+      },
+      "label": {
+        "displayName": "Data Label",
+        "purpose": "Metric labels and metadata with tabular numeric companions."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "state",
+        "value": "180ms cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Hover, focus, and disclosure feedback only."
+      }
+    ],
+    "breakpoints": [
+      { "name": "compact", "value": "760px" },
+      { "name": "medium", "value": "980px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Dossier Header",
+      "kind": "custom",
+      "refersTo": "dossier-header",
+      "description": "The report identity and current scope in one feature surface.",
+      "html": "<header class=\"ds-header\"><span class=\"ds-signal\"></span><div><small>Local usage dossier</small><h2>Agent usage</h2><p>Measured activity across local coding-agent sources.</p></div></header>",
+      "css": ".ds-header{display:flex;gap:16px;align-items:flex-start;padding:32px;border:1px solid oklch(.285 .025 24);border-radius:16px;background:oklch(.155 .016 24);color:oklch(.96 .006 24);font-family:Inter,ui-sans-serif,system-ui}.ds-signal{width:10px;height:10px;margin-top:7px;border-radius:50%;background:oklch(.68 .21 24)}.ds-header small,.ds-header p{color:oklch(.73 .018 24)}.ds-header h2{margin:4px 0;font-size:28px;letter-spacing:-.03em}.ds-header p{margin:0}"
+    },
+    {
+      "name": "Metric Strip",
+      "kind": "custom",
+      "refersTo": "metric-strip",
+      "description": "A continuous row for comparable headline totals.",
+      "html": "<dl class=\"ds-metrics\"><div><dt>Active time</dt><dd>3h 42m</dd></div><div><dt>Requests</dt><dd>284</dd></div></dl>",
+      "css": ".ds-metrics{display:flex;margin:0;border:1px solid oklch(.285 .025 24);border-radius:14px;background:oklch(.155 .016 24);color:oklch(.96 .006 24);font-family:Inter,ui-sans-serif,system-ui;overflow:hidden}.ds-metrics div{flex:1;padding:18px 20px}.ds-metrics div+div{border-left:1px solid oklch(.285 .025 24)}.ds-metrics dt{color:oklch(.73 .018 24);font-size:12px}.ds-metrics dd{margin:4px 0 0;font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}"
+    },
+    {
+      "name": "Data Surface",
+      "kind": "card",
+      "refersTo": "data-surface",
+      "description": "A major analytical region with tonal rather than shadow elevation.",
+      "html": "<section class=\"ds-surface\"><h3>Model breakdown</h3><p>Requests and tokens grouped by model.</p></section>",
+      "css": ".ds-surface{padding:24px;border:1px solid oklch(.285 .025 24);border-radius:14px;background:oklch(.155 .016 24);color:oklch(.96 .006 24);font-family:Inter,ui-sans-serif,system-ui}.ds-surface h3{margin:0 0 4px;font-size:16px}.ds-surface p{margin:0;color:oklch(.73 .018 24)}"
+    },
+    {
+      "name": "Data Track",
+      "kind": "custom",
+      "refersTo": "data-track",
+      "description": "A labeled categorical proportion with redundant text encoding.",
+      "html": "<div class=\"ds-track-row\"><span>Codex</span><strong>68%</strong><div class=\"ds-track\"><i></i></div></div>",
+      "css": ".ds-track-row{display:grid;grid-template-columns:1fr auto;gap:8px;color:oklch(.96 .006 24);font-family:Inter,ui-sans-serif,system-ui}.ds-track-row span{color:oklch(.73 .018 24)}.ds-track-row strong{font-variant-numeric:tabular-nums}.ds-track{grid-column:1/-1;height:7px;overflow:hidden;border-radius:999px;background:oklch(.19 .019 24)}.ds-track i{display:block;width:68%;height:100%;border-radius:inherit;background:oklch(.68 .21 24)}"
+    },
+    {
+      "name": "Disclosure Row",
+      "kind": "custom",
+      "description": "A native progressive disclosure for raw diagnostic data.",
+      "html": "<details class=\"ds-disclosure\"><summary>Show daily rows</summary><p>Detailed data appears here.</p></details>",
+      "css": ".ds-disclosure{padding:10px 12px;border-radius:8px;color:oklch(.96 .006 24);font-family:Inter,ui-sans-serif,system-ui;transition:background 180ms cubic-bezier(.22,1,.36,1)}.ds-disclosure:hover{background:oklch(.19 .019 24)}.ds-disclosure summary{cursor:pointer;color:oklch(.73 .018 24);font-weight:600}.ds-disclosure summary:focus-visible{outline:2px solid oklch(.72 .16 5);outline-offset:3px}.ds-disclosure p{color:oklch(.73 .018 24)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Precision Observatory",
+    "overview": "The usage dossier should feel like a carefully tuned instrument viewed in a quiet workspace. Its near-black, red-tinted canvas reduces glare while the restrained coral signal color creates moments of energy and orientation. Information remains dense, but never cramped.",
+    "keyCharacteristics": [
+      "Precise numerical hierarchy with tabular figures",
+      "Red-tinted near-black layers with one coral signal color",
+      "Rounded, continuous surfaces instead of sharp terminal grids",
+      "Compact analytical density with generous section rhythm",
+      "State motion only, with reduced-motion parity"
+    ],
+    "rules": [
+      {
+        "name": "The Signal Rarity Rule",
+        "body": "Signal Coral should occupy less than 10% of the visible surface. Its scarcity gives it meaning.",
+        "section": "colors"
+      },
+      {
+        "name": "The Data Owns Color Rule",
+        "body": "Supporting hues distinguish data categories. They do not decorate headings, containers, or prose.",
+        "section": "colors"
+      },
+      {
+        "name": "The Numerical Cadence Rule",
+        "body": "Every comparable numeric value uses tabular figures and a consistent unit treatment.",
+        "section": "typography"
+      },
+      {
+        "name": "The Layer Before Lift Rule",
+        "body": "Use tonal separation before shadow. A static report section never floats above the canvas.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use Signal Coral sparingly for primary chart marks and orientation cues.",
+      "Do group related metrics into continuous surfaces with quiet dividers.",
+      "Do preserve tabular figures, explicit units, and text labels alongside every color encoding.",
+      "Do use 14px section corners and 16px feature corners consistently.",
+      "Do maintain WCAG 2.2 AA contrast and reduced-motion behavior."
+    ],
+    "donts": [
+      "Don't create terminal-themed dashboards with sharp neon-on-black styling, faux command prompts, scan lines, or hacker aesthetics.",
+      "Don't build generic SaaS analytics pages from repeated floating cards and oversized vanity metrics.",
+      "Don't use decorative glassmorphism, gratuitous gradients, or motion that competes with the data.",
+      "Don't reproduce dense monitoring consoles that users must decode before reading their own activity.",
+      "Don't pair wide soft shadows with one-pixel borders or exceed 16px corner radii on cards and sections.",
+      "Don't use color as the only way to distinguish a data category."
+    ]
+  }
+}

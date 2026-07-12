@@ -6,28 +6,31 @@ product
 
 ## Users
 
-Local power users and developers reviewing their own AI coding-agent usage from local session history. They are in a self-audit workflow: checking time spent, token volume, model mix, costs, repositories, languages, and recent activity without leaving the machine.
+Developers who use multiple coding-agent sources and want a trustworthy local view of how their time, requests, tokens, models, repositories, and estimated costs are distributed. They inspect the usage dossier to understand patterns quickly, then move into deeper diagnostics when something deserves attention.
 
 ## Product Purpose
 
-`agent-usage` reads local Codex, Pi, OpenCode and optional Claude Code JSONL session stores, aggregates activity by rolling time range, and presents a usage dashboard. Success means the report quickly answers: how much agent work happened, where it happened, which models drove it, what it likely cost, and what changed recently.
+Agent Usage turns local coding-agent session history into a coherent usage dossier. It should make the overall shape of activity legible at a glance while preserving enough detail for technical investigation. Success means users can orient themselves quickly, compare sources and models accurately, and leave with a clearer understanding of their working habits and resource use.
 
 ## Brand Personality
 
-Tactical, precise, dense. The interface should feel like an analyst console refined for readability, not a terminal skin or a SaaS template.
+Precise, calm, technical, and quietly engaging. The product should feel expertly instrumented without becoming clinical, sterile, or visually monotonous.
 
 ## Anti-references
 
-Avoid generic SaaS card grids, purple gradients, decorative glass panels, terminal-type novelty, console/ANSI clones, and overly playful marketing visuals.
+- Terminal-themed dashboards with sharp neon-on-black styling, faux command prompts, scan lines, or hacker aesthetics.
+- Generic SaaS analytics pages made from repeated floating cards and oversized vanity metrics.
+- Decorative glassmorphism, gratuitous gradients, or motion that competes with the data.
+- Dense monitoring consoles that require users to decode the interface before reading their own activity.
 
 ## Design Principles
 
-- Prioritize scan speed: key answers visible immediately, supporting detail close by.
-- Preserve density with hierarchy: compact does not mean cramped.
-- Show provenance: distinguish Codex, Pi, Claude, combined totals, and local data sources clearly.
-- Make estimates honest: cost and pricing data must read as estimates, with missing data handled plainly.
-- Use polish to reduce friction, not to decorate.
+1. Make orientation immediate. Scope, sources, and the most decision-relevant totals should be clear before detailed analysis begins.
+2. Give every visual distinction a data purpose. Color, weight, and motion must clarify category, hierarchy, or state.
+3. Balance density with calm. Preserve diagnostic detail while using rhythm, grouping, and progressive disclosure to prevent overload.
+4. Reward close inspection. Small moments of polish and responsive feedback should make the dossier pleasant without distracting from the task.
+5. Preserve analytical trust. Labels, comparisons, units, and visual encodings must remain consistent and unambiguous.
 
 ## Accessibility & Inclusion
 
-No specific accessibility requirements requested. Still favor readable contrast, semantic HTML, keyboard-safe controls where present, and reduced-motion-safe CSS.
+Target WCAG 2.2 AA. Maintain keyboard-readable document structure, visible focus states for interactive controls, text and data contrast that meets AA thresholds, redundant cues beyond color, color-blind-safe category distinctions, responsive layouts, and reduced-motion alternatives.
