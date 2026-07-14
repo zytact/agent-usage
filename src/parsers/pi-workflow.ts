@@ -13,6 +13,13 @@ type WorkflowAgent = {
   tokens: number;
 };
 
+type WorkflowUsageState = {
+  effort: string;
+  model: string;
+};
+
+const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
+
 export async function parsePiWorkflowFile(path: string): Promise<ParsedSession | undefined> {
   try {
     return parsePiWorkflowText(await readFile(path, "utf8"), path);
@@ -48,10 +55,11 @@ export function parsePiWorkflowText(
 
   const repo = workflowRepo(path);
   const requests: ParsedSession["requests"] = [];
-  const model = uniqueUsageModel(agents);
+  const usageState = aggregateUsageState(agents);
   if (tokens.total > 0) {
     addRequest(requests, {
-      model,
+      effort: usageState.effort,
+      model: usageState.model,
       originator: ORIGINATOR,
       repo,
       sessionId: runId,
@@ -61,24 +69,24 @@ export function parsePiWorkflowText(
     });
   }
   const activeSeconds = Math.max(0, (end.getTime() - start.getTime()) / 1000);
-  const modelKey = model ?? "unknown";
   const modelTokens = tokens.total
-    ? { [modelKey]: { ...tokens, billableOutput: tokens.output } }
+    ? { [usageState.model]: { ...tokens, billableOutput: tokens.output } }
     : {};
   const day = end.toISOString().slice(0, 10);
+  const state = `${usageState.model}::${usageState.effort}`;
 
   return {
     activeSeconds,
     assistantTurns: requests.length,
     cacheWriteKnown: true,
-    dayModelActiveSeconds: { [day]: { [modelKey]: activeSeconds } },
-    dayStateActiveSeconds: { [day]: { [`${modelKey}::unknown`]: activeSeconds } },
-    efforts: {},
+    dayModelActiveSeconds: { [day]: { [usageState.model]: activeSeconds } },
+    dayStateActiveSeconds: { [day]: { [state]: activeSeconds } },
+    efforts: tokens.total ? { [usageState.effort]: 1 } : {},
     end,
     languages: {},
-    modelActiveSeconds: { [modelKey]: activeSeconds },
+    modelActiveSeconds: { [usageState.model]: activeSeconds },
     modelTokens,
-    models: tokens.total ? { [modelKey]: 1 } : {},
+    models: tokens.total ? { [usageState.model]: 1 } : {},
     originator: ORIGINATOR,
     path,
     repo,
@@ -88,7 +96,7 @@ export function parsePiWorkflowText(
     source: "pi",
     sourceLabel: sessionLabel("pi", ORIGINATOR),
     start,
-    stateActiveSeconds: { [`${modelKey}::unknown`]: activeSeconds },
+    stateActiveSeconds: { [state]: activeSeconds },
     tokens,
     userTurns: 0,
     workflowRunId: runId,
@@ -115,18 +123,20 @@ export function removePersistedWorkflowUsage(
     workflow.activeSeconds - matches.reduce((sum, session) => sum + session.activeSeconds, 0),
   );
   const day = workflow.end.toISOString().slice(0, 10);
+  const state = `${request.model}::${request.effort}`;
   return {
     ...workflow,
     activeSeconds,
     assistantTurns: 1,
-    dayModelActiveSeconds: { [day]: { unknown: activeSeconds } },
-    dayStateActiveSeconds: { [day]: { "unknown::unknown": activeSeconds } },
-    modelActiveSeconds: { unknown: activeSeconds },
-    modelTokens: { unknown: { ...remainder, billableOutput: remainder.output } },
-    models: { unknown: 1 },
+    dayModelActiveSeconds: { [day]: { [request.model]: activeSeconds } },
+    dayStateActiveSeconds: { [day]: { [state]: activeSeconds } },
+    efforts: { [request.effort]: 1 },
+    modelActiveSeconds: { [request.model]: activeSeconds },
+    modelTokens: { [request.model]: { ...remainder, billableOutput: remainder.output } },
+    models: { [request.model]: 1 },
     requestCount: 1,
     requests: [request],
-    stateActiveSeconds: { "unknown::unknown": activeSeconds },
+    stateActiveSeconds: { [state]: activeSeconds },
     tokens: remainder,
   };
 }
@@ -169,9 +179,31 @@ function isNonnegativeFinite(value: unknown): boolean {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
-function uniqueUsageModel(agents: WorkflowAgent[]): string | undefined {
-  const models = new Set(agents.filter((agent) => agent.tokens > 0).map((agent) => agent.model));
-  return models.size === 1 ? [...models][0] : undefined;
+function aggregateUsageState(agents: WorkflowAgent[]): WorkflowUsageState {
+  const states = agents
+    .filter((agent) => agent.tokens > 0)
+    .map((agent) => parseModelSpec(agent.model));
+  return {
+    effort: uniqueValue(states.map((state) => state.effort)) ?? "mixed",
+    model: uniqueValue(states.map((state) => state.model)) ?? "mixed",
+  };
+}
+
+function parseModelSpec(spec: string | undefined): WorkflowUsageState {
+  if (!spec) return { effort: "unknown", model: "unknown" };
+
+  const separator = spec.lastIndexOf(":");
+  const suffix = separator >= 0 ? spec.slice(separator + 1).toLowerCase() : undefined;
+  const effort = suffix && THINKING_LEVELS.has(suffix) ? suffix : "unknown";
+  const modelSpec = effort === "unknown" ? spec : spec.slice(0, separator);
+  const providerSeparator = modelSpec.indexOf("/");
+  const model = providerSeparator >= 0 ? modelSpec.slice(providerSeparator + 1) : modelSpec;
+  return { effort, model: model || "unknown" };
+}
+
+function uniqueValue(values: string[]): string | undefined {
+  const unique = new Set(values);
+  return unique.size === 1 ? [...unique][0] : undefined;
 }
 
 function workflowRepo(path: string): string {

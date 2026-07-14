@@ -15,7 +15,7 @@ const completed = {
       id: 1,
       label: "one",
       status: "done",
-      model: "provider/model",
+      model: "openai-codex/gpt-5.6-terra:medium",
       tokens: 100,
       startedAt: "2026-06-14T10:00:00.000Z",
       endedAt: "2026-06-14T10:01:00.000Z",
@@ -24,7 +24,7 @@ const completed = {
       id: 2,
       label: "two",
       status: "done",
-      model: "provider/model",
+      model: "openai-codex/gpt-5.6-terra:medium",
       tokens: 70,
       startedAt: "2026-06-14T10:01:00.000Z",
       endedAt: "2026-06-14T10:02:00.000Z",
@@ -47,7 +47,43 @@ describe("pi-dynamic-workflows parsing", () => {
       tokens: { cacheWrite: 0, cached: 50, input: 100, output: 20, reasoning: 0, total: 170 },
       workflowRunId: "audit-abc123",
     });
-    expect(session?.requests[0]?.model).toBe("provider/model");
+    expect(session?.requests[0]).toMatchObject({ effort: "medium", model: "gpt-5.6-terra" });
+    expect(session?.efforts).toEqual({ medium: 1 });
+    expect(session?.stateActiveSeconds).toEqual({ "gpt-5.6-terra::medium": 120 });
+  });
+
+  it("labels heterogeneous agent models and efforts as mixed instead of unknown", () => {
+    const session = parsePiWorkflowText(
+      JSON.stringify({
+        ...completed,
+        agents: [
+          { ...completed.agents[0], model: "openai-codex/gpt-5.6-sol:low" },
+          { ...completed.agents[1], model: "opencode/deepseek-v4-flash-free" },
+        ],
+      }),
+      path,
+    );
+
+    expect(session?.requests[0]).toMatchObject({ effort: "mixed", model: "mixed" });
+    expect(session?.stateActiveSeconds).toEqual({ "mixed::mixed": 120 });
+  });
+
+  it("preserves non-effort model suffixes", () => {
+    const session = parsePiWorkflowText(
+      JSON.stringify({
+        ...completed,
+        agents: completed.agents.map((agent) => ({
+          ...agent,
+          model: "openrouter/deepseek/deepseek-chat:free",
+        })),
+      }),
+      path,
+    );
+
+    expect(session?.requests[0]).toMatchObject({
+      effort: "unknown",
+      model: "deepseek/deepseek-chat:free",
+    });
   });
 
   it.each(["running", "paused", "failed"])("skips %s records", (status) => {
@@ -104,6 +140,8 @@ describe("pi-dynamic-workflows parsing", () => {
       total: 80,
     });
     expect(remainder?.requestCount).toBe(1);
+    expect(remainder?.requests[0]).toMatchObject({ effort: "medium", model: "gpt-5.6-terra" });
+    expect(remainder?.stateActiveSeconds).toEqual({ "gpt-5.6-terra::medium": 60 });
   });
 });
 
