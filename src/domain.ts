@@ -30,6 +30,13 @@ export type SessionRequest = {
   uncachedInput: number;
 };
 
+export type WorkflowAgentUsage = {
+  effort: string;
+  label: string;
+  model: string;
+  total: number;
+};
+
 export type ParsedSession = {
   activeSeconds: number;
   assistantTurns: number;
@@ -56,6 +63,7 @@ export type ParsedSession = {
   tokens: TokenUsage;
   userTurns: number;
   workflowAgentLabel?: string;
+  workflowAgentUsage?: WorkflowAgentUsage[];
   workflowRunId?: string;
 };
 

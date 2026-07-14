@@ -11,6 +11,7 @@ import {
   estimateStatsTotalCost,
   modelEffortBreakdowns,
   type PricingInfo,
+  workflowModelAttributions,
 } from "../src/report-data.js";
 import { makeRequest, makeSession } from "./fixtures.js";
 
@@ -157,6 +158,27 @@ describe("buildReport", () => {
     const cost = estimateStatsTotalCost(report.combined.stats, pricing);
 
     expect(cost).toBeGreaterThan(0);
+  });
+
+  it("reports exact agent totals separately from mixed workflow usage", () => {
+    const mixedRequest = makeRequest({ effort: "mixed", model: "mixed usage", total: 170 });
+    const session = makeSession({
+      requests: [mixedRequest],
+      workflowAgentUsage: [
+        { effort: "low", label: "finder", model: "gpt-5.6-sol", total: 100 },
+        { effort: "unknown", label: "reviewer", model: "deepseek-v4-flash-free", total: 70 },
+      ],
+    });
+
+    expect(workflowModelAttributions([session])).toEqual([
+      { effort: "low", model: "gpt-5.6-sol", pct: (100 / 170) * 100, total: 100 },
+      {
+        effort: "unknown",
+        model: "deepseek-v4-flash-free",
+        pct: (70 / 170) * 100,
+        total: 70,
+      },
+    ]);
   });
 
   it("builds normalized effort breakdowns per model", () => {

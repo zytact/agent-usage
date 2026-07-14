@@ -64,8 +64,12 @@ describe("pi-dynamic-workflows parsing", () => {
       path,
     );
 
-    expect(session?.requests[0]).toMatchObject({ effort: "mixed", model: "mixed" });
-    expect(session?.stateActiveSeconds).toEqual({ "mixed::mixed": 120 });
+    expect(session?.requests[0]).toMatchObject({ effort: "mixed", model: "mixed usage" });
+    expect(session?.stateActiveSeconds).toEqual({ "mixed usage::mixed": 120 });
+    expect(session?.workflowAgentUsage).toEqual([
+      { effort: "low", label: "one", model: "gpt-5.6-sol", total: 100 },
+      { effort: "unknown", label: "two", model: "deepseek-v4-flash-free", total: 70 },
+    ]);
   });
 
   it("preserves non-effort model suffixes", () => {
@@ -142,6 +146,9 @@ describe("pi-dynamic-workflows parsing", () => {
     expect(remainder?.requestCount).toBe(1);
     expect(remainder?.requests[0]).toMatchObject({ effort: "medium", model: "gpt-5.6-terra" });
     expect(remainder?.stateActiveSeconds).toEqual({ "gpt-5.6-terra::medium": 60 });
+    expect(remainder?.workflowAgentUsage).toEqual([
+      { effort: "medium", label: "two", model: "gpt-5.6-terra", total: 70 },
+    ]);
   });
 });
 

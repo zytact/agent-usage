@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 
-import type { ParsedSession, TokenUsage } from "../domain.js";
+import type { ParsedSession, TokenUsage, WorkflowAgentUsage } from "../domain.js";
 import { addRequest, sessionLabel } from "../ingest-shared.js";
 import { asNumber, asString, isRecord } from "./shared.js";
 
@@ -99,6 +99,7 @@ export function parsePiWorkflowText(
     stateActiveSeconds: { [state]: activeSeconds },
     tokens,
     userTurns: 0,
+    workflowAgentUsage: agentUsage(agents),
     workflowRunId: runId,
   };
 }
@@ -124,6 +125,7 @@ export function removePersistedWorkflowUsage(
   );
   const day = workflow.end.toISOString().slice(0, 10);
   const state = `${request.model}::${request.effort}`;
+  const persistedLabels = new Set(matches.map((session) => session.workflowAgentLabel));
   return {
     ...workflow,
     activeSeconds,
@@ -138,6 +140,9 @@ export function removePersistedWorkflowUsage(
     requests: [request],
     stateActiveSeconds: { [state]: activeSeconds },
     tokens: remainder,
+    workflowAgentUsage: workflow.workflowAgentUsage?.filter(
+      (agent) => !persistedLabels.has(agent.label),
+    ),
   };
 }
 
@@ -185,8 +190,14 @@ function aggregateUsageState(agents: WorkflowAgent[]): WorkflowUsageState {
     .map((agent) => parseModelSpec(agent.model));
   return {
     effort: uniqueValue(states.map((state) => state.effort)) ?? "mixed",
-    model: uniqueValue(states.map((state) => state.model)) ?? "mixed",
+    model: uniqueValue(states.map((state) => state.model)) ?? "mixed usage",
   };
+}
+
+function agentUsage(agents: WorkflowAgent[]): WorkflowAgentUsage[] {
+  return agents
+    .filter((agent) => agent.tokens > 0)
+    .map((agent) => ({ ...parseModelSpec(agent.model), label: agent.label, total: agent.tokens }));
 }
 
 function parseModelSpec(spec: string | undefined): WorkflowUsageState {

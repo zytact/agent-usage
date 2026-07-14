@@ -138,6 +138,53 @@ describe("renderers", () => {
     expect(output).toContain("Weighted input eq/req");
   });
 
+  it("shows exact workflow model totals separately from mixed token categories", () => {
+    const request = makeRequest({
+      cacheRead: 50,
+      effort: "mixed",
+      input: 100,
+      model: "mixed usage",
+      output: 20,
+      source: "pi",
+      sourceLabel: "Pi",
+      subharness: "pi",
+      total: 170,
+    });
+    const report = buildReport(
+      [
+        makeSession({
+          originator: "pi-dynamic-workflows",
+          requests: [request],
+          source: "pi",
+          sourceLabel: "Pi",
+          workflowAgentUsage: [
+            { effort: "low", label: "finder", model: "gpt-5.6-sol", total: 100 },
+            {
+              effort: "unknown",
+              label: "reviewer",
+              model: "deepseek-v4-flash-free",
+              total: 70,
+            },
+          ],
+        }),
+      ],
+      "7d",
+      ["pi"],
+      new Date("2026-06-14T18:45:00+05:30"),
+      pricing,
+    );
+    const html = renderHtmlReport(report, pricing);
+    const output = renderTerminalReport(report, pricing);
+
+    for (const rendered of [html, output]) {
+      expect(rendered).toContain("Models within mixed usage");
+      expect(rendered).toContain("gpt-5.6-sol");
+      expect(rendered).toContain("deepseek-v4-flash-free");
+      expect(rendered).toContain("Token categories and cost remain combined");
+    }
+    expect(html).toContain("mixed usage");
+  });
+
   it("hides cache-write totals when availability is mixed", () => {
     const report = buildReport(
       [

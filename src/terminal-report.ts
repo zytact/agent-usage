@@ -17,8 +17,9 @@ import {
   formatFloat,
   estimateStatsTotalCost,
   formatUsd,
-  modelEffortBreakdowns,
+  modelEffortBreakdownMap,
   modelRows,
+  workflowModelAttributions,
   summarizeDistribution,
   topEntries,
   type BuiltReport,
@@ -247,12 +248,17 @@ function renderModelList(
     lines.push("    none");
     return lines;
   }
-  const effortBreakdowns = new Map(
-    modelEffortBreakdowns(section.sessions, pricing, rows.length).map((row) => [
-      row.model,
-      row.effortRows,
-    ]),
-  );
+  const effortBreakdowns = modelEffortBreakdownMap(section.sessions, pricing, rows.length);
+  const workflowAttributions = workflowModelAttributions(section.sessions);
+  if (workflowAttributions.length > 0) {
+    lines.push("    Models within mixed usage (exact agent totals)");
+    for (const row of workflowAttributions) {
+      lines.push(
+        `      · ${row.model} · ${row.effort} · ${compactTokens(row.total)} · ${row.pct.toFixed(0)}%`,
+      );
+    }
+    lines.push("      Token categories and cost remain combined under mixed usage.");
+  }
   for (const row of rows) {
     lines.push(
       `    - ${row.key} · ${row.pct.toFixed(0)}% · time ${humanSeconds(row.activeSeconds)} · in ${compactTokens(row.tokenInfo.input)} (${row.inputRate}) · cached ${compactTokens(row.tokenInfo.cached)} · write ${displayCacheWrite(row.tokenInfo.cacheWrite, writeAvailability)} · out ${compactTokens(row.tokenInfo.output)} (${row.outputRate}) · reason ${compactTokens(row.tokenInfo.reasoning)} · est ${row.cost}`,

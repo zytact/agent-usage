@@ -141,6 +141,13 @@ export type ModelEffortBreakdown = {
   model: string;
 };
 
+export type WorkflowModelAttribution = {
+  effort: string;
+  model: string;
+  pct: number;
+  total: number;
+};
+
 export type EffortMetricCell = {
   kind: "duration" | "tokens" | "usd";
   label: string;
@@ -1049,6 +1056,35 @@ export function modelRows(
       tokenInfo,
     };
   });
+}
+
+export function workflowModelAttributions(sessions: ParsedSession[]): WorkflowModelAttribution[] {
+  const grouped = new Map<string, Omit<WorkflowModelAttribution, "pct">>();
+
+  for (const session of sessions) {
+    if (!session.requests.some((request) => request.model === "mixed usage")) continue;
+    for (const agent of session.workflowAgentUsage ?? []) {
+      const key = `${agent.model}\u0000${agent.effort}`;
+      const row = grouped.get(key) ?? { effort: agent.effort, model: agent.model, total: 0 };
+      row.total += agent.total;
+      grouped.set(key, row);
+    }
+  }
+
+  const total = [...grouped.values()].reduce((sum, row) => sum + row.total, 0);
+  return [...grouped.values()]
+    .sort((a, b) => b.total - a.total || a.model.localeCompare(b.model))
+    .map((row) => ({ ...row, pct: total > 0 ? (row.total / total) * 100 : 0 }));
+}
+
+export function modelEffortBreakdownMap(
+  sessions: ParsedSession[],
+  pricing: Record<string, PricingInfo>,
+  limit: number,
+): Map<string, EffortBreakdownRow[]> {
+  return new Map(
+    modelEffortBreakdowns(sessions, pricing, limit).map((row) => [row.model, row.effortRows]),
+  );
 }
 
 export function modelEffortBreakdowns(
