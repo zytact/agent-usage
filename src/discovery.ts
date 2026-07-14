@@ -10,6 +10,7 @@ type DiscoveryRoots = {
   homeDir: string;
   opencodeDir: string;
   piDir: string;
+  piWorkflowsDir: string;
 };
 
 export function defaultDiscoveryRoots(homeDir: string): DiscoveryRoots {
@@ -19,6 +20,7 @@ export function defaultDiscoveryRoots(homeDir: string): DiscoveryRoots {
     homeDir,
     opencodeDir: join(homeDir, ".local", "share", "opencode"),
     piDir: join(homeDir, ".pi", "agent", "sessions"),
+    piWorkflowsDir: join(homeDir, ".pi", "workflows", "projects"),
   };
 }
 
@@ -27,10 +29,13 @@ export async function discoverSessionFiles(
   scopeStart?: Date,
 ): Promise<SessionDiscovery> {
   const cutoffMs = scopeStart?.getTime();
-  const [claudeFiles, codexFiles, piFiles] = await Promise.all([
+  const [claudeFiles, codexFiles, piFiles, piWorkflowFiles] = await Promise.all([
     collectFiles(roots.claudeDir, ".jsonl", cutoffMs),
     collectFiles(roots.codexDir, ".jsonl", cutoffMs),
     collectFiles(roots.piDir, ".jsonl", cutoffMs),
+    // Workflow project names and file mtimes are not lifecycle timestamps. Parse
+    // candidates and apply Scope using completedAt instead.
+    collectFiles(roots.piWorkflowsDir, ".json"),
   ]);
 
   return {
@@ -38,6 +43,7 @@ export async function discoverSessionFiles(
     codexFiles,
     opencodeDbPath: join(roots.opencodeDir, "opencode.db"),
     piFiles,
+    piWorkflowFiles,
   };
 }
 

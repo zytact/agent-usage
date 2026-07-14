@@ -55,6 +55,8 @@ export type ParsedSession = {
   stateActiveSeconds: Record<string, number>;
   tokens: TokenUsage;
   userTurns: number;
+  workflowAgentLabel?: string;
+  workflowRunId?: string;
 };
 
 export type DiscoveredSessionFile = {
@@ -68,4 +70,5 @@ export type SessionDiscovery = {
   codexFiles: DiscoveredSessionFile[];
   opencodeDbPath: string;
   piFiles: DiscoveredSessionFile[];
+  piWorkflowFiles: DiscoveredSessionFile[];
 };

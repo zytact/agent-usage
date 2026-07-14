@@ -4,12 +4,14 @@ Local CLI that reads coding-agent session history and generates a usage dossier 
 
 ## Sources
 
-| Agent       | Location                              |
-| ----------- | ------------------------------------- |
-| Codex       | `~/.codex/sessions/`                  |
-| opencode    | `~/.local/share/opencode/opencode.db` |
-| Pi          | `~/.pi/agent/sessions/`               |
-| Claude Code | `~/.claude/projects/`                 |
+| Source      | Location                                                          |
+| ----------- | ----------------------------------------------------------------- |
+| Codex       | `~/.codex/sessions/`                                              |
+| opencode    | `~/.local/share/opencode/opencode.db`                             |
+| Pi          | `~/.pi/agent/sessions/`, `~/.pi/workflows/projects/*/runs/*.json` |
+| Claude Code | `~/.claude/projects/`                                             |
+
+The Pi Source includes completed `pi-dynamic-workflows` records with the Originator shown as `pi-dynamic-workflows`. Workflow records provide aggregate Session accounting, not request-level or reasoning-token detail. If `persistAgentSessions=true` writes workflow subagents as standard Pi Sessions, their explicit `workflow:<runId> <label>` metadata is used to subtract the represented accounting from the aggregate record, preventing duplicate Sessions, Requests, and tokens. Mixed persistence fallback is supported.
 
 ## Usage
 

@@ -150,7 +150,7 @@ export function buildParsedSession(
     ParsedSession,
     "cacheWriteKnown" | "efforts" | "modelTokens" | "source" | "sourceLabel"
   > &
-    Partial<Pick<ParsedSession, "originator">>,
+    Partial<Pick<ParsedSession, "originator" | "workflowAgentLabel" | "workflowRunId">>,
 ): ParsedSession | undefined {
   if (state.events.length === 0) {
     return undefined;
@@ -184,6 +184,8 @@ export function buildParsedSession(
     stateActiveSeconds: allocated.byStateSeconds,
     tokens: { ...state.tokens },
     userTurns: state.userTurns,
+    workflowAgentLabel: extras.workflowAgentLabel,
+    workflowRunId: extras.workflowRunId,
   };
 }
 

@@ -25,6 +25,8 @@ export async function parsePiSessionFile(path: string): Promise<ParsedSession | 
 type PiParseState = ModelTokenParserState & {
   effortMarks: Record<string, number>;
   originator?: string;
+  workflowAgentLabel?: string;
+  workflowRunId?: string;
 };
 
 export function parsePiSessionText(
@@ -57,12 +59,7 @@ function parsePiLine(rawLine: string, state: PiParseState): void {
   }
 
   const { item, ts } = parsed;
-  if (item.type === "session") {
-    state.sessionId = asString(item.id) ?? state.sessionId;
-    state.cwd = asString(item.cwd) ?? state.cwd;
-    state.originator = inferPiOriginator(item, state.path) ?? state.originator;
-    return;
-  }
+  if (applyPiMetadata(item, state)) return;
   if (item.type === "model_change") {
     setCurrentModel(asString(item.modelId), ts, state);
     return;
@@ -120,7 +117,36 @@ function finishPiSession(state: PiParseState): ParsedSession | undefined {
     originator: state.originator,
     source: "pi",
     sourceLabel: sessionLabel("pi", state.originator),
+    workflowAgentLabel: state.workflowAgentLabel,
+    workflowRunId: state.workflowRunId,
   });
+}
+
+function applyPiMetadata(item: Record<string, unknown>, state: PiParseState): boolean {
+  if (item.type === "session") {
+    state.sessionId = asString(item.id) ?? state.sessionId;
+    state.cwd = asString(item.cwd) ?? state.cwd;
+    state.originator = inferPiOriginator(item, state.path) ?? state.originator;
+    return true;
+  }
+  if (item.type !== "session_info") return false;
+  applyPiSessionInfo(item, state);
+  return true;
+}
+
+function applyPiSessionInfo(item: Record<string, unknown>, state: PiParseState): void {
+  const workflow = parseWorkflowSessionName(asString(item.name));
+  if (!workflow) return;
+  state.originator = "pi-dynamic-workflows";
+  state.workflowRunId = workflow.runId;
+  state.workflowAgentLabel = workflow.label;
+}
+
+function parseWorkflowSessionName(
+  name: string | undefined,
+): { label: string; runId: string } | undefined {
+  const match = name?.match(/^workflow:(\S+)\s+(.+)$/);
+  return match ? { runId: match[1], label: match[2] } : undefined;
 }
 
 function inferPiOriginator(item: Record<string, unknown>, path: string): string | undefined {
