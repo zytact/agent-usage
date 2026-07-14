@@ -397,7 +397,7 @@ function deduplicateWorkflowSessions(sessions: ParsedSession[]): ParsedSession[]
 
 const PARSE_CONCURRENCY = 8;
 
-const SESSION_CACHE_VERSION = 4;
+const SESSION_CACHE_VERSION = 5;
 
 type SessionCacheRecord = {
   mtimeMs: number;
