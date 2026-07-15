@@ -14,6 +14,7 @@ import { renderHtmlReport, writeHtmlReport } from "./html-report.js";
 import { parseClaudeSessionFile } from "./parsers/claude.js";
 import { parseCodexSessionFile } from "./parsers/codex.js";
 import { parseOpencodeDb } from "./parsers/opencode.js";
+import { parsePiWorkflowFile, removePersistedWorkflowUsage } from "./parsers/pi-workflow.js";
 import { parsePiSessionFile } from "./parsers/pi.js";
 import { loadPricingMap } from "./pricing.js";
 import { scopeStart, type Scope } from "./report-core.js";
@@ -359,25 +360,44 @@ async function collectSessions(
   const cacheDir = await ensureParsedSessionCacheDir();
   const selected = new Set(sources);
   const useCache = options.useCache ?? true;
-  const [codexSessions, piSessions, claudeSessions, opencodeSessions] = await Promise.all([
-    selected.has("codex")
-      ? parseDiscoveredFiles(discovered.codexFiles, parseCodexSessionFile, cacheDir, useCache)
-      : [],
-    selected.has("pi")
-      ? parseDiscoveredFiles(discovered.piFiles, parsePiSessionFile, cacheDir, useCache)
-      : [],
-    selected.has("claude")
-      ? parseDiscoveredFiles(discovered.claudeFiles, parseClaudeSessionFile, cacheDir, useCache)
-      : [],
-    selected.has("opencode") ? parseOpencodeDb(discovered.opencodeDbPath, start) : [],
-  ]);
+  const [codexSessions, piSessions, piWorkflowSessions, claudeSessions, opencodeSessions] =
+    await Promise.all([
+      selected.has("codex")
+        ? parseDiscoveredFiles(discovered.codexFiles, parseCodexSessionFile, cacheDir, useCache)
+        : [],
+      selected.has("pi")
+        ? parseDiscoveredFiles(discovered.piFiles, parsePiSessionFile, cacheDir, useCache)
+        : [],
+      selected.has("pi")
+        ? parseDiscoveredFiles(discovered.piWorkflowFiles, parsePiWorkflowFile, cacheDir, useCache)
+        : [],
+      selected.has("claude")
+        ? parseDiscoveredFiles(discovered.claudeFiles, parseClaudeSessionFile, cacheDir, useCache)
+        : [],
+      selected.has("opencode") ? parseOpencodeDb(discovered.opencodeDbPath, start) : [],
+    ]);
 
-  return [...codexSessions, ...opencodeSessions, ...claudeSessions, ...piSessions];
+  const workflows = deduplicateWorkflowSessions(piWorkflowSessions)
+    .filter((session) => session.end >= start)
+    .map((session) => removePersistedWorkflowUsage(session, piSessions))
+    .filter((session): session is ParsedSession => session !== undefined);
+  return [...codexSessions, ...opencodeSessions, ...claudeSessions, ...piSessions, ...workflows];
+}
+
+function deduplicateWorkflowSessions(sessions: ParsedSession[]): ParsedSession[] {
+  const byRunId = new Map<string, ParsedSession>();
+  for (const session of sessions) {
+    const runId = session.workflowRunId;
+    if (!runId) continue;
+    const current = byRunId.get(runId);
+    if (!current || session.end > current.end) byRunId.set(runId, session);
+  }
+  return [...byRunId.values()];
 }
 
 const PARSE_CONCURRENCY = 8;
 
-const SESSION_CACHE_VERSION = 3;
+const SESSION_CACHE_VERSION = 7;
 
 type SessionCacheRecord = {
   mtimeMs: number;

@@ -16,10 +16,12 @@ describe("discoverSessionFiles", () => {
     await mkdir(join(roots.piDir, "repo"), { recursive: true });
     await mkdir(join(roots.claudeDir, "project-a"), { recursive: true });
     await mkdir(roots.opencodeDir, { recursive: true });
+    await mkdir(join(roots.piWorkflowsDir, "project-a", "runs"), { recursive: true });
 
     await writeFile(join(roots.codexDir, "2026", "06", "14", "one.jsonl"), "");
     await writeFile(join(roots.piDir, "repo", "two.jsonl"), "");
     await writeFile(join(roots.claudeDir, "project-a", "three.jsonl"), "");
+    await writeFile(join(roots.piWorkflowsDir, "project-a", "runs", "four.json"), "");
 
     const discovered = await discoverSessionFiles(roots);
 
@@ -46,6 +48,13 @@ describe("discoverSessionFiles", () => {
           size: 0,
         },
       ],
+      piWorkflowFiles: [
+        {
+          mtimeMs: discovered.piWorkflowFiles[0]?.mtimeMs,
+          path: join(roots.piWorkflowsDir, "project-a", "runs", "four.json"),
+          size: 0,
+        },
+      ],
     });
   });
 
@@ -54,6 +63,9 @@ describe("discoverSessionFiles", () => {
     await mkdir(join(roots.codexDir, "2026", "06", "12"), { recursive: true });
     await mkdir(join(roots.codexDir, "2026", "06", "14"), { recursive: true });
     await mkdir(join(roots.piDir, "repo"), { recursive: true });
+    await mkdir(join(roots.piWorkflowsDir, "misleading-2020-01-01", "runs"), {
+      recursive: true,
+    });
 
     await writeFile(join(roots.codexDir, "2026", "06", "12", "old.jsonl"), "");
     await writeFile(join(roots.codexDir, "2026", "06", "14", "new.jsonl"), "");
@@ -61,6 +73,14 @@ describe("discoverSessionFiles", () => {
     const newPiFile = join(roots.piDir, "repo", "new-pi.jsonl");
     await writeFile(oldPiFile, "");
     await writeFile(newPiFile, "");
+    const workflowFile = join(
+      roots.piWorkflowsDir,
+      "misleading-2020-01-01",
+      "runs",
+      "in-scope.json",
+    );
+    await writeFile(workflowFile, "");
+    await utimes(workflowFile, new Date("2020-01-01T00:00:00Z"), new Date("2020-01-01T00:00:00Z"));
     await utimes(oldPiFile, new Date("2026-06-12T00:00:00Z"), new Date("2026-06-12T00:00:00Z"));
     await utimes(newPiFile, new Date("2026-06-14T12:00:00Z"), new Date("2026-06-14T12:00:00Z"));
 
@@ -70,6 +90,7 @@ describe("discoverSessionFiles", () => {
       join(roots.codexDir, "2026", "06", "14", "new.jsonl"),
     ]);
     expect(discovered.piFiles.map((file) => file.path)).toEqual([newPiFile]);
+    expect(discovered.piWorkflowFiles.map((file) => file.path)).toEqual([workflowFile]);
   });
 });
 

@@ -30,6 +30,13 @@ export type SessionRequest = {
   uncachedInput: number;
 };
 
+export type WorkflowAgentUsage = {
+  effort: string;
+  label: string;
+  model: string;
+  total: number;
+};
+
 export type ParsedSession = {
   activeSeconds: number;
   assistantTurns: number;
@@ -55,6 +62,9 @@ export type ParsedSession = {
   stateActiveSeconds: Record<string, number>;
   tokens: TokenUsage;
   userTurns: number;
+  workflowAgentLabel?: string;
+  workflowAgentUsage?: WorkflowAgentUsage[];
+  workflowRunId?: string;
 };
 
 export type DiscoveredSessionFile = {
@@ -68,4 +78,5 @@ export type SessionDiscovery = {
   codexFiles: DiscoveredSessionFile[];
   opencodeDbPath: string;
   piFiles: DiscoveredSessionFile[];
+  piWorkflowFiles: DiscoveredSessionFile[];
 };

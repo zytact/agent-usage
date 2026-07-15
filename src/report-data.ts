@@ -141,6 +141,18 @@ export type ModelEffortBreakdown = {
   model: string;
 };
 
+export type WorkflowModelAttribution = {
+  agents: number;
+  effort: string;
+  model: string;
+};
+
+export type MixedWorkflowUsage = {
+  activeSeconds: number;
+  requests: number;
+  tokenInfo: ModelTokenUsage;
+};
+
 export type EffortMetricCell = {
   kind: "duration" | "tokens" | "usd";
   label: string;
@@ -1019,6 +1031,7 @@ export function modelRows(
   outputRate: string;
   pct: number;
   tokenInfo: ModelTokenUsage;
+  tokensAttributed: boolean;
 }> {
   const total = sumValues(stats.modelUsage);
   if (total <= 0) {
@@ -1026,8 +1039,9 @@ export function modelRows(
   }
 
   return topEntries(stats.modelUsage, limit).map(({ key, value }) => {
+    const attributedTokenInfo = stats.modelTokens[key];
     const tokenInfo =
-      stats.modelTokens[key] ??
+      attributedTokenInfo ??
       ({
         billableOutput: 0,
         cacheWrite: 0,
@@ -1041,14 +1055,77 @@ export function modelRows(
     const rates = pricing[modelId] ?? {};
     return {
       activeSeconds: stats.modelActiveSeconds[key] ?? 0,
-      cost: formatUsd(estimateCost(key, tokenInfo, pricing)),
+      cost: attributedTokenInfo ? formatUsd(estimateCost(key, tokenInfo, pricing)) : "n/a",
       inputRate: formatUsdPerMillion(rates.prompt),
       key,
       outputRate: formatUsdPerMillion(rates.completion),
       pct: (value / total) * 100,
       tokenInfo,
+      tokensAttributed: attributedTokenInfo !== undefined,
     };
   });
+}
+
+export function modelRowsIncludingWorkflowModels(
+  stats: ReportStats,
+  sessions: ParsedSession[],
+  pricing: Record<string, PricingInfo>,
+  limit: number,
+): ReturnType<typeof modelRows> {
+  const top = modelRows(stats, pricing, limit);
+  const workflowModels = new Set(workflowModelAttributions(sessions).map((row) => row.model));
+  if (workflowModels.size === 0) return top;
+
+  const included = new Set(top.map((row) => row.key));
+  return [
+    ...top,
+    ...modelRows(stats, pricing, Object.keys(stats.modelUsage).length).filter(
+      (row) => workflowModels.has(row.key) && !included.has(row.key),
+    ),
+  ];
+}
+
+export function mixedWorkflowUsage(sessions: ParsedSession[]): MixedWorkflowUsage | undefined {
+  const stats = aggregateSessions(sessions);
+  const tokenInfo = stats.modelTokens["mixed usage"];
+  if (!tokenInfo) return undefined;
+  return {
+    activeSeconds: stats.modelActiveSeconds["mixed usage"] ?? 0,
+    requests: sessions.reduce(
+      (sum, session) =>
+        sum + session.requests.filter((request) => request.model === "mixed usage").length,
+      0,
+    ),
+    tokenInfo,
+  };
+}
+
+export function workflowModelAttributions(sessions: ParsedSession[]): WorkflowModelAttribution[] {
+  const grouped = new Map<string, WorkflowModelAttribution>();
+
+  for (const session of sessions) {
+    if (!session.requests.some((request) => request.model === "mixed usage")) continue;
+    for (const agent of session.workflowAgentUsage ?? []) {
+      const key = `${agent.model}\u0000${agent.effort}`;
+      const row = grouped.get(key) ?? { agents: 0, effort: agent.effort, model: agent.model };
+      row.agents += 1;
+      grouped.set(key, row);
+    }
+  }
+
+  return [...grouped.values()].sort(
+    (a, b) => b.agents - a.agents || a.model.localeCompare(b.model),
+  );
+}
+
+export function modelEffortBreakdownMap(
+  sessions: ParsedSession[],
+  pricing: Record<string, PricingInfo>,
+  limit: number,
+): Map<string, EffortBreakdownRow[]> {
+  return new Map(
+    modelEffortBreakdowns(sessions, pricing, limit).map((row) => [row.model, row.effortRows]),
+  );
 }
 
 export function modelEffortBreakdowns(

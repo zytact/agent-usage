@@ -19,8 +19,11 @@ import {
   estimateStatsTotalCost,
   formatFloat,
   formatUsd,
-  modelEffortBreakdowns,
+  mixedWorkflowUsage,
+  modelEffortBreakdownMap,
   modelRows,
+  modelRowsIncludingWorkflowModels,
+  workflowModelAttributions,
   percentRows,
   topEntries,
   type BuiltReport,
@@ -544,6 +547,35 @@ details.raw-details summary {
 .share-list .track { height: 6px; }
 .model-panel { background: color-mix(in oklch, var(--surface-2), var(--tone) 8%); }
 .model-list .track { height: 7px; margin-bottom: 10px; }
+.workflow-model-note {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.7fr) minmax(180px, 1fr) minmax(240px, 1.3fr);
+  gap: 10px 18px;
+  align-items: baseline;
+  padding: 11px 12px;
+  background: var(--surface);
+}
+.workflow-model-note strong { font-size: 0.78rem; }
+.workflow-model-note span { color: var(--muted); font-size: 0.78rem; }
+.workflow-model-note small { color: var(--soft); font-size: 0.72rem; }
+.mixed-usage {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.mixed-usage-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px 24px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.mixed-usage-head div { display: grid; gap: 2px; }
+.mixed-usage-head strong { font-size: 0.9rem; }
+.mixed-usage-head small,
+.mixed-usage-head p { color: var(--soft); font-size: 0.72rem; }
+.mixed-usage-head p { max-width: 60ch; margin: 0; }
 .model-metrics { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .model-metrics div { padding: 9px 10px; background: var(--surface); }
 .effort-block {
@@ -621,6 +653,7 @@ details.raw-details summary {
   .source-head dl,
   .model-metrics,
   .effort-metrics,
+  .workflow-model-note,
   .detail-grid,
   .detail-grid-summary,
   .detail-grid-full,
@@ -1198,7 +1231,7 @@ function renderSourceSection(
   const costs = estimateStatsTotalCost(stats, pricing);
   const effortRows = percentRows(stats.efforts, 5);
   const writeAvailability = cacheWriteAvailability(section.sessions);
-  const models = modelRows(stats, pricing, 5);
+  const models = modelRowsIncludingWorkflowModels(stats, section.sessions, pricing, 5);
   const tokenTotal = Math.max(stats.tokens.total, 1);
 
   return `<section class="source-block" style="--tone:${escapeHtml(section.tone)}">
@@ -1699,18 +1732,27 @@ function renderModelsPanel(
   pricing: Record<string, PricingInfo>,
   writeAvailability: ReturnType<typeof cacheWriteAvailability>,
 ): string {
-  const effortBreakdowns = new Map(
-    modelEffortBreakdowns(section.sessions, pricing, rows.length).map((row) => [
-      row.model,
-      row.effortRows,
-    ]),
-  );
-  const body =
+  const effortBreakdowns = modelEffortBreakdownMap(section.sessions, pricing, rows.length);
+  const workflowAttributions = workflowModelAttributions(section.sessions);
+  const mixedUsage = mixedWorkflowUsage(section.sessions);
+  const modelHtml =
     rows.length === 0
       ? '<li class="empty">No model markers</li>'
       : rows
           .map((row) => {
             const efforts = effortBreakdowns.get(row.key) ?? [];
+            const modelAttributions = workflowAttributions.filter((item) => item.model === row.key);
+            const unattributedHtml = row.tokensAttributed
+              ? ""
+              : `<div class="workflow-model-note"><strong>Observed workflow model</strong><span>${modelAttributions
+                  .map(
+                    (item) =>
+                      `${item.effort} effort · ${item.agents} agent ${item.agents === 1 ? "session" : "sessions"}`,
+                  )
+                  .map(escapeHtml)
+                  .join(
+                    "<br>",
+                  )}</span><small>Per-model token categories, active time, and cost are unavailable.</small></div>`;
             const effortHtml =
               efforts.length === 0
                 ? ""
@@ -1728,10 +1770,16 @@ function renderModelsPanel(
                       return `<li><div class="effort-top"><strong>${escapeHtml(effort.effort)}</strong><span>${escapeHtml(`${effort.requests} req`)}</span></div><dl class="effort-metrics">${metrics}</dl><p class="effort-cost-split">Cost mix/req · ${escapeHtml(costMix)}</p></li>`;
                     })
                     .join("")}</ul></div>`;
-            return `<li class="model-row"><div class="model-top"><span title="${escapeHtml(row.key)}">${escapeHtml(row.key)}</span><b>${row.pct.toFixed(0)}%</b></div><div class="track"><i style="width:${Math.max(2, Math.min(100, row.pct)).toFixed(1)}%"></i></div><dl class="model-metrics"><div><dt>Time</dt><dd>${escapeHtml(humanSeconds(row.activeSeconds))}</dd><small>range total</small></div><div><dt>Input</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.input))}</dd><small>${escapeHtml(row.inputRate)}</small></div><div><dt>Cached</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.cached))}</dd><small>cache read</small></div><div><dt>Write</dt><dd>${escapeHtml(displayCacheWrite(row.tokenInfo.cacheWrite, writeAvailability))}</dd><small>${escapeHtml(writeAvailability === "unknown" ? "not exposed" : "cache create")}</small></div><div><dt>Output</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.output))}</dd><small>${escapeHtml(row.outputRate)}</small></div><div><dt>Reason</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.reasoning))}</dd><small>thinking</small></div><div><dt>Est cost</dt><dd>${escapeHtml(row.cost)}</dd><small>range total</small></div></dl>${effortHtml}</li>`;
+            const metricsHtml = row.tokensAttributed
+              ? `<dl class="model-metrics"><div><dt>Time</dt><dd>${escapeHtml(humanSeconds(row.activeSeconds))}</dd><small>range total</small></div><div><dt>Input</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.input))}</dd><small>${escapeHtml(row.inputRate)}</small></div><div><dt>Cached</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.cached))}</dd><small>cache read</small></div><div><dt>Write</dt><dd>${escapeHtml(displayCacheWrite(row.tokenInfo.cacheWrite, writeAvailability))}</dd><small>${escapeHtml(writeAvailability === "unknown" ? "not exposed" : "cache create")}</small></div><div><dt>Output</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.output))}</dd><small>${escapeHtml(row.outputRate)}</small></div><div><dt>Reason</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.reasoning))}</dd><small>thinking</small></div><div><dt>Est cost</dt><dd>${escapeHtml(row.cost)}</dd><small>range total</small></div></dl>`
+              : "";
+            return `<li class="model-row"><div class="model-top"><span title="${escapeHtml(row.key)}">${escapeHtml(row.key)}</span><b>${row.pct.toFixed(0)}% observed</b></div><div class="track"><i style="width:${Math.max(2, Math.min(100, row.pct)).toFixed(1)}%"></i></div>${metricsHtml}${unattributedHtml}${effortHtml}</li>`;
           })
           .join("");
-  return `<section class="panel-wide model-panel"><h4>Models</h4><ul class="model-list">${body}</ul></section>`;
+  const mixedUsageHtml = mixedUsage
+    ? `<section class="mixed-usage"><div class="mixed-usage-head"><div><strong>Combined mixed workflow usage</strong><small>${mixedUsage.requests} aggregate ${mixedUsage.requests === 1 ? "record" : "records"}</small></div><p>These totals apply collectively to the workflow models above and cannot be split by model.</p></div><dl class="model-metrics"><div><dt>Total</dt><dd>${escapeHtml(compactTokens(mixedUsage.tokenInfo.total))}</dd><small>all categories</small></div><div><dt>Input</dt><dd>${escapeHtml(compactTokens(mixedUsage.tokenInfo.input))}</dd><small>fresh input</small></div><div><dt>Cached</dt><dd>${escapeHtml(compactTokens(mixedUsage.tokenInfo.cached))}</dd><small>cache read</small></div><div><dt>Write</dt><dd>${escapeHtml(displayCacheWrite(mixedUsage.tokenInfo.cacheWrite, writeAvailability))}</dd><small>cache create</small></div><div><dt>Output</dt><dd>${escapeHtml(compactTokens(mixedUsage.tokenInfo.output))}</dd><small>visible output</small></div><div><dt>Reason</dt><dd>${escapeHtml(compactTokens(mixedUsage.tokenInfo.reasoning))}</dd><small>thinking</small></div><div><dt>Time</dt><dd>${escapeHtml(humanSeconds(mixedUsage.activeSeconds))}</dd><small>combined range</small></div></dl></section>`
+    : "";
+  return `<section class="panel-wide model-panel"><h4>Models</h4><ul class="model-list">${modelHtml}</ul>${mixedUsageHtml}</section>`;
 }
 
 function htmlMetric(label: string, value: string, note?: string): string {
