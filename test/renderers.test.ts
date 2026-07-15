@@ -153,6 +153,7 @@ describe("renderers", () => {
     const report = buildReport(
       [
         makeSession({
+          models: { "deepseek-v4-flash-free": 1, "gpt-5.6-sol": 1 },
           originator: "pi-dynamic-workflows",
           requests: [request],
           source: "pi",
@@ -177,12 +178,15 @@ describe("renderers", () => {
     const output = renderTerminalReport(report, pricing);
 
     for (const rendered of [html, output]) {
-      expect(rendered).toContain("Models within mixed usage");
       expect(rendered).toContain("gpt-5.6-sol");
       expect(rendered).toContain("deepseek-v4-flash-free");
-      expect(rendered).toContain("Token categories and cost remain combined");
+      expect(rendered).toContain(
+        "Per-model token categories, active time, and cost are unavailable",
+      );
+      expect(rendered).toContain("Combined mixed workflow usage");
+      expect(rendered).toContain("cannot be split by model");
     }
-    expect(html).toContain("mixed usage");
+    expect(html).not.toContain(">mixed usage</span>");
   });
 
   it("hides cache-write totals when availability is mixed", () => {

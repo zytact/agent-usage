@@ -48,7 +48,8 @@ describe("pi-dynamic-workflows parsing", () => {
       workflowRunId: "audit-abc123",
     });
     expect(session?.requests[0]).toMatchObject({ effort: "medium", model: "gpt-5.6-terra" });
-    expect(session?.efforts).toEqual({ medium: 1 });
+    expect(session?.efforts).toEqual({ medium: 2 });
+    expect(session?.models).toEqual({ "gpt-5.6-terra": 2 });
     expect(session?.stateActiveSeconds).toEqual({ "gpt-5.6-terra::medium": 120 });
   });
 
@@ -70,6 +71,10 @@ describe("pi-dynamic-workflows parsing", () => {
       { effort: "low", label: "one", model: "gpt-5.6-sol", total: 100 },
       { effort: "unknown", label: "two", model: "deepseek-v4-flash-free", total: 70 },
     ]);
+    expect(session?.models).toEqual({
+      "deepseek-v4-flash-free": 1,
+      "gpt-5.6-sol": 1,
+    });
   });
 
   it("preserves non-effort model suffixes", () => {

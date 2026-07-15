@@ -17,8 +17,10 @@ import {
   formatFloat,
   estimateStatsTotalCost,
   formatUsd,
+  mixedWorkflowUsage,
   modelEffortBreakdownMap,
   modelRows,
+  modelRowsIncludingWorkflowModels,
   workflowModelAttributions,
   summarizeDistribution,
   topEntries,
@@ -131,7 +133,12 @@ function renderSelectedSummary(
       key: "model-breakdown",
       render: () =>
         renderModelList(
-          modelRows(report.combined.stats, pricing, 6),
+          modelRowsIncludingWorkflowModels(
+            report.combined.stats,
+            report.combined.sessions,
+            pricing,
+            6,
+          ),
           report.combined,
           pricing,
           cacheWriteAvailability(report.combined.sessions),
@@ -185,7 +192,14 @@ function renderSection(
       topEntries(stats.repos, 4).map(({ key, value }) => [key, humanSeconds(value)]),
     ),
   );
-  lines.push(...renderModelList(modelRows(stats, pricing, 5), section, pricing, writeAvailability));
+  lines.push(
+    ...renderModelList(
+      modelRowsIncludingWorkflowModels(stats, section.sessions, pricing, 5),
+      section,
+      pricing,
+      writeAvailability,
+    ),
+  );
   lines.push(
     ...renderTopList(
       "Reasoning effort",
@@ -250,18 +264,20 @@ function renderModelList(
   }
   const effortBreakdowns = modelEffortBreakdownMap(section.sessions, pricing, rows.length);
   const workflowAttributions = workflowModelAttributions(section.sessions);
-  if (workflowAttributions.length > 0) {
-    lines.push("    Models within mixed usage (exact agent totals)");
-    for (const row of workflowAttributions) {
-      lines.push(
-        `      · ${row.model} · ${row.effort} · ${compactTokens(row.total)} · ${row.pct.toFixed(0)}%`,
-      );
-    }
-    lines.push("      Token categories and cost remain combined under mixed usage.");
-  }
+  const mixedUsage = mixedWorkflowUsage(section.sessions);
   for (const row of rows) {
+    if (!row.tokensAttributed) {
+      lines.push(`    - ${row.key} · ${row.pct.toFixed(0)}% observed`);
+      for (const attribution of workflowAttributions.filter((item) => item.model === row.key)) {
+        lines.push(
+          `      · ${attribution.effort} effort · ${attribution.agents} agent ${attribution.agents === 1 ? "session" : "sessions"}`,
+        );
+      }
+      lines.push("      Per-model token categories, active time, and cost are unavailable.");
+      continue;
+    }
     lines.push(
-      `    - ${row.key} · ${row.pct.toFixed(0)}% · time ${humanSeconds(row.activeSeconds)} · in ${compactTokens(row.tokenInfo.input)} (${row.inputRate}) · cached ${compactTokens(row.tokenInfo.cached)} · write ${displayCacheWrite(row.tokenInfo.cacheWrite, writeAvailability)} · out ${compactTokens(row.tokenInfo.output)} (${row.outputRate}) · reason ${compactTokens(row.tokenInfo.reasoning)} · est ${row.cost}`,
+      `    - ${row.key} · ${row.pct.toFixed(0)}% observed · time ${humanSeconds(row.activeSeconds)} · in ${compactTokens(row.tokenInfo.input)} (${row.inputRate}) · cached ${compactTokens(row.tokenInfo.cached)} · write ${displayCacheWrite(row.tokenInfo.cacheWrite, writeAvailability)} · out ${compactTokens(row.tokenInfo.output)} (${row.outputRate}) · reason ${compactTokens(row.tokenInfo.reasoning)} · est ${row.cost}`,
     );
     for (const effort of effortBreakdowns.get(row.key) ?? []) {
       const metrics = effortMetricCells(effort)
@@ -276,6 +292,15 @@ function renderModelList(
       lines.push(`      · ${effort.effort} · ${effort.requests} req · ${metrics}`);
       lines.push(`        cost mix/req · ${costMix}`);
     }
+  }
+  if (mixedUsage) {
+    lines.push("    Combined mixed workflow usage");
+    lines.push(
+      `      total ${compactTokens(mixedUsage.tokenInfo.total)} · input ${compactTokens(mixedUsage.tokenInfo.input)} · cached ${compactTokens(mixedUsage.tokenInfo.cached)} · write ${displayCacheWrite(mixedUsage.tokenInfo.cacheWrite, writeAvailability)} · output ${compactTokens(mixedUsage.tokenInfo.output)} · reason ${compactTokens(mixedUsage.tokenInfo.reasoning)} · time ${humanSeconds(mixedUsage.activeSeconds)}`,
+    );
+    lines.push(
+      "      These totals apply collectively to the workflow models above and cannot be split by model.",
+    );
   }
   return lines;
 }

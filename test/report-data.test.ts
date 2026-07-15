@@ -9,6 +9,7 @@ import { parsePiSessionText } from "../src/parsers/pi.js";
 import {
   buildReport,
   estimateStatsTotalCost,
+  mixedWorkflowUsage,
   modelEffortBreakdowns,
   type PricingInfo,
   workflowModelAttributions,
@@ -171,14 +172,13 @@ describe("buildReport", () => {
     });
 
     expect(workflowModelAttributions([session])).toEqual([
-      { effort: "low", model: "gpt-5.6-sol", pct: (100 / 170) * 100, total: 100 },
-      {
-        effort: "unknown",
-        model: "deepseek-v4-flash-free",
-        pct: (70 / 170) * 100,
-        total: 70,
-      },
+      { agents: 1, effort: "unknown", model: "deepseek-v4-flash-free" },
+      { agents: 1, effort: "low", model: "gpt-5.6-sol" },
     ]);
+    expect(mixedWorkflowUsage([session])).toMatchObject({
+      requests: 1,
+      tokenInfo: { total: 170 },
+    });
   });
 
   it("builds normalized effort breakdowns per model", () => {

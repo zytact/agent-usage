@@ -55,7 +55,8 @@ export function parsePiWorkflowText(
 
   const repo = workflowRepo(path);
   const requests: ParsedSession["requests"] = [];
-  const usageState = aggregateUsageState(agents);
+  const workflowAgentUsage = agentUsage(agents);
+  const usageState = aggregateUsageState(workflowAgentUsage);
   if (tokens.total > 0) {
     addRequest(requests, {
       effort: usageState.effort,
@@ -81,12 +82,12 @@ export function parsePiWorkflowText(
     cacheWriteKnown: true,
     dayModelActiveSeconds: { [day]: { [usageState.model]: activeSeconds } },
     dayStateActiveSeconds: { [day]: { [state]: activeSeconds } },
-    efforts: tokens.total ? { [usageState.effort]: 1 } : {},
+    efforts: countAgentUsage(workflowAgentUsage, "effort"),
     end,
     languages: {},
     modelActiveSeconds: { [usageState.model]: activeSeconds },
     modelTokens,
-    models: tokens.total ? { [usageState.model]: 1 } : {},
+    models: countAgentUsage(workflowAgentUsage, "model"),
     originator: ORIGINATOR,
     path,
     repo,
@@ -99,7 +100,7 @@ export function parsePiWorkflowText(
     stateActiveSeconds: { [state]: activeSeconds },
     tokens,
     userTurns: 0,
-    workflowAgentUsage: agentUsage(agents),
+    workflowAgentUsage,
     workflowRunId: runId,
   };
 }
@@ -118,31 +119,33 @@ export function removePersistedWorkflowUsage(
 
   const request = { ...workflow.requests[0] };
   if (!request) return undefined;
-  Object.assign(request, requestTokens(remainder));
+  const persistedLabels = new Set(matches.map((session) => session.workflowAgentLabel));
+  const workflowAgentUsage = workflow.workflowAgentUsage?.filter(
+    (agent) => !persistedLabels.has(agent.label),
+  );
+  const usageState = aggregateUsageState(workflowAgentUsage ?? []);
+  Object.assign(request, requestTokens(remainder), usageState);
   const activeSeconds = Math.max(
     0,
     workflow.activeSeconds - matches.reduce((sum, session) => sum + session.activeSeconds, 0),
   );
   const day = workflow.end.toISOString().slice(0, 10);
   const state = `${request.model}::${request.effort}`;
-  const persistedLabels = new Set(matches.map((session) => session.workflowAgentLabel));
   return {
     ...workflow,
     activeSeconds,
     assistantTurns: 1,
     dayModelActiveSeconds: { [day]: { [request.model]: activeSeconds } },
     dayStateActiveSeconds: { [day]: { [state]: activeSeconds } },
-    efforts: { [request.effort]: 1 },
+    efforts: countAgentUsage(workflowAgentUsage ?? [], "effort"),
     modelActiveSeconds: { [request.model]: activeSeconds },
     modelTokens: { [request.model]: { ...remainder, billableOutput: remainder.output } },
-    models: { [request.model]: 1 },
+    models: countAgentUsage(workflowAgentUsage ?? [], "model"),
     requestCount: 1,
     requests: [request],
     stateActiveSeconds: { [state]: activeSeconds },
     tokens: remainder,
-    workflowAgentUsage: workflow.workflowAgentUsage?.filter(
-      (agent) => !persistedLabels.has(agent.label),
-    ),
+    workflowAgentUsage,
   };
 }
 
@@ -184,14 +187,20 @@ function isNonnegativeFinite(value: unknown): boolean {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
-function aggregateUsageState(agents: WorkflowAgent[]): WorkflowUsageState {
-  const states = agents
-    .filter((agent) => agent.tokens > 0)
-    .map((agent) => parseModelSpec(agent.model));
+function aggregateUsageState(agents: WorkflowAgentUsage[]): WorkflowUsageState {
   return {
-    effort: uniqueValue(states.map((state) => state.effort)) ?? "mixed",
-    model: uniqueValue(states.map((state) => state.model)) ?? "mixed usage",
+    effort: uniqueValue(agents.map((agent) => agent.effort)) ?? "mixed",
+    model: uniqueValue(agents.map((agent) => agent.model)) ?? "mixed usage",
   };
+}
+
+function countAgentUsage(
+  agents: WorkflowAgentUsage[],
+  key: "effort" | "model",
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const agent of agents) counts[agent[key]] = (counts[agent[key]] ?? 0) + 1;
+  return counts;
 }
 
 function agentUsage(agents: WorkflowAgent[]): WorkflowAgentUsage[] {
