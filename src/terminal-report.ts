@@ -267,7 +267,7 @@ function renderModelList(
   const mixedUsage = mixedWorkflowUsage(section.sessions);
   for (const row of rows) {
     if (!row.tokensAttributed) {
-      lines.push(`    - ${row.key} · ${row.pct.toFixed(0)}% observed`);
+      lines.push(`    - ${row.key} · ${row.pct.toFixed(0)}% model share`);
       for (const attribution of workflowAttributions.filter((item) => item.model === row.key)) {
         lines.push(
           `      · ${attribution.effort} effort · ${attribution.agents} agent ${attribution.agents === 1 ? "session" : "sessions"}`,
@@ -277,7 +277,7 @@ function renderModelList(
       continue;
     }
     lines.push(
-      `    - ${row.key} · ${row.pct.toFixed(0)}% observed · time ${humanSeconds(row.activeSeconds)} · in ${compactTokens(row.tokenInfo.input)} (${row.inputRate}) · cached ${compactTokens(row.tokenInfo.cached)} · write ${displayCacheWrite(row.tokenInfo.cacheWrite, writeAvailability)} · out ${compactTokens(row.tokenInfo.output)} (${row.outputRate}) · reason ${compactTokens(row.tokenInfo.reasoning)} · est ${row.cost}`,
+      `    - ${row.key} · ${row.pct.toFixed(0)}% model share · time ${humanSeconds(row.activeSeconds)} · in ${compactTokens(row.tokenInfo.input)} (${row.inputRate}) · cached ${compactTokens(row.tokenInfo.cached)} · write ${displayCacheWrite(row.tokenInfo.cacheWrite, writeAvailability)} · out ${compactTokens(row.tokenInfo.output)} (${row.outputRate}) · reason ${compactTokens(row.tokenInfo.reasoning)} · est ${row.cost}`,
     );
     for (const effort of effortBreakdowns.get(row.key) ?? []) {
       const metrics = effortMetricCells(effort)
