@@ -75,6 +75,108 @@ describe("parseClaudeSessionText", () => {
     });
   });
 
+  it("deduplicates streamed assistant records and preserves reasoning effort", () => {
+    const base = {
+      cwd: "/tmp/demo",
+      effort: "high",
+      sessionId: "codex-backed-claude",
+      type: "assistant",
+    };
+    const message = {
+      id: "resp-1",
+      model: "gpt-5.6-sol",
+      role: "assistant",
+    };
+    const session = parseClaudeSessionText(
+      [
+        JSON.stringify({
+          cwd: "/tmp/demo",
+          sessionId: "codex-backed-claude",
+          timestamp: "2026-07-18T10:00:00.000Z",
+          type: "user",
+        }),
+        JSON.stringify({
+          ...base,
+          message: { ...message, usage: { input_tokens: 0, output_tokens: 0 } },
+          timestamp: "2026-07-18T10:00:00.000Z",
+        }),
+        JSON.stringify({
+          ...base,
+          message: {
+            ...message,
+            usage: {
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 80,
+              input_tokens: 20,
+              output_tokens: 10,
+            },
+          },
+          timestamp: "2026-07-18T10:00:01.000Z",
+        }),
+        JSON.stringify({
+          ...base,
+          message: {
+            ...message,
+            usage: {
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 80,
+              input_tokens: 20,
+              output_tokens: 10,
+            },
+          },
+          timestamp: "2026-07-18T10:00:02.000Z",
+        }),
+      ].join("\n"),
+      "codex-backed-claude.jsonl",
+    );
+
+    expect(session).toMatchObject({
+      assistantTurns: 1,
+      efforts: { high: 1 },
+      models: { "gpt-5.6-sol": 1 },
+      requestCount: 1,
+      tokens: {
+        cacheWrite: 0,
+        cached: 80,
+        input: 20,
+        output: 10,
+        reasoning: 0,
+        total: 110,
+      },
+    });
+    expect(session?.requests[0]).toMatchObject({
+      effort: "high",
+      model: "gpt-5.6-sol",
+      total: 110,
+    });
+  });
+
+  it("counts assistant records without a message envelope", () => {
+    const session = parseClaudeSessionText(
+      [
+        JSON.stringify({
+          cwd: "/tmp/demo",
+          sessionId: "partial-claude",
+          timestamp: "2026-07-18T10:00:00.000Z",
+          type: "assistant",
+        }),
+        JSON.stringify({
+          cwd: "/tmp/demo",
+          message: {
+            model: "gpt-5.6-luna",
+            usage: { input_tokens: 5, output_tokens: 2 },
+          },
+          sessionId: "partial-claude",
+          timestamp: "2026-07-18T10:00:01.000Z",
+          type: "assistant",
+        }),
+      ].join("\n"),
+      "partial-claude.jsonl",
+    );
+
+    expect(session).toMatchObject({ assistantTurns: 2, requestCount: 1 });
+  });
+
   it("infers claude originator from entrypoint", () => {
     const session = parseClaudeSessionText(
       [

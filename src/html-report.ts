@@ -1389,7 +1389,7 @@ function renderSelectedChartGrid(
   }
   if (sections.has("model-breakdown")) {
     panels.push(`<section class="chart-panel">
-    <h2>Model request mix</h2>
+    <h2>Model mix</h2>
     ${renderBarList(modelMix, 100, "No model markers")}
   </section>`);
   }
@@ -1773,7 +1773,7 @@ function renderModelsPanel(
             const metricsHtml = row.tokensAttributed
               ? `<dl class="model-metrics"><div><dt>Time</dt><dd>${escapeHtml(humanSeconds(row.activeSeconds))}</dd><small>range total</small></div><div><dt>Input</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.input))}</dd><small>${escapeHtml(row.inputRate)}</small></div><div><dt>Cached</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.cached))}</dd><small>cache read</small></div><div><dt>Write</dt><dd>${escapeHtml(displayCacheWrite(row.tokenInfo.cacheWrite, writeAvailability))}</dd><small>${escapeHtml(writeAvailability === "unknown" ? "not exposed" : "cache create")}</small></div><div><dt>Output</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.output))}</dd><small>${escapeHtml(row.outputRate)}</small></div><div><dt>Reason</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.reasoning))}</dd><small>thinking</small></div><div><dt>Est cost</dt><dd>${escapeHtml(row.cost)}</dd><small>range total</small></div></dl>`
               : "";
-            return `<li class="model-row"><div class="model-top"><span title="${escapeHtml(row.key)}">${escapeHtml(row.key)}</span><b>${row.pct.toFixed(0)}% observed</b></div><div class="track"><i style="width:${Math.max(2, Math.min(100, row.pct)).toFixed(1)}%"></i></div>${metricsHtml}${unattributedHtml}${effortHtml}</li>`;
+            return `<li class="model-row"><div class="model-top"><span title="${escapeHtml(row.key)}">${escapeHtml(row.key)}</span><b>${row.pct.toFixed(0)}% model share</b></div><div class="track"><i style="width:${Math.max(2, Math.min(100, row.pct)).toFixed(1)}%"></i></div>${metricsHtml}${unattributedHtml}${effortHtml}</li>`;
           })
           .join("");
   const mixedUsageHtml = mixedUsage
