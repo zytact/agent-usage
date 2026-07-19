@@ -1,4 +1,10 @@
-import type { ParsedSession, SessionRequest, SourceId, TokenUsage } from "./domain.js";
+import type {
+  ParsedSession,
+  SessionRequest,
+  SourceId,
+  TelemetryAvailability,
+  TokenUsage,
+} from "./domain.js";
 import { originatorLabel } from "./ingest-shared.js";
 import {
   coefficientOfVariation,
@@ -43,6 +49,7 @@ export type DailyBreakdownRow = {
   model: string;
   output: number;
   reasoning: number;
+  reasoningAvailability: TelemetryAvailability;
   requests: number;
   sessions: number;
   subharness: string;
@@ -128,7 +135,8 @@ export type EffortBreakdownRow = {
   inputPerRequest: number;
   outputPerRequest: number;
   outputPerRequestUplift?: number;
-  reasoningPerRequest: number;
+  reasoningAvailability: TelemetryAvailability;
+  reasoningPerRequest?: number;
   reasoningPerRequestUplift?: number;
   requests: number;
   tokensPerRequest: number;
@@ -165,6 +173,7 @@ type EffortAggregationBucket = {
   contextCount: number;
   contextTotal: number;
   costBreakdown?: CostBreakdown;
+  reasoningRequestCount: number;
   requestCount: number;
   tokenInfo: ModelTokenUsage;
 };
@@ -176,8 +185,6 @@ export type SourceSection = {
   title: string;
   tone: string;
 };
-
-export type CacheWriteAvailability = "known" | "mixed" | "unknown";
 
 export type BuiltReport = {
   attributionOverages: Array<{
@@ -451,7 +458,10 @@ function buildDailyUsageSummary(
 }
 
 function groupedDailyModelBreakdown(sessions: ParsedSession[]): DailyBreakdownRow[] {
-  const grouped = new Map<string, DailyBreakdownRow & { _sessionIds: Set<string> }>();
+  const grouped = new Map<
+    string,
+    DailyBreakdownRow & { _reasoningKnown: number; _sessionIds: Set<string> }
+  >();
 
   for (const session of sessions) {
     const sessionSeen = new Set<string>();
@@ -467,6 +477,7 @@ function groupedDailyModelBreakdown(sessions: ParsedSession[]): DailyBreakdownRo
       const row =
         grouped.get(key) ??
         ({
+          _reasoningKnown: 0,
           _sessionIds: new Set<string>(),
           activeSeconds: 0,
           cached: 0,
@@ -476,16 +487,21 @@ function groupedDailyModelBreakdown(sessions: ParsedSession[]): DailyBreakdownRo
           input: 0,
           model: request.model,
           output: 0,
-          reasoning: request.reasoning,
+          reasoning: 0,
+          reasoningAvailability: "unknown",
           requests: 0,
           sessions: 0,
           subharness: request.subharness,
-        } satisfies DailyBreakdownRow & { _sessionIds: Set<string> });
+        } satisfies DailyBreakdownRow & {
+          _reasoningKnown: number;
+          _sessionIds: Set<string>;
+        });
 
       row.cached += request.cacheRead;
       row.input += request.input;
       row.output += request.output;
       row.reasoning += request.reasoning;
+      row._reasoningKnown += request.reasoningAvailability === "known" ? 1 : 0;
       row.requests += 1;
       row._sessionIds.add(session.sessionId);
 
@@ -502,7 +518,18 @@ function groupedDailyModelBreakdown(sessions: ParsedSession[]): DailyBreakdownRo
   }
 
   return [...grouped.values()]
-    .map(({ _sessionIds, ...row }) => ({ ...row, sessions: _sessionIds.size }))
+    .map(
+      ({ _reasoningKnown, _sessionIds, ...row }): DailyBreakdownRow => ({
+        ...row,
+        reasoningAvailability:
+          _reasoningKnown === 0
+            ? "unknown"
+            : _reasoningKnown === row.requests
+              ? "known"
+              : "partial",
+        sessions: _sessionIds.size,
+      }),
+    )
     .sort((a, b) =>
       compareRows(
         [b.date, b.harness, b.subharness, b.model, b.effort],
@@ -874,26 +901,33 @@ function formatScopeMoment(value: Date): string {
   return `${value.toISOString().slice(0, 10)} ${value.toISOString().slice(11, 16)} UTC`;
 }
 
-export function cacheWriteAvailability(sessions: ParsedSession[]): CacheWriteAvailability {
-  if (sessions.length === 0) {
-    return "known";
-  }
-  let known = 0;
-  let unknown = 0;
-  for (const session of sessions) {
-    if (session.cacheWriteKnown) {
-      known += 1;
-    } else {
-      unknown += 1;
-    }
-  }
+export function telemetryAvailability(
+  requests: SessionRequest[],
+  field: "cacheWriteAvailability" | "reasoningAvailability",
+): TelemetryAvailability {
+  const known = requests.filter((request) => request[field] === "known").length;
+  return availabilityFromCounts(known, requests.length);
+}
+
+function availabilityFromCounts(known: number, total: number): TelemetryAvailability {
   if (known === 0) {
     return "unknown";
   }
-  if (unknown === 0) {
-    return "known";
-  }
-  return "mixed";
+  return known === total ? "known" : "partial";
+}
+
+export function cacheWriteAvailability(sessions: ParsedSession[]): TelemetryAvailability {
+  return telemetryAvailability(
+    sessions.flatMap((session) => session.requests),
+    "cacheWriteAvailability",
+  );
+}
+
+export function reasoningAvailability(sessions: ParsedSession[]): TelemetryAvailability {
+  return telemetryAvailability(
+    sessions.flatMap((session) => session.requests),
+    "reasoningAvailability",
+  );
 }
 
 export function formatFloat(value: number | undefined): string {
@@ -993,7 +1027,14 @@ export function effortMetricCells(row: EffortBreakdownRow): EffortMetricCell[] {
     {
       kind: "tokens",
       label: "Reason/req",
-      note: row.effort === "medium" ? "baseline" : formatUpliftNote(row.reasoningPerRequestUplift),
+      note:
+        row.reasoningAvailability === "known"
+          ? row.effort === "medium"
+            ? "baseline"
+            : formatUpliftNote(row.reasoningPerRequestUplift)
+          : row.reasoningAvailability === "partial"
+            ? "partially reported"
+            : "not separately reported",
       value: row.reasoningPerRequest,
     },
     {
@@ -1184,6 +1225,7 @@ function addRequestMetrics(
     }
     const bucket = ensureEffortBucket(ensureEffortMap(rowsByModel, request.model), request.effort);
     bucket.requestCount += 1;
+    bucket.reasoningRequestCount += request.reasoningAvailability === "known" ? 1 : 0;
     if (request.contextSize > 0) {
       bucket.contextCount += 1;
       bucket.contextTotal += request.contextSize;
@@ -1223,7 +1265,10 @@ function baselineMetrics(baseline: EffortAggregationBucket | undefined) {
     costPerActiveMinute: metricPerMinute(baseline?.costBreakdown?.total, baseline?.activeSeconds),
     costPerRequest: metricPerRequest(baseline?.costBreakdown?.total, baseline?.requestCount),
     outputPerRequest: metricPerRequest(baseline?.tokenInfo.output, baseline?.requestCount),
-    reasoningPerRequest: metricPerRequest(baseline?.tokenInfo.reasoning, baseline?.requestCount),
+    reasoningPerRequest: metricPerRequest(
+      baseline?.tokenInfo.reasoning,
+      baseline?.reasoningRequestCount,
+    ),
     tokensPerRequest: metricPerRequest(baseline?.tokenInfo.total, baseline?.requestCount),
   };
 }
@@ -1238,7 +1283,11 @@ function buildEffortBreakdownRow(
   const costPerActiveMinute = metricPerMinute(bucket.costBreakdown?.total, bucket.activeSeconds);
   const tokensPerRequest = metricPerRequestOrZero(bucket.tokenInfo.total, requestCount);
   const outputPerRequest = metricPerRequestOrZero(bucket.tokenInfo.output, requestCount);
-  const reasoningPerRequest = metricPerRequestOrZero(bucket.tokenInfo.reasoning, requestCount);
+  const reasoningAvailability = availabilityFromCounts(bucket.reasoningRequestCount, requestCount);
+  const reasoningPerRequest = metricPerRequest(
+    bucket.tokenInfo.reasoning,
+    bucket.reasoningRequestCount,
+  );
   const contextPerRequest =
     bucket.contextCount > 0 ? bucket.contextTotal / bucket.contextCount : undefined;
 
@@ -1257,6 +1306,7 @@ function buildEffortBreakdownRow(
     inputPerRequest: metricPerRequestOrZero(bucket.tokenInfo.input, requestCount),
     outputPerRequest,
     outputPerRequestUplift: uplift(outputPerRequest, baseline.outputPerRequest),
+    reasoningAvailability,
     reasoningPerRequest,
     reasoningPerRequestUplift: uplift(reasoningPerRequest, baseline.reasoningPerRequest),
     requests: requestCount,
@@ -1284,6 +1334,7 @@ function ensureEffortBucket(effortMap: Map<string, EffortAggregationBucket>, eff
       activeSeconds: 0,
       contextCount: 0,
       contextTotal: 0,
+      reasoningRequestCount: 0,
       requestCount: 0,
       tokenInfo: {
         billableOutput: 0,

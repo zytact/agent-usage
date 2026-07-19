@@ -428,7 +428,7 @@ function buildParsedSession(
   return {
     activeSeconds: allocated.totalSeconds,
     assistantTurns: context.assistantTurns,
-    cacheWriteKnown: true,
+    cacheWriteAvailability: "known",
     cwd: context.cwd,
     dayModelActiveSeconds: collapseDayStateSeconds(allocated.byDayStateSeconds),
     dayStateActiveSeconds: allocated.byDayStateSeconds,
@@ -440,6 +440,7 @@ function buildParsedSession(
     models: context.models,
     originator,
     path: dbPath,
+    reasoningAvailability: "known",
     repo: repoName(context.cwd),
     requestCount: context.requests.length,
     requests: context.requests,

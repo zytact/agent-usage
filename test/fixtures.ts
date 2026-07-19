@@ -35,6 +35,7 @@ function defaultRequest(model: string): SessionRequest {
     cacheRead: 0,
     cacheReadRatio: 0,
     cacheWrite: 0,
+    cacheWriteAvailability: "known",
     contextSize: 0,
     date: "2026-06-14",
     effort: "medium",
@@ -42,6 +43,7 @@ function defaultRequest(model: string): SessionRequest {
     model,
     output: 0,
     reasoning: 0,
+    reasoningAvailability: "known",
     repo: "agent-usage",
     sessionId: "session-1",
     source: "codex",
@@ -80,7 +82,11 @@ function defaultSession(requests: SessionRequest[]): ParsedSession {
   return {
     activeSeconds: 600,
     assistantTurns: requests.length,
-    cacheWriteKnown: false,
+    cacheWriteAvailability: requests.some((request) => request.cacheWriteAvailability === "known")
+      ? requests.every((request) => request.cacheWriteAvailability === "known")
+        ? "known"
+        : "partial"
+      : "unknown",
     cwd: undefined,
     dayModelActiveSeconds: {},
     dayStateActiveSeconds: {},
@@ -92,6 +98,11 @@ function defaultSession(requests: SessionRequest[]): ParsedSession {
     models: {},
     originator: undefined,
     path: "/tmp/session.jsonl",
+    reasoningAvailability: requests.some((request) => request.reasoningAvailability === "known")
+      ? requests.every((request) => request.reasoningAvailability === "known")
+        ? "known"
+        : "partial"
+      : "unknown",
     repo: "agent-usage",
     requestCount: requests.length,
     requests,

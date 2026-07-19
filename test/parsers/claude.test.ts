@@ -151,6 +151,143 @@ describe("parseClaudeSessionText", () => {
     });
   });
 
+  it("distinguishes explicit zero from unavailable telemetry", () => {
+    const session = parseClaudeSessionText(
+      [
+        JSON.stringify({
+          timestamp: "2026-07-18T10:00:00.000Z",
+          type: "user",
+        }),
+        JSON.stringify({
+          message: {
+            model: "gpt-5.6-sol",
+            usage: {
+              cache_creation_input_tokens: 0,
+              input_tokens: 5,
+              output_tokens: 2,
+            },
+          },
+          timestamp: "2026-07-18T10:00:01.000Z",
+          type: "assistant",
+        }),
+        JSON.stringify({
+          message: {
+            model: "gpt-5.6-sol",
+            usage: { input_tokens: 7, output_tokens: 3 },
+          },
+          timestamp: "2026-07-18T10:00:02.000Z",
+          type: "assistant",
+        }),
+      ].join("\n"),
+    );
+
+    expect(session).toMatchObject({
+      cacheWriteAvailability: "partial",
+      reasoningAvailability: "unknown",
+    });
+    expect(session?.requests.map((request) => request.cacheWriteAvailability)).toEqual([
+      "known",
+      "unknown",
+    ]);
+    expect(session?.requests.map((request) => request.reasoningAvailability)).toEqual([
+      "unknown",
+      "unknown",
+    ]);
+  });
+
+  it("separates explicit reasoning from output without double counting", () => {
+    const session = parseClaudeSessionText(
+      [
+        JSON.stringify({ timestamp: "2026-07-18T10:00:00.000Z", type: "user" }),
+        JSON.stringify({
+          message: {
+            id: "resp-reasoning",
+            model: "gpt-5.6-sol",
+            usage: {
+              input_tokens: 10,
+              output_tokens: 25,
+              output_tokens_details: { reasoning_tokens: 5 },
+              total_tokens: 35,
+            },
+          },
+          timestamp: "2026-07-18T10:00:01.000Z",
+          type: "assistant",
+        }),
+      ].join("\n"),
+    );
+
+    expect(session).toMatchObject({
+      reasoningAvailability: "known",
+      tokens: { input: 10, output: 20, reasoning: 5, total: 35 },
+    });
+    expect(session?.modelTokens["gpt-5.6-sol"]?.billableOutput).toBe(25);
+  });
+
+  it("adds separately reported reasoning to output totals", () => {
+    const session = parseClaudeSessionText(
+      [
+        JSON.stringify({ timestamp: "2026-07-18T10:00:00.000Z", type: "user" }),
+        JSON.stringify({
+          message: {
+            id: "resp-separate-reasoning",
+            model: "gpt-5.6-sol",
+            usage: {
+              input_tokens: 10,
+              output_tokens: 20,
+              reasoning_output_tokens: 5,
+            },
+          },
+          timestamp: "2026-07-18T10:00:01.000Z",
+          type: "assistant",
+        }),
+      ].join("\n"),
+    );
+
+    expect(session).toMatchObject({
+      reasoningAvailability: "known",
+      tokens: { input: 10, output: 20, reasoning: 5, total: 35 },
+    });
+    expect(session?.modelTokens["gpt-5.6-sol"]?.billableOutput).toBe(25);
+  });
+
+  it("prefers the streamed duplicate with more complete telemetry", () => {
+    const session = parseClaudeSessionText(
+      [
+        JSON.stringify({ timestamp: "2026-07-18T10:00:00.000Z", type: "user" }),
+        JSON.stringify({
+          message: {
+            id: "resp-complete",
+            model: "gpt-5.6-sol",
+            usage: { input_tokens: 10, output_tokens: 20 },
+          },
+          timestamp: "2026-07-18T10:00:01.000Z",
+          type: "assistant",
+        }),
+        JSON.stringify({
+          message: {
+            id: "resp-complete",
+            model: "gpt-5.6-sol",
+            usage: {
+              cache_creation_input_tokens: 0,
+              input_tokens: 10,
+              output_tokens: 20,
+              output_tokens_details: { reasoning_tokens: 4 },
+            },
+          },
+          timestamp: "2026-07-18T10:00:02.000Z",
+          type: "assistant",
+        }),
+      ].join("\n"),
+    );
+
+    expect(session).toMatchObject({
+      assistantTurns: 1,
+      cacheWriteAvailability: "known",
+      reasoningAvailability: "known",
+      tokens: { cacheWrite: 0, output: 16, reasoning: 4 },
+    });
+  });
+
   it("counts assistant records without a message envelope", () => {
     const session = parseClaudeSessionText(
       [
@@ -209,7 +346,7 @@ describe("parseClaudeSessionText", () => {
     );
 
     expect(session).toMatchObject({
-      cacheWriteKnown: true,
+      cacheWriteAvailability: "known",
       originator: "sdk-cli",
       sourceLabel: "Claude Code",
     });

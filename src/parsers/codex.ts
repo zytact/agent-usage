@@ -195,6 +195,7 @@ function addCodexRequest(
     repo: repoName(state.cwd),
     sessionId: finalSessionId(state.sessionId, state.path),
     source: "codex",
+    telemetry: { cacheWrite: "unknown" },
     tokens,
     ts,
   });
@@ -203,7 +204,6 @@ function addCodexRequest(
 function finishCodexSession(state: CodexParseState): ParsedSession | undefined {
   const modelTokens = distributeModelTokens(state.tokens, state.models);
   return buildParsedSession(state, {
-    cacheWriteKnown: false,
     efforts: state.efforts,
     modelTokens,
     originator: state.originator,

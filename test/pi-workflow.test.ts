@@ -42,12 +42,17 @@ describe("pi-dynamic-workflows parsing", () => {
       originator: "pi-dynamic-workflows",
       repo: "agent-usage",
       requestCount: 1,
+      reasoningAvailability: "unknown",
       sessionId: "audit-abc123",
       source: "pi",
       tokens: { cacheWrite: 0, cached: 50, input: 100, output: 20, reasoning: 0, total: 170 },
       workflowRunId: "audit-abc123",
     });
-    expect(session?.requests[0]).toMatchObject({ effort: "medium", model: "gpt-5.6-terra" });
+    expect(session?.requests[0]).toMatchObject({
+      effort: "medium",
+      model: "gpt-5.6-terra",
+      reasoningAvailability: "unknown",
+    });
     expect(session?.efforts).toEqual({ medium: 2 });
     expect(session?.models).toEqual({ "gpt-5.6-terra": 2 });
     expect(session?.stateActiveSeconds).toEqual({ "gpt-5.6-terra::medium": 120 });

@@ -65,6 +65,7 @@ export function parsePiWorkflowText(
       repo,
       sessionId: runId,
       source: "pi",
+      telemetry: { reasoning: "unknown" },
       tokens,
       ts: end,
     });
@@ -79,7 +80,7 @@ export function parsePiWorkflowText(
   return {
     activeSeconds,
     assistantTurns: requests.length,
-    cacheWriteKnown: true,
+    cacheWriteAvailability: "known",
     dayModelActiveSeconds: { [day]: { [usageState.model]: activeSeconds } },
     dayStateActiveSeconds: { [day]: { [state]: activeSeconds } },
     efforts: countAgentUsage(workflowAgentUsage, "effort"),
@@ -90,6 +91,7 @@ export function parsePiWorkflowText(
     models: countAgentUsage(workflowAgentUsage, "model"),
     originator: ORIGINATOR,
     path,
+    reasoningAvailability: "unknown",
     repo,
     requestCount: requests.length,
     requests,

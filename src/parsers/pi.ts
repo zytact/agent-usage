@@ -103,6 +103,9 @@ function parsePiMessage(
       repo: repoName(state.cwd),
       sessionId: finalSessionId(state.sessionId, state.path),
       source: "pi",
+      telemetry: {
+        reasoning: Object.hasOwn(usage, "reasoning") ? "known" : "unknown",
+      },
       tokens: usageTokens,
       ts,
     });
@@ -111,7 +114,6 @@ function parsePiMessage(
 
 function finishPiSession(state: PiParseState): ParsedSession | undefined {
   return buildParsedSession(state, {
-    cacheWriteKnown: true,
     efforts: state.effortMarks,
     modelTokens: state.modelTokens,
     originator: state.originator,
