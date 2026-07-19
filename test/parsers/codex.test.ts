@@ -15,7 +15,7 @@ describe("parseCodexSessionText", () => {
     expect(session).toMatchObject({
       activeSeconds: 758,
       assistantTurns: 1,
-      cacheWriteKnown: false,
+      cacheWriteAvailability: "unknown",
       cwd: "/home/arnab/Projects/agent-usage",
       efforts: { high: 1, medium: 1 },
       languages: { Markdown: 1, TypeScript: 1 },

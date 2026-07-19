@@ -2,6 +2,7 @@ import type { ReportMode } from "./args.js";
 import { formatEffortMetricValue } from "./effort-format.js";
 import { isPrimarySection, shouldShowSection } from "./render-shared.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
+import { displayCacheWrite, displayPartialCost, displayTelemetry } from "./telemetry-format.js";
 import {
   ALL_SECTIONS,
   DEFAULT_SECTIONS,
@@ -21,6 +22,8 @@ import {
   modelEffortBreakdownMap,
   modelRows,
   modelRowsIncludingWorkflowModels,
+  modelTelemetryAvailability,
+  reasoningAvailability,
   workflowModelAttributions,
   summarizeDistribution,
   topEntries,
@@ -39,7 +42,10 @@ export function renderTerminalReport(
 ): string {
   const resolvedSections = sanitizeSectionsForScope(report.scope, sections);
   const lines: string[] = [];
-  const combinedCost = formatUsd(estimateStatsTotalCost(report.combined.stats, pricing));
+  const combinedCost = displayCost(
+    estimateStatsTotalCost(report.combined.stats, pricing),
+    cacheWriteAvailability(report.combined.sessions),
+  );
   const activeSections = new Set(resolvedSections);
   const mode = inferSectionModeForScope(report.scope, resolvedSections);
 
@@ -52,7 +58,7 @@ export function renderTerminalReport(
 
   if (mode === "full") {
     lines.push(
-      "Legend: input=fresh prompt, cached=cache reads, cache write=cache creation, output=visible output, reasoning=hidden/thinking output, total=provider total when present.",
+      "Legend: input=fresh prompt, cached=cache reads, cache write=cache creation, output=reported output, reasoning=separately reported reasoning, total=provider total when present.",
     );
     lines.push("");
   }
@@ -144,7 +150,7 @@ function renderSelectedSummary(
           cacheWriteAvailability(report.combined.sessions),
         ),
     },
-    { key: "token-mix", render: () => renderTokenBreakdown(report.combined.stats) },
+    { key: "token-mix", render: () => renderTokenBreakdown(report.combined) },
     {
       key: "top-repos",
       render: () =>
@@ -172,17 +178,18 @@ function renderSection(
 ): string[] {
   const { stats, title } = section;
   const writeAvailability = cacheWriteAvailability(section.sessions);
+  const reasonAvailability = reasoningAvailability(section.sessions);
   const lines = [
     title.toUpperCase(),
     `  Active time     ${humanSeconds(stats.activeSeconds)}`,
     `  Sessions        ${stats.sessionCount}`,
     `  Requests        ${stats.requestCount}`,
-    `  Est cost        ${formatUsd(estimateStatsTotalCost(stats, pricing))}`,
+    `  Est cost        ${displayCost(estimateStatsTotalCost(stats, pricing), writeAvailability)}`,
     `  Input           ${compactTokens(stats.tokens.input)}`,
     `  Cached          ${compactTokens(stats.tokens.cached)}`,
     `  Cache write     ${displayCacheWrite(stats.tokens.cacheWrite, writeAvailability)}`,
     `  Output          ${compactTokens(stats.tokens.output)}`,
-    `  Reasoning       ${compactTokens(stats.tokens.reasoning)}`,
+    `  Reasoning       ${displayTelemetry(stats.tokens.reasoning, reasonAvailability)}`,
     `  Total           ${compactTokens(stats.tokens.total)}`,
   ];
 
@@ -228,13 +235,14 @@ function renderSourceShares(report: BuiltReport): string[] {
   );
 }
 
-function renderTokenBreakdown(stats: ReportStats): string[] {
+function renderTokenBreakdown(section: SourceSection): string[] {
+  const { stats } = section;
   return [
     "  Token mix",
     `    • input · ${compactTokens(stats.tokens.input)}`,
     `    • cached · ${compactTokens(stats.tokens.cached)}`,
     `    • output · ${compactTokens(stats.tokens.output)}`,
-    `    • reasoning · ${compactTokens(stats.tokens.reasoning)}`,
+    `    • reasoning · ${displayTelemetry(stats.tokens.reasoning, reasoningAvailability(section.sessions))}`,
     `    • total · ${compactTokens(stats.tokens.total)}`,
   ];
 }
@@ -265,7 +273,9 @@ function renderModelList(
   const effortBreakdowns = modelEffortBreakdownMap(section.sessions, pricing, rows.length);
   const workflowAttributions = workflowModelAttributions(section.sessions);
   const mixedUsage = mixedWorkflowUsage(section.sessions);
+  const reasonAvailability = reasoningAvailability(section.sessions);
   for (const row of rows) {
+    const rowAvailability = modelTelemetryAvailability(section, row.key);
     if (!row.tokensAttributed) {
       lines.push(`    - ${row.key} · ${row.pct.toFixed(0)}% model share`);
       for (const attribution of workflowAttributions.filter((item) => item.model === row.key)) {
@@ -277,7 +287,7 @@ function renderModelList(
       continue;
     }
     lines.push(
-      `    - ${row.key} · ${row.pct.toFixed(0)}% model share · time ${humanSeconds(row.activeSeconds)} · in ${compactTokens(row.tokenInfo.input)} (${row.inputRate}) · cached ${compactTokens(row.tokenInfo.cached)} · write ${displayCacheWrite(row.tokenInfo.cacheWrite, writeAvailability)} · out ${compactTokens(row.tokenInfo.output)} (${row.outputRate}) · reason ${compactTokens(row.tokenInfo.reasoning)} · est ${row.cost}`,
+      `    - ${row.key} · ${row.pct.toFixed(0)}% model share · time ${humanSeconds(row.activeSeconds)} · in ${compactTokens(row.tokenInfo.input)} (${row.inputRate}) · cached ${compactTokens(row.tokenInfo.cached)} · write ${displayCacheWrite(row.tokenInfo.cacheWrite, rowAvailability.cacheWrite)} · out ${compactTokens(row.tokenInfo.output)} (${row.outputRate}) · reason ${displayTelemetry(row.tokenInfo.reasoning, rowAvailability.reasoning)} · est ${displayPartialCost(row.cost, rowAvailability.cacheWrite)}`,
     );
     for (const effort of effortBreakdowns.get(row.key) ?? []) {
       const metrics = effortMetricCells(effort)
@@ -296,7 +306,7 @@ function renderModelList(
   if (mixedUsage) {
     lines.push("    Combined mixed workflow usage");
     lines.push(
-      `      total ${compactTokens(mixedUsage.tokenInfo.total)} · input ${compactTokens(mixedUsage.tokenInfo.input)} · cached ${compactTokens(mixedUsage.tokenInfo.cached)} · write ${displayCacheWrite(mixedUsage.tokenInfo.cacheWrite, writeAvailability)} · output ${compactTokens(mixedUsage.tokenInfo.output)} · reason ${compactTokens(mixedUsage.tokenInfo.reasoning)} · time ${humanSeconds(mixedUsage.activeSeconds)}`,
+      `      total ${compactTokens(mixedUsage.tokenInfo.total)} · input ${compactTokens(mixedUsage.tokenInfo.input)} · cached ${compactTokens(mixedUsage.tokenInfo.cached)} · write ${displayCacheWrite(mixedUsage.tokenInfo.cacheWrite, writeAvailability)} · output ${compactTokens(mixedUsage.tokenInfo.output)} · reason ${displayTelemetry(mixedUsage.tokenInfo.reasoning, reasonAvailability)} · time ${humanSeconds(mixedUsage.activeSeconds)}`,
     );
     lines.push(
       "      These totals apply collectively to the workflow models above and cannot be split by model.",
@@ -305,11 +315,11 @@ function renderModelList(
   return lines;
 }
 
-function displayCacheWrite(
-  value: number,
-  availability: ReturnType<typeof cacheWriteAvailability>,
+function displayCost(
+  value: number | undefined,
+  availability: "known" | "partial" | "unknown",
 ): string {
-  return availability === "known" ? compactTokens(value) : "n/a";
+  return displayPartialCost(formatUsd(value), availability);
 }
 
 function renderRequestSummary(
@@ -388,7 +398,7 @@ function renderDailyBreakdown(rows: DailyBreakdownRow[]): string[] {
   );
   for (const row of rows.slice(0, 20)) {
     lines.push(
-      `  ${row.date} ${pad(row.harness, 8)} ${pad(row.subharness, 10)} ${pad(row.model, 24)} ${pad(row.effort, 8)} ${padLeft(humanSeconds(row.activeSeconds), 6)} ${padLeft(String(row.sessions), 4)} ${padLeft(String(row.requests), 4)} ${padLeft(compactTokens(row.input), 6)} ${padLeft(compactTokens(row.cached), 7)} ${padLeft(compactTokens(row.output), 7)} ${padLeft(compactTokens(row.reasoning), 7)}`,
+      `  ${row.date} ${pad(row.harness, 8)} ${pad(row.subharness, 10)} ${pad(row.model, 24)} ${pad(row.effort, 8)} ${padLeft(humanSeconds(row.activeSeconds), 6)} ${padLeft(String(row.sessions), 4)} ${padLeft(String(row.requests), 4)} ${padLeft(compactTokens(row.input), 6)} ${padLeft(compactTokens(row.cached), 7)} ${padLeft(compactTokens(row.output), 7)} ${padLeft(displayTelemetry(row.reasoning, row.reasoningAvailability), 7)}`,
     );
   }
   return lines;

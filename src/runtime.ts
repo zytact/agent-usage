@@ -397,7 +397,7 @@ function deduplicateWorkflowSessions(sessions: ParsedSession[]): ParsedSession[]
 
 const PARSE_CONCURRENCY = 8;
 
-const SESSION_CACHE_VERSION = 7;
+const SESSION_CACHE_VERSION = 8;
 
 type SessionCacheRecord = {
   mtimeMs: number;
@@ -478,8 +478,10 @@ function reviveParsedSession(session: ParsedSession | null): ParsedSession | nul
 
   return {
     ...session,
-    cacheWriteKnown: session.cacheWriteKnown ?? session.source !== "codex",
+    cacheWriteAvailability:
+      session.cacheWriteAvailability ?? (session.source === "codex" ? "unknown" : "known"),
     end: new Date(session.end),
+    reasoningAvailability: session.reasoningAvailability ?? "known",
     requests: session.requests.map((request) => ({ ...request, ts: new Date(request.ts) })),
     start: new Date(session.start),
   };

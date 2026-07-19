@@ -123,6 +123,7 @@ describe("renderers", () => {
     expect(output).toContain("vs medium");
     expect(output).toContain("write n/a");
     expect(output).toContain("est $");
+    expect(output).toContain("(partial)");
     expect(output).toContain("HIGHLIGHTS");
   });
 
@@ -189,17 +190,22 @@ describe("renderers", () => {
     expect(html).not.toContain(">mixed usage</span>");
   });
 
-  it("hides cache-write totals when availability is mixed", () => {
+  it("renders partial cache-write aggregates truthfully", () => {
     const report = buildReport(
       [
         makeSession({
-          cacheWriteKnown: false,
-          requests: [makeRequest({ cacheWrite: 500, model: "openai/gpt-5", total: 500 })],
+          requests: [
+            makeRequest({
+              cacheWrite: 0,
+              cacheWriteAvailability: "unknown",
+              model: "openai/gpt-5",
+              total: 0,
+            }),
+          ],
           source: "codex",
           sourceLabel: "Codex",
         }),
         makeSession({
-          cacheWriteKnown: true,
           requests: [makeRequest({ cacheWrite: 250, model: "openai/gpt-5", total: 250 })],
           sessionId: "session-2",
           source: "pi",
@@ -213,9 +219,9 @@ describe("renderers", () => {
     );
     const output = renderTerminalReport(report, pricing);
 
-    expect(output).toContain("Cache write     n/a");
-    expect(output).toContain("write n/a");
-    expect(output).not.toContain("write 750");
+    expect(output).toContain("write 250 (partial)");
+    expect(output).toContain("est $0.0003 (partial)");
+    expect(output).not.toContain("write 0");
   });
 
   it("renders terminal custom section subset", async () => {

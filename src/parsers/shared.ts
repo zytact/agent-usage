@@ -146,10 +146,7 @@ export function addModelTokens(
 
 export function buildParsedSession(
   state: ParserBaseState,
-  extras: Pick<
-    ParsedSession,
-    "cacheWriteKnown" | "efforts" | "modelTokens" | "source" | "sourceLabel"
-  > &
+  extras: Pick<ParsedSession, "efforts" | "modelTokens" | "source" | "sourceLabel"> &
     Partial<Pick<ParsedSession, "originator" | "workflowAgentLabel" | "workflowRunId">>,
 ): ParsedSession | undefined {
   if (state.events.length === 0) {
@@ -162,7 +159,9 @@ export function buildParsedSession(
   return {
     activeSeconds: allocated.totalSeconds,
     assistantTurns: state.assistantTurns,
-    cacheWriteKnown: extras.cacheWriteKnown,
+    cacheWriteAvailability: aggregateAvailability(
+      state.requests.map((request) => request.cacheWriteAvailability),
+    ),
     cwd: state.cwd,
     dayModelActiveSeconds: collapseDayStateSeconds(allocated.byDayStateSeconds),
     dayStateActiveSeconds: allocated.byDayStateSeconds,
@@ -174,6 +173,9 @@ export function buildParsedSession(
     models: state.models,
     originator: extras.originator,
     path: state.path,
+    reasoningAvailability: aggregateAvailability(
+      state.requests.map((request) => request.reasoningAvailability),
+    ),
     repo: repoName(state.cwd),
     requestCount: state.requests.length,
     requests: state.requests,
@@ -187,6 +189,15 @@ export function buildParsedSession(
     workflowAgentLabel: extras.workflowAgentLabel,
     workflowRunId: extras.workflowRunId,
   };
+}
+
+function aggregateAvailability(
+  values: ParsedSession["requests"][number]["cacheWriteAvailability"][],
+): ParsedSession["cacheWriteAvailability"] {
+  if (values.every((value) => value === "unknown")) {
+    return "unknown";
+  }
+  return values.every((value) => value === "known") ? "known" : "partial";
 }
 
 export function finalSessionId(sessionId: string | undefined, path: string): string {

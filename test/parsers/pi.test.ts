@@ -15,7 +15,7 @@ describe("parsePiSessionText", () => {
     expect(session).toMatchObject({
       activeSeconds: 41,
       assistantTurns: 2,
-      cacheWriteKnown: true,
+      cacheWriteAvailability: "known",
       cwd: "/home/arnab/Projects/scripts",
       efforts: { high: 1, medium: 1 },
       languages: { Python: 1 },
@@ -26,6 +26,7 @@ describe("parsePiSessionText", () => {
       models: { "gpt-5.4": 2, "gpt-5.4-mini": 2 },
       repo: "scripts",
       requestCount: 2,
+      reasoningAvailability: "partial",
       sessionId: "019dc1a2-d71d-77ec-a42a-689f33c942cd",
       source: "pi",
       sourceLabel: "Pi",
@@ -75,6 +76,7 @@ describe("parsePiSessionText", () => {
       input: 1450,
       model: "gpt-5.4-mini",
       output: 102,
+      reasoningAvailability: "unknown",
       total: 1552,
       uncachedInput: 1450,
     });
@@ -86,8 +88,32 @@ describe("parsePiSessionText", () => {
       model: "gpt-5.4",
       output: 50,
       reasoning: 15,
+      reasoningAvailability: "known",
       total: 575,
       uncachedInput: 425,
+    });
+  });
+
+  it("preserves an explicit reasoning zero as known", () => {
+    const session = parsePiSessionText(
+      [
+        JSON.stringify({ type: "session", id: "pi-zero", timestamp: "2026-04-24T22:36:00.000Z" }),
+        JSON.stringify({
+          type: "message",
+          timestamp: "2026-04-24T22:36:01.000Z",
+          message: {
+            role: "assistant",
+            model: "gpt-5.4",
+            usage: { input: 10, output: 5, reasoning: 0, totalTokens: 15 },
+          },
+        }),
+      ].join("\n"),
+    );
+
+    expect(session).toMatchObject({ reasoningAvailability: "known" });
+    expect(session?.requests[0]).toMatchObject({
+      reasoning: 0,
+      reasoningAvailability: "known",
     });
   });
 

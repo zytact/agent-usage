@@ -103,10 +103,14 @@ function collectAssistantMessage(
 }
 
 function mergeAssistantMessage(current: ClaudeMessage, next: ClaudeMessage): ClaudeMessage {
-  const hasMoreUsage = usageTotal(next.envelope) > usageTotal(current.envelope);
+  const currentScore = usageCompleteness(current.envelope);
+  const nextScore = usageCompleteness(next.envelope);
+  const useNext =
+    nextScore > currentScore ||
+    (nextScore === currentScore && usageTotal(next.envelope) >= usageTotal(current.envelope));
   return {
     effort: next.effort ?? current.effort,
-    envelope: hasMoreUsage ? next.envelope : current.envelope,
+    envelope: useNext ? next.envelope : current.envelope,
     ts: earliestTimestamp(current.ts, next.ts),
   };
 }
@@ -116,6 +120,29 @@ function earliestTimestamp(current: Date | undefined, next: Date | undefined): D
     return current ?? next;
   }
   return current < next ? current : next;
+}
+
+function usageCompleteness(envelope: Record<string, unknown>): number {
+  const usage = isRecord(envelope.usage) ? envelope.usage : undefined;
+  if (!usage) {
+    return 0;
+  }
+  const fields = [
+    "input_tokens",
+    "cache_read_input_tokens",
+    "cache_creation_input_tokens",
+    "output_tokens",
+    "total_tokens",
+    "reasoning_output_tokens",
+  ];
+  let score = fields.filter((field) => Object.hasOwn(usage, field)).length;
+  if (
+    isRecord(usage.output_tokens_details) &&
+    Object.hasOwn(usage.output_tokens_details, "reasoning_tokens")
+  ) {
+    score += 1;
+  }
+  return score;
 }
 
 function usageTotal(envelope: Record<string, unknown>): number {
@@ -143,10 +170,10 @@ function parseClaudeMessage(message: ClaudeMessage, state: ClaudeParseState): vo
     return;
   }
 
-  const usageTokens = claudeUsageTokens(usage);
-  addTokens(state.tokens, usageTokens);
-  addModelTokens(state.modelTokens, model, usageTokens);
-  addClaudeRequest(model, usageTokens, ts, state);
+  const parsedUsage = claudeUsageTokens(usage);
+  addTokens(state.tokens, parsedUsage.tokens);
+  addModelTokens(state.modelTokens, model, parsedUsage.tokens);
+  addClaudeRequest(model, parsedUsage, ts, state);
 }
 
 function finishClaudeSession(state: ClaudeParseState): ParsedSession | undefined {
@@ -179,7 +206,6 @@ function finishClaudeSession(state: ClaudeParseState): ParsedSession | undefined
   }
 
   return buildParsedSession(state, {
-    cacheWriteKnown: true,
     efforts: state.efforts,
     modelTokens: state.modelTokens,
     originator: state.originator,
@@ -199,9 +225,15 @@ function setCurrentModel(
   setSharedCurrentModel(model, ts, state);
 }
 
+type ClaudeUsage = {
+  cacheWriteAvailability: "known" | "unknown";
+  reasoningAvailability: "known" | "unknown";
+  tokens: ParsedSession["tokens"];
+};
+
 function addClaudeRequest(
   model: string,
-  tokens: ParsedSession["tokens"],
+  usage: ClaudeUsage,
   ts: Date | undefined,
   state: ClaudeParseState,
 ): void {
@@ -211,24 +243,75 @@ function addClaudeRequest(
     repo: repoName(state.cwd),
     sessionId: finalSessionId(state.sessionId, state.path),
     source: "claude",
-    tokens,
+    telemetry: {
+      cacheWrite: usage.cacheWriteAvailability,
+      reasoning: usage.reasoningAvailability,
+    },
+    tokens: usage.tokens,
     ts,
   });
 }
 
-function claudeUsageTokens(usage: Record<string, unknown>): ParsedSession["tokens"] {
+function claudeUsageTokens(usage: Record<string, unknown>): ClaudeUsage {
   const input = asNumber(usage.input_tokens);
   const cached = asNumber(usage.cache_read_input_tokens);
   const cacheWrite = asNumber(usage.cache_creation_input_tokens);
-  const output = asNumber(usage.output_tokens);
+  const rawOutput = asNumber(usage.output_tokens);
+  const reasoning = explicitReasoningTokens(usage);
+  const output = splitClaudeOutput(rawOutput, reasoning);
+  const fallbackTotal = input + cached + cacheWrite + rawOutput + output.additiveReasoning;
   return {
-    cacheWrite,
-    cached,
-    input,
-    output,
-    reasoning: 0,
-    total: asNumber(usage.total_tokens) || input + cached + cacheWrite + output,
+    cacheWriteAvailability: fieldAvailability(usage, "cache_creation_input_tokens"),
+    reasoningAvailability: valueAvailability(reasoning),
+    tokens: {
+      cacheWrite,
+      cached,
+      input,
+      output: output.visible,
+      reasoning: output.reasoning,
+      total: asNumber(usage.total_tokens) || fallbackTotal,
+    },
   };
+}
+
+function fieldAvailability(value: Record<string, unknown>, field: string): "known" | "unknown" {
+  return Object.hasOwn(value, field) ? "known" : "unknown";
+}
+
+function valueAvailability(value: unknown): "known" | "unknown" {
+  return value === undefined ? "unknown" : "known";
+}
+
+function splitClaudeOutput(
+  rawOutput: number,
+  reasoning: { includedInOutput: boolean; tokens: number } | undefined,
+) {
+  if (!reasoning) {
+    return { additiveReasoning: 0, reasoning: 0, visible: rawOutput };
+  }
+  return reasoning.includedInOutput
+    ? {
+        additiveReasoning: 0,
+        reasoning: reasoning.tokens,
+        visible: Math.max(0, rawOutput - reasoning.tokens),
+      }
+    : { additiveReasoning: reasoning.tokens, reasoning: reasoning.tokens, visible: rawOutput };
+}
+
+function explicitReasoningTokens(
+  usage: Record<string, unknown>,
+): { includedInOutput: boolean; tokens: number } | undefined {
+  const details = isRecord(usage.output_tokens_details) ? usage.output_tokens_details : undefined;
+  if (details && Object.hasOwn(details, "reasoning_tokens")) {
+    return {
+      includedInOutput: true,
+      tokens: Math.min(asNumber(details.reasoning_tokens), asNumber(usage.output_tokens)),
+    };
+  }
+  if (Object.hasOwn(usage, "reasoning_output_tokens")) {
+    return { includedInOutput: false, tokens: asNumber(usage.reasoning_output_tokens) };
+  }
+  return undefined;
 }
 
 function inferOriginator(

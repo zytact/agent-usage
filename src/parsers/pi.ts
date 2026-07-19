@@ -96,22 +96,34 @@ function parsePiMessage(
   addModelTokens(state.modelTokens, tokenModel, usageTokens);
 
   if (role === "assistant") {
-    addRequest(state.requests, {
-      effort: state.currentEffort,
-      model: tokenModel,
-      originator: state.originator,
-      repo: repoName(state.cwd),
-      sessionId: finalSessionId(state.sessionId, state.path),
-      source: "pi",
-      tokens: usageTokens,
-      ts,
-    });
+    addPiRequest(usage, usageTokens, tokenModel, ts, state);
   }
+}
+
+function addPiRequest(
+  usage: Record<string, unknown>,
+  tokens: ParsedSession["tokens"],
+  model: string | undefined,
+  ts: Date | undefined,
+  state: PiParseState,
+): void {
+  addRequest(state.requests, {
+    effort: state.currentEffort,
+    model,
+    originator: state.originator,
+    repo: repoName(state.cwd),
+    sessionId: finalSessionId(state.sessionId, state.path),
+    source: "pi",
+    telemetry: {
+      reasoning: Object.hasOwn(usage, "reasoning") ? "known" : "unknown",
+    },
+    tokens,
+    ts,
+  });
 }
 
 function finishPiSession(state: PiParseState): ParsedSession | undefined {
   return buildParsedSession(state, {
-    cacheWriteKnown: true,
     efforts: state.effortMarks,
     modelTokens: state.modelTokens,
     originator: state.originator,

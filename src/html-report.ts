@@ -5,6 +5,12 @@ import { compactMetric, formatEffortMetricValue } from "./effort-format.js";
 import { shouldShowSection } from "./render-shared.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
 import {
+  availabilityNote,
+  displayCacheWrite,
+  displayPartialCost,
+  displayTelemetry,
+} from "./telemetry-format.js";
+import {
   ALL_SECTIONS,
   DEFAULT_SECTIONS,
   inferSectionModeForScope,
@@ -23,6 +29,8 @@ import {
   modelEffortBreakdownMap,
   modelRows,
   modelRowsIncludingWorkflowModels,
+  modelTelemetryAvailability,
+  reasoningAvailability,
   workflowModelAttributions,
   percentRows,
   topEntries,
@@ -1164,12 +1172,15 @@ function renderHero(report: BuiltReport, mode: HtmlReportView["mode"]): string {
 }
 
 function renderCombinedSummary(report: BuiltReport, pricing: Record<string, PricingInfo>): string {
-  const combinedCost = estimateStatsTotalCost(report.combined.stats, pricing);
+  const combinedCost = displayCost(
+    estimateStatsTotalCost(report.combined.stats, pricing),
+    cacheWriteAvailability(report.combined.sessions),
+  );
   return `<dl class="summary-grid" aria-label="Combined summary">
     ${htmlMetric("Active time", humanSeconds(report.combined.stats.activeSeconds))}
     ${htmlMetric("Sessions", String(report.combined.stats.sessionCount))}
     ${htmlMetric("Tokens", compactTokens(report.combined.stats.tokens.total), "provider total when present")}
-    ${htmlMetric("Estimated cost", formatUsd(combinedCost), "models.dev rate card when available")}
+    ${htmlMetric("Estimated cost", combinedCost, "models.dev rate card when available")}
   </dl>`;
 }
 
@@ -1231,6 +1242,7 @@ function renderSourceSection(
   const costs = estimateStatsTotalCost(stats, pricing);
   const effortRows = percentRows(stats.efforts, 5);
   const writeAvailability = cacheWriteAvailability(section.sessions);
+  const reasonAvailability = reasoningAvailability(section.sessions);
   const models = modelRowsIncludingWorkflowModels(stats, section.sessions, pricing, 5);
   const tokenTotal = Math.max(stats.tokens.total, 1);
 
@@ -1245,7 +1257,7 @@ function renderSourceSection(
       ${htmlMetric("Sessions", String(stats.sessionCount))}
       ${htmlMetric("Requests", String(stats.requestCount))}
       ${htmlMetric("Tokens", compactTokens(stats.tokens.total))}
-      ${htmlMetric("Est cost", formatUsd(costs))}
+      ${htmlMetric("Est cost", displayCost(costs, writeAvailability))}
     </dl>
   </header>
   <section class="token-panel">
@@ -1253,9 +1265,9 @@ function renderSourceSection(
     <p>Total uses provider total when present, else input plus cached plus cache write plus output plus reasoning.</p>
     ${htmlTokenBar("Input", stats.tokens.input, tokenTotal, "input")}
     ${htmlTokenBar("Cached", stats.tokens.cached, tokenTotal, "cached")}
-    ${htmlTokenBar("Cache write", stats.tokens.cacheWrite, tokenTotal, "cache-write", displayCacheWrite(stats.tokens.cacheWrite, writeAvailability), writeAvailability === "unknown" ? "not exposed by source" : undefined)}
+    ${htmlTokenBar("Cache write", stats.tokens.cacheWrite, tokenTotal, "cache-write", displayCacheWrite(stats.tokens.cacheWrite, writeAvailability), writeAvailability === "unknown" ? "not exposed by source" : writeAvailability === "partial" ? "partially reported" : undefined)}
     ${htmlTokenBar("Output", stats.tokens.output, tokenTotal, "output")}
-    ${htmlTokenBar("Reasoning", stats.tokens.reasoning, tokenTotal, "reasoning")}
+    ${htmlTokenBar("Reasoning", stats.tokens.reasoning, tokenTotal, "reasoning", displayTelemetry(stats.tokens.reasoning, reasonAvailability), reasonAvailability === "unknown" ? "not separately reported" : reasonAvailability === "partial" ? "partially reported" : undefined)}
     ${htmlTokenBar("Total", stats.tokens.total, tokenTotal, "total")}
   </section>
   <div class="detail-grid ${full ? "detail-grid-full" : "detail-grid-summary"}">
@@ -1481,7 +1493,7 @@ function renderDailyBreakdown(rows: DailyBreakdownRow[]): string {
           : limited
               .map(
                 (row) =>
-                  `<tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(row.harness)}</td><td>${escapeHtml(row.subharness)}</td><td>${escapeHtml(row.model)}</td><td>${escapeHtml(row.effort)}</td><td>${escapeHtml(humanSeconds(row.activeSeconds))}</td><td>${row.sessions}</td><td>${row.requests}</td><td>${escapeHtml(compactTokens(row.input))}</td><td>${escapeHtml(compactTokens(row.cached))}</td><td>${escapeHtml(compactTokens(row.output))}</td><td>${escapeHtml(compactTokens(row.reasoning))}</td></tr>`,
+                  `<tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(row.harness)}</td><td>${escapeHtml(row.subharness)}</td><td>${escapeHtml(row.model)}</td><td>${escapeHtml(row.effort)}</td><td>${escapeHtml(humanSeconds(row.activeSeconds))}</td><td>${row.sessions}</td><td>${row.requests}</td><td>${escapeHtml(compactTokens(row.input))}</td><td>${escapeHtml(compactTokens(row.cached))}</td><td>${escapeHtml(compactTokens(row.output))}</td><td>${escapeHtml(displayTelemetry(row.reasoning, row.reasoningAvailability))}</td></tr>`,
               )
               .join("")
       }</tbody>
@@ -1675,7 +1687,7 @@ function renderDailyVisuals(rows: DailyBreakdownRow[]): string {
   <strong title="${escapeHtml(`${row.date} · ${row.harness} · ${row.model}`)}">${escapeHtml(row.date)} · ${escapeHtml(row.harness)} · ${escapeHtml(row.model)}</strong>
   <small>${escapeHtml(row.subharness)} · ${escapeHtml(row.effort)} · ${row.requests} req · ${humanSeconds(row.activeSeconds)}</small>
   <div class="bar-track"><i style="--bar-tone:${escapeHtml(sourceTone(row.harness))};width:${activeWidth}%"></i></div>
-  <div class="stack-track" title="${escapeHtml(`Fresh ${compactTokens(row.input)} · cached ${compactTokens(row.cached)} · output ${compactTokens(row.output)} · reasoning ${compactTokens(row.reasoning)}`)}">
+  <div class="stack-track" title="${escapeHtml(`Fresh ${compactTokens(row.input)} · cached ${compactTokens(row.cached)} · output ${compactTokens(row.output)} · reasoning ${displayTelemetry(row.reasoning, row.reasoningAvailability)}`)}">
     <i class="stack-input" style="width:${stackPct(row.input, total).toFixed(1)}%"></i>
     <i class="stack-cached" style="width:${stackPct(row.cached, total).toFixed(1)}%"></i>
     <i class="stack-output" style="width:${stackPct(row.output, total).toFixed(1)}%"></i>
@@ -1733,6 +1745,7 @@ function renderModelsPanel(
   writeAvailability: ReturnType<typeof cacheWriteAvailability>,
 ): string {
   const effortBreakdowns = modelEffortBreakdownMap(section.sessions, pricing, rows.length);
+  const reasonAvailability = reasoningAvailability(section.sessions);
   const workflowAttributions = workflowModelAttributions(section.sessions);
   const mixedUsage = mixedWorkflowUsage(section.sessions);
   const modelHtml =
@@ -1741,6 +1754,7 @@ function renderModelsPanel(
       : rows
           .map((row) => {
             const efforts = effortBreakdowns.get(row.key) ?? [];
+            const rowAvailability = modelTelemetryAvailability(section, row.key);
             const modelAttributions = workflowAttributions.filter((item) => item.model === row.key);
             const unattributedHtml = row.tokensAttributed
               ? ""
@@ -1771,13 +1785,13 @@ function renderModelsPanel(
                     })
                     .join("")}</ul></div>`;
             const metricsHtml = row.tokensAttributed
-              ? `<dl class="model-metrics"><div><dt>Time</dt><dd>${escapeHtml(humanSeconds(row.activeSeconds))}</dd><small>range total</small></div><div><dt>Input</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.input))}</dd><small>${escapeHtml(row.inputRate)}</small></div><div><dt>Cached</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.cached))}</dd><small>cache read</small></div><div><dt>Write</dt><dd>${escapeHtml(displayCacheWrite(row.tokenInfo.cacheWrite, writeAvailability))}</dd><small>${escapeHtml(writeAvailability === "unknown" ? "not exposed" : "cache create")}</small></div><div><dt>Output</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.output))}</dd><small>${escapeHtml(row.outputRate)}</small></div><div><dt>Reason</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.reasoning))}</dd><small>thinking</small></div><div><dt>Est cost</dt><dd>${escapeHtml(row.cost)}</dd><small>range total</small></div></dl>`
+              ? `<dl class="model-metrics"><div><dt>Time</dt><dd>${escapeHtml(humanSeconds(row.activeSeconds))}</dd><small>range total</small></div><div><dt>Input</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.input))}</dd><small>${escapeHtml(row.inputRate)}</small></div><div><dt>Cached</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.cached))}</dd><small>cache read</small></div><div><dt>Write</dt><dd>${escapeHtml(displayCacheWrite(row.tokenInfo.cacheWrite, rowAvailability.cacheWrite))}</dd><small>${escapeHtml(availabilityNote(rowAvailability.cacheWrite, "cache create", "not exposed"))}</small></div><div><dt>Output</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.output))}</dd><small>${escapeHtml(row.outputRate)}</small></div><div><dt>Reason</dt><dd>${escapeHtml(displayTelemetry(row.tokenInfo.reasoning, rowAvailability.reasoning))}</dd><small>${escapeHtml(availabilityNote(rowAvailability.reasoning, "separately reported", "not separately reported"))}</small></div><div><dt>Est cost</dt><dd>${escapeHtml(displayPartialCost(row.cost, rowAvailability.cacheWrite))}</dd><small>range total</small></div></dl>`
               : "";
             return `<li class="model-row"><div class="model-top"><span title="${escapeHtml(row.key)}">${escapeHtml(row.key)}</span><b>${row.pct.toFixed(0)}% model share</b></div><div class="track"><i style="width:${Math.max(2, Math.min(100, row.pct)).toFixed(1)}%"></i></div>${metricsHtml}${unattributedHtml}${effortHtml}</li>`;
           })
           .join("");
   const mixedUsageHtml = mixedUsage
-    ? `<section class="mixed-usage"><div class="mixed-usage-head"><div><strong>Combined mixed workflow usage</strong><small>${mixedUsage.requests} aggregate ${mixedUsage.requests === 1 ? "record" : "records"}</small></div><p>These totals apply collectively to the workflow models above and cannot be split by model.</p></div><dl class="model-metrics"><div><dt>Total</dt><dd>${escapeHtml(compactTokens(mixedUsage.tokenInfo.total))}</dd><small>all categories</small></div><div><dt>Input</dt><dd>${escapeHtml(compactTokens(mixedUsage.tokenInfo.input))}</dd><small>fresh input</small></div><div><dt>Cached</dt><dd>${escapeHtml(compactTokens(mixedUsage.tokenInfo.cached))}</dd><small>cache read</small></div><div><dt>Write</dt><dd>${escapeHtml(displayCacheWrite(mixedUsage.tokenInfo.cacheWrite, writeAvailability))}</dd><small>cache create</small></div><div><dt>Output</dt><dd>${escapeHtml(compactTokens(mixedUsage.tokenInfo.output))}</dd><small>visible output</small></div><div><dt>Reason</dt><dd>${escapeHtml(compactTokens(mixedUsage.tokenInfo.reasoning))}</dd><small>thinking</small></div><div><dt>Time</dt><dd>${escapeHtml(humanSeconds(mixedUsage.activeSeconds))}</dd><small>combined range</small></div></dl></section>`
+    ? `<section class="mixed-usage"><div class="mixed-usage-head"><div><strong>Combined mixed workflow usage</strong><small>${mixedUsage.requests} aggregate ${mixedUsage.requests === 1 ? "record" : "records"}</small></div><p>These totals apply collectively to the workflow models above and cannot be split by model.</p></div><dl class="model-metrics"><div><dt>Total</dt><dd>${escapeHtml(compactTokens(mixedUsage.tokenInfo.total))}</dd><small>all categories</small></div><div><dt>Input</dt><dd>${escapeHtml(compactTokens(mixedUsage.tokenInfo.input))}</dd><small>fresh input</small></div><div><dt>Cached</dt><dd>${escapeHtml(compactTokens(mixedUsage.tokenInfo.cached))}</dd><small>cache read</small></div><div><dt>Write</dt><dd>${escapeHtml(displayCacheWrite(mixedUsage.tokenInfo.cacheWrite, writeAvailability))}</dd><small>cache create</small></div><div><dt>Output</dt><dd>${escapeHtml(compactTokens(mixedUsage.tokenInfo.output))}</dd><small>reported output</small></div><div><dt>Reason</dt><dd>${escapeHtml(displayTelemetry(mixedUsage.tokenInfo.reasoning, reasonAvailability))}</dd><small>${escapeHtml(reasonAvailability === "unknown" ? "not separately reported" : reasonAvailability === "partial" ? "partially reported" : "separately reported")}</small></div><div><dt>Time</dt><dd>${escapeHtml(humanSeconds(mixedUsage.activeSeconds))}</dd><small>combined range</small></div></dl></section>`
     : "";
   return `<section class="panel-wide model-panel"><h4>Models</h4><ul class="model-list">${modelHtml}</ul>${mixedUsageHtml}</section>`;
 }
@@ -1818,11 +1832,11 @@ function htmlTokenBar(
   return `<div class="token-row ${escapeHtml(cls)}"><span>${escapeHtml(label)}</span><div class="track"><i style="width:${width.toFixed(1)}%"></i></div><b>${escapeHtml(displayValue)}</b>${note ? `<small>${escapeHtml(note)}</small>` : ""}</div>`;
 }
 
-function displayCacheWrite(
-  value: number,
-  availability: ReturnType<typeof cacheWriteAvailability>,
+function displayCost(
+  value: number | undefined,
+  availability: "known" | "partial" | "unknown",
 ): string {
-  return availability === "unknown" ? "n/a" : compactTokens(value);
+  return displayPartialCost(formatUsd(value), availability);
 }
 
 function pct(value: number | undefined, maxValue: number): string {

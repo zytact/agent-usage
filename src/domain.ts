@@ -1,5 +1,7 @@
 export type SourceId = "claude" | "codex" | "opencode" | "pi";
 
+export type TelemetryAvailability = "known" | "partial" | "unknown";
+
 export type TokenUsage = {
   cacheWrite: number;
   cached: number;
@@ -13,6 +15,7 @@ export type SessionRequest = {
   cacheRead: number;
   cacheReadRatio: number;
   cacheWrite: number;
+  cacheWriteAvailability: TelemetryAvailability;
   contextSize: number;
   date: string;
   effort: string;
@@ -20,6 +23,7 @@ export type SessionRequest = {
   model: string;
   output: number;
   reasoning: number;
+  reasoningAvailability: TelemetryAvailability;
   repo: string;
   sessionId: string;
   source: SourceId;
@@ -40,7 +44,7 @@ export type WorkflowAgentUsage = {
 export type ParsedSession = {
   activeSeconds: number;
   assistantTurns: number;
-  cacheWriteKnown: boolean;
+  cacheWriteAvailability: TelemetryAvailability;
   cwd?: string;
   dayModelActiveSeconds: Record<string, Record<string, number>>;
   dayStateActiveSeconds: Record<string, Record<string, number>>;
@@ -53,6 +57,7 @@ export type ParsedSession = {
   originator?: string;
   path: string;
   repo: string;
+  reasoningAvailability: TelemetryAvailability;
   requestCount: number;
   requests: SessionRequest[];
   sessionId: string;

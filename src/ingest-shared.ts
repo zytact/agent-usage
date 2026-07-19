@@ -166,6 +166,7 @@ export function addRequest(
     repo,
     sessionId,
     source,
+    telemetry,
     tokens,
     ts,
   }: {
@@ -175,6 +176,10 @@ export function addRequest(
     repo: string;
     sessionId: string;
     source: SourceId;
+    telemetry?: {
+      cacheWrite?: SessionRequest["cacheWriteAvailability"];
+      reasoning?: SessionRequest["reasoningAvailability"];
+    };
     tokens: TokenUsage;
     ts?: Date;
   },
@@ -188,6 +193,7 @@ export function addRequest(
     cacheRead: tokens.cached,
     cacheReadRatio: contextSize > 0 ? tokens.cached / contextSize : 0,
     cacheWrite: tokens.cacheWrite,
+    cacheWriteAvailability: telemetry?.cacheWrite ?? "known",
     contextSize,
     date: ts.toISOString().slice(0, 10),
     effort: effort ?? "unknown",
@@ -195,6 +201,7 @@ export function addRequest(
     model: model ?? "unknown",
     output: tokens.output,
     reasoning: tokens.reasoning,
+    reasoningAvailability: telemetry?.reasoning ?? "known",
     repo,
     sessionId,
     source,
