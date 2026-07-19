@@ -195,7 +195,21 @@ describe("parseClaudeSessionText", () => {
     ]);
   });
 
-  it("separates explicit reasoning from output without double counting", () => {
+  it.each([
+    {
+      name: "separates reasoning included in output",
+      usage: {
+        input_tokens: 10,
+        output_tokens: 25,
+        output_tokens_details: { reasoning_tokens: 5 },
+        total_tokens: 35,
+      },
+    },
+    {
+      name: "adds separately reported reasoning",
+      usage: { input_tokens: 10, output_tokens: 20, reasoning_output_tokens: 5 },
+    },
+  ])("$name without double counting", ({ usage }) => {
     const session = parseClaudeSessionText(
       [
         JSON.stringify({ timestamp: "2026-07-18T10:00:00.000Z", type: "user" }),
@@ -203,39 +217,7 @@ describe("parseClaudeSessionText", () => {
           message: {
             id: "resp-reasoning",
             model: "gpt-5.6-sol",
-            usage: {
-              input_tokens: 10,
-              output_tokens: 25,
-              output_tokens_details: { reasoning_tokens: 5 },
-              total_tokens: 35,
-            },
-          },
-          timestamp: "2026-07-18T10:00:01.000Z",
-          type: "assistant",
-        }),
-      ].join("\n"),
-    );
-
-    expect(session).toMatchObject({
-      reasoningAvailability: "known",
-      tokens: { input: 10, output: 20, reasoning: 5, total: 35 },
-    });
-    expect(session?.modelTokens["gpt-5.6-sol"]?.billableOutput).toBe(25);
-  });
-
-  it("adds separately reported reasoning to output totals", () => {
-    const session = parseClaudeSessionText(
-      [
-        JSON.stringify({ timestamp: "2026-07-18T10:00:00.000Z", type: "user" }),
-        JSON.stringify({
-          message: {
-            id: "resp-separate-reasoning",
-            model: "gpt-5.6-sol",
-            usage: {
-              input_tokens: 10,
-              output_tokens: 20,
-              reasoning_output_tokens: 5,
-            },
+            usage,
           },
           timestamp: "2026-07-18T10:00:01.000Z",
           type: "assistant",

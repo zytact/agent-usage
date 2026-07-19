@@ -930,6 +930,16 @@ export function reasoningAvailability(sessions: ParsedSession[]): TelemetryAvail
   );
 }
 
+export function modelTelemetryAvailability(section: SourceSection, model: string) {
+  const requests = section.sessions.flatMap((session) =>
+    session.requests.filter((request) => request.model === model),
+  );
+  return {
+    cacheWrite: telemetryAvailability(requests, "cacheWriteAvailability"),
+    reasoning: telemetryAvailability(requests, "reasoningAvailability"),
+  };
+}
+
 export function formatFloat(value: number | undefined): string {
   if (value === undefined || Number.isNaN(value)) {
     return "n/a";

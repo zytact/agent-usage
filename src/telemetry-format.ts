@@ -16,6 +16,10 @@ export function displayPartialCost(value: string, availability: TelemetryAvailab
   return availability !== "known" && value !== "n/a" ? `${value} (partial)` : value;
 }
 
+export function displayCacheWrite(value: number, availability: TelemetryAvailability): string {
+  return displayTelemetry(value, availability);
+}
+
 export function displayTelemetry(value: number, availability: TelemetryAvailability): string {
   if (availability === "unknown") {
     return "n/a";

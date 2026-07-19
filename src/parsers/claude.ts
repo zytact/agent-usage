@@ -255,28 +255,47 @@ function addClaudeRequest(
 function claudeUsageTokens(usage: Record<string, unknown>): ClaudeUsage {
   const input = asNumber(usage.input_tokens);
   const cached = asNumber(usage.cache_read_input_tokens);
-  const cacheWriteAvailability = Object.hasOwn(usage, "cache_creation_input_tokens")
-    ? "known"
-    : "unknown";
   const cacheWrite = asNumber(usage.cache_creation_input_tokens);
   const rawOutput = asNumber(usage.output_tokens);
   const reasoning = explicitReasoningTokens(usage);
-  const reasoningTokens = reasoning?.tokens ?? 0;
-  const output = reasoning?.includedInOutput ? Math.max(0, rawOutput - reasoningTokens) : rawOutput;
-  const fallbackTotal =
-    input + cached + cacheWrite + rawOutput + (reasoning?.includedInOutput ? 0 : reasoningTokens);
+  const output = splitClaudeOutput(rawOutput, reasoning);
+  const fallbackTotal = input + cached + cacheWrite + rawOutput + output.additiveReasoning;
   return {
-    cacheWriteAvailability,
-    reasoningAvailability: reasoning === undefined ? "unknown" : "known",
+    cacheWriteAvailability: fieldAvailability(usage, "cache_creation_input_tokens"),
+    reasoningAvailability: valueAvailability(reasoning),
     tokens: {
       cacheWrite,
       cached,
       input,
-      output,
-      reasoning: reasoningTokens,
+      output: output.visible,
+      reasoning: output.reasoning,
       total: asNumber(usage.total_tokens) || fallbackTotal,
     },
   };
+}
+
+function fieldAvailability(value: Record<string, unknown>, field: string): "known" | "unknown" {
+  return Object.hasOwn(value, field) ? "known" : "unknown";
+}
+
+function valueAvailability(value: unknown): "known" | "unknown" {
+  return value === undefined ? "unknown" : "known";
+}
+
+function splitClaudeOutput(
+  rawOutput: number,
+  reasoning: { includedInOutput: boolean; tokens: number } | undefined,
+) {
+  if (!reasoning) {
+    return { additiveReasoning: 0, reasoning: 0, visible: rawOutput };
+  }
+  return reasoning.includedInOutput
+    ? {
+        additiveReasoning: 0,
+        reasoning: reasoning.tokens,
+        visible: Math.max(0, rawOutput - reasoning.tokens),
+      }
+    : { additiveReasoning: reasoning.tokens, reasoning: reasoning.tokens, visible: rawOutput };
 }
 
 function explicitReasoningTokens(

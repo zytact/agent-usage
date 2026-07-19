@@ -4,7 +4,12 @@ import type { ReportMode } from "./args.js";
 import { compactMetric, formatEffortMetricValue } from "./effort-format.js";
 import { shouldShowSection } from "./render-shared.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
-import { availabilityNote, displayPartialCost, displayTelemetry } from "./telemetry-format.js";
+import {
+  availabilityNote,
+  displayCacheWrite,
+  displayPartialCost,
+  displayTelemetry,
+} from "./telemetry-format.js";
 import {
   ALL_SECTIONS,
   DEFAULT_SECTIONS,
@@ -24,6 +29,7 @@ import {
   modelEffortBreakdownMap,
   modelRows,
   modelRowsIncludingWorkflowModels,
+  modelTelemetryAvailability,
   reasoningAvailability,
   workflowModelAttributions,
   percentRows,
@@ -34,7 +40,6 @@ import {
   type RequestDistributionRow,
   type ReportStats,
   type SourceSection,
-  telemetryAvailability,
 } from "./report-data.js";
 
 const SOURCE_NOTES = {
@@ -1749,17 +1754,7 @@ function renderModelsPanel(
       : rows
           .map((row) => {
             const efforts = effortBreakdowns.get(row.key) ?? [];
-            const modelRequests = section.sessions.flatMap((session) =>
-              session.requests.filter((request) => request.model === row.key),
-            );
-            const rowWriteAvailability = telemetryAvailability(
-              modelRequests,
-              "cacheWriteAvailability",
-            );
-            const rowReasonAvailability = telemetryAvailability(
-              modelRequests,
-              "reasoningAvailability",
-            );
+            const rowAvailability = modelTelemetryAvailability(section, row.key);
             const modelAttributions = workflowAttributions.filter((item) => item.model === row.key);
             const unattributedHtml = row.tokensAttributed
               ? ""
@@ -1790,7 +1785,7 @@ function renderModelsPanel(
                     })
                     .join("")}</ul></div>`;
             const metricsHtml = row.tokensAttributed
-              ? `<dl class="model-metrics"><div><dt>Time</dt><dd>${escapeHtml(humanSeconds(row.activeSeconds))}</dd><small>range total</small></div><div><dt>Input</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.input))}</dd><small>${escapeHtml(row.inputRate)}</small></div><div><dt>Cached</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.cached))}</dd><small>cache read</small></div><div><dt>Write</dt><dd>${escapeHtml(displayCacheWrite(row.tokenInfo.cacheWrite, rowWriteAvailability))}</dd><small>${escapeHtml(availabilityNote(rowWriteAvailability, "cache create", "not exposed"))}</small></div><div><dt>Output</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.output))}</dd><small>${escapeHtml(row.outputRate)}</small></div><div><dt>Reason</dt><dd>${escapeHtml(displayTelemetry(row.tokenInfo.reasoning, rowReasonAvailability))}</dd><small>${escapeHtml(availabilityNote(rowReasonAvailability, "separately reported", "not separately reported"))}</small></div><div><dt>Est cost</dt><dd>${escapeHtml(displayPartialCost(row.cost, rowWriteAvailability))}</dd><small>range total</small></div></dl>`
+              ? `<dl class="model-metrics"><div><dt>Time</dt><dd>${escapeHtml(humanSeconds(row.activeSeconds))}</dd><small>range total</small></div><div><dt>Input</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.input))}</dd><small>${escapeHtml(row.inputRate)}</small></div><div><dt>Cached</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.cached))}</dd><small>cache read</small></div><div><dt>Write</dt><dd>${escapeHtml(displayCacheWrite(row.tokenInfo.cacheWrite, rowAvailability.cacheWrite))}</dd><small>${escapeHtml(availabilityNote(rowAvailability.cacheWrite, "cache create", "not exposed"))}</small></div><div><dt>Output</dt><dd>${escapeHtml(compactTokens(row.tokenInfo.output))}</dd><small>${escapeHtml(row.outputRate)}</small></div><div><dt>Reason</dt><dd>${escapeHtml(displayTelemetry(row.tokenInfo.reasoning, rowAvailability.reasoning))}</dd><small>${escapeHtml(availabilityNote(rowAvailability.reasoning, "separately reported", "not separately reported"))}</small></div><div><dt>Est cost</dt><dd>${escapeHtml(displayPartialCost(row.cost, rowAvailability.cacheWrite))}</dd><small>range total</small></div></dl>`
               : "";
             return `<li class="model-row"><div class="model-top"><span title="${escapeHtml(row.key)}">${escapeHtml(row.key)}</span><b>${row.pct.toFixed(0)}% model share</b></div><div class="track"><i style="width:${Math.max(2, Math.min(100, row.pct)).toFixed(1)}%"></i></div>${metricsHtml}${unattributedHtml}${effortHtml}</li>`;
           })
@@ -1835,13 +1830,6 @@ function htmlTokenBar(
 ): string {
   const width = maxValue <= 0 ? 0 : Math.max(2, Math.min(100, (value / maxValue) * 100));
   return `<div class="token-row ${escapeHtml(cls)}"><span>${escapeHtml(label)}</span><div class="track"><i style="width:${width.toFixed(1)}%"></i></div><b>${escapeHtml(displayValue)}</b>${note ? `<small>${escapeHtml(note)}</small>` : ""}</div>`;
-}
-
-function displayCacheWrite(
-  value: number,
-  availability: ReturnType<typeof cacheWriteAvailability>,
-): string {
-  return displayTelemetry(value, availability);
 }
 
 function displayCost(

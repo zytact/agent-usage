@@ -2,7 +2,7 @@ import type { ReportMode } from "./args.js";
 import { formatEffortMetricValue } from "./effort-format.js";
 import { isPrimarySection, shouldShowSection } from "./render-shared.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
-import { displayPartialCost, displayTelemetry } from "./telemetry-format.js";
+import { displayCacheWrite, displayPartialCost, displayTelemetry } from "./telemetry-format.js";
 import {
   ALL_SECTIONS,
   DEFAULT_SECTIONS,
@@ -22,10 +22,10 @@ import {
   modelEffortBreakdownMap,
   modelRows,
   modelRowsIncludingWorkflowModels,
+  modelTelemetryAvailability,
   reasoningAvailability,
   workflowModelAttributions,
   summarizeDistribution,
-  telemetryAvailability,
   topEntries,
   type BuiltReport,
   type DailyBreakdownRow,
@@ -275,11 +275,7 @@ function renderModelList(
   const mixedUsage = mixedWorkflowUsage(section.sessions);
   const reasonAvailability = reasoningAvailability(section.sessions);
   for (const row of rows) {
-    const modelRequests = section.sessions.flatMap((session) =>
-      session.requests.filter((request) => request.model === row.key),
-    );
-    const rowWriteAvailability = telemetryAvailability(modelRequests, "cacheWriteAvailability");
-    const rowReasonAvailability = telemetryAvailability(modelRequests, "reasoningAvailability");
+    const rowAvailability = modelTelemetryAvailability(section, row.key);
     if (!row.tokensAttributed) {
       lines.push(`    - ${row.key} · ${row.pct.toFixed(0)}% model share`);
       for (const attribution of workflowAttributions.filter((item) => item.model === row.key)) {
@@ -291,7 +287,7 @@ function renderModelList(
       continue;
     }
     lines.push(
-      `    - ${row.key} · ${row.pct.toFixed(0)}% model share · time ${humanSeconds(row.activeSeconds)} · in ${compactTokens(row.tokenInfo.input)} (${row.inputRate}) · cached ${compactTokens(row.tokenInfo.cached)} · write ${displayCacheWrite(row.tokenInfo.cacheWrite, rowWriteAvailability)} · out ${compactTokens(row.tokenInfo.output)} (${row.outputRate}) · reason ${displayTelemetry(row.tokenInfo.reasoning, rowReasonAvailability)} · est ${displayPartialCost(row.cost, rowWriteAvailability)}`,
+      `    - ${row.key} · ${row.pct.toFixed(0)}% model share · time ${humanSeconds(row.activeSeconds)} · in ${compactTokens(row.tokenInfo.input)} (${row.inputRate}) · cached ${compactTokens(row.tokenInfo.cached)} · write ${displayCacheWrite(row.tokenInfo.cacheWrite, rowAvailability.cacheWrite)} · out ${compactTokens(row.tokenInfo.output)} (${row.outputRate}) · reason ${displayTelemetry(row.tokenInfo.reasoning, rowAvailability.reasoning)} · est ${displayPartialCost(row.cost, rowAvailability.cacheWrite)}`,
     );
     for (const effort of effortBreakdowns.get(row.key) ?? []) {
       const metrics = effortMetricCells(effort)
@@ -317,13 +313,6 @@ function renderModelList(
     );
   }
   return lines;
-}
-
-function displayCacheWrite(
-  value: number,
-  availability: ReturnType<typeof cacheWriteAvailability>,
-): string {
-  return displayTelemetry(value, availability);
 }
 
 function displayCost(
