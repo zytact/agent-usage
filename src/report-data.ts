@@ -901,7 +901,7 @@ function formatScopeMoment(value: Date): string {
   return `${value.toISOString().slice(0, 10)} ${value.toISOString().slice(11, 16)} UTC`;
 }
 
-export function telemetryAvailability(
+function telemetryAvailability(
   requests: SessionRequest[],
   field: "cacheWriteAvailability" | "reasoningAvailability",
 ): TelemetryAvailability {
