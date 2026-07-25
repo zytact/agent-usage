@@ -47,7 +47,7 @@ describe("pricing", () => {
     });
   });
 
-  it("uses alias resolution and billable output for cost breakdown", () => {
+  it("uses dynamic model resolution and billable output for cost breakdown", () => {
     const pricing: Record<string, PricingInfo> = {
       "openai/gpt-5.4": {
         cacheRead: 0.5,
@@ -71,8 +71,7 @@ describe("pricing", () => {
       pricing,
     );
 
-    expect(resolveModelId("gpt-5.4")).toBe("openai/gpt-5.4");
-    expect(resolveModelId("gpt-5.6-sol")).toBe("openai/gpt-5.6-sol");
+    expect(resolveModelId("gpt-5.4", pricing)).toBe("openai/gpt-5.4");
     expect(cost).toEqual({
       cacheWrite: 14,
       cached: 2.5,
@@ -80,6 +79,55 @@ describe("pricing", () => {
       output: 33,
       total: 59.5,
     });
+  });
+
+  it("resolves model ids dynamically across every source", () => {
+    const pricing: Record<string, PricingInfo> = {
+      "anthropic/claude-opus-5": {
+        cacheRead: 0.5,
+        cacheWrite: 6.25,
+        completion: 25,
+        prompt: 5,
+      },
+      "anthropic/claude-sonnet-4-6": {
+        cacheRead: 0.3,
+        cacheWrite: 3.75,
+        completion: 15,
+        prompt: 3,
+      },
+      "gateway/claude-opus-5": { prompt: 50 },
+      "gateway/gpt-6-codex": { prompt: 50 },
+      "openai/gpt-6-codex": { prompt: 5 },
+      "opencode/deepseek-v5-flash-free": { prompt: 1 },
+      "openrouter/qwen/qwen4-coder:free": { prompt: 0 },
+      "provider-a/shared-model": { prompt: 1 },
+      "provider-b/shared-model": { prompt: 2 },
+    };
+    const usage = {
+      cacheWrite: 4,
+      cached: 3,
+      input: 2,
+      output: 1,
+      reasoning: 0,
+      total: 10,
+    };
+
+    expect(resolveModelId("claude-opus-5", pricing)).toBe("anthropic/claude-opus-5");
+    expect(resolveModelId("claude-sonnet-4.6", pricing)).toBe("anthropic/claude-sonnet-4-6");
+    expect(resolveModelId("gpt-6-codex", pricing)).toBe("openai/gpt-6-codex");
+    expect(resolveModelId("deepseek-v5-flash-free", pricing)).toBe(
+      "opencode/deepseek-v5-flash-free",
+    );
+    expect(resolveModelId("openrouter/qwen/qwen4-coder:free", pricing)).toBe(
+      "openrouter/qwen/qwen4-coder:free",
+    );
+    expect(resolveModelId("qwen/qwen4-coder:free", pricing)).toBe(
+      "openrouter/qwen/qwen4-coder:free",
+    );
+    expect(resolveModelId("shared-model", pricing)).toBe("shared-model");
+    expect(resolveModelId("constructor", pricing)).toBe("constructor");
+    expect(estimateCost("claude-opus-5", usage, pricing)).toBe(61.5);
+    expect(estimateCost("claude-sonnet-4-6", usage, pricing)).toBe(36.9);
   });
 
   it("falls back cache-write rate to prompt when missing", () => {

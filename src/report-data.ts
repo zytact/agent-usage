@@ -776,8 +776,18 @@ export type CostBreakdown = {
   total: number;
 };
 
-export function resolveModelId(modelName: string): string {
-  return MODEL_ALIASES[modelName] ?? modelName;
+export function resolveModelId(modelName: string, pricing: Record<string, PricingInfo>): string {
+  if (Object.hasOwn(pricing, modelName)) {
+    return modelName;
+  }
+
+  const candidates = pricingCandidates(pricing).get(normalizeModelId(modelName)) ?? [];
+  const publisher = canonicalPublisher(modelName);
+  const publisherMatch = publisher
+    ? candidates.find((candidate) => candidate.startsWith(`${publisher}/`))
+    : undefined;
+
+  return publisherMatch ?? (candidates.length === 1 ? candidates[0] : modelName);
 }
 
 export function estimateCostBreakdown(
@@ -785,7 +795,7 @@ export function estimateCostBreakdown(
   tokenInfo: ModelTokenUsage | TokenUsage,
   pricing: Record<string, PricingInfo>,
 ): CostBreakdown | undefined {
-  const rates = pricing[resolveModelId(modelName)];
+  const rates = pricing[resolveModelId(modelName, pricing)];
   if (!rates) {
     return undefined;
   }
@@ -1102,7 +1112,7 @@ export function modelRows(
         reasoning: 0,
         total: 0,
       } satisfies ModelTokenUsage);
-    const modelId = resolveModelId(key);
+    const modelId = resolveModelId(key, pricing);
     const rates = pricing[modelId] ?? {};
     return {
       activeSeconds: stats.modelActiveSeconds[key] ?? 0,
@@ -1414,24 +1424,42 @@ function effortRank(effort: string): number {
   return { low: 0, medium: 1, high: 2, unknown: 98 }[effort] ?? 50;
 }
 
-const MODEL_ALIASES: Record<string, string> = {
-  "claude-haiku-4-5-20251001": "anthropic/claude-haiku-4.5",
-  "claude-opus-4-6": "anthropic/claude-opus-4.6",
-  "claude-opus-4-7": "anthropic/claude-opus-4.7",
-  "claude-sonnet-4-6": "anthropic/claude-sonnet-4.6",
-  "deepseek-v4-flash": "deepseek/deepseek-v4-flash",
-  "deepseek-v4-flash-free": "deepseek/deepseek-v4-flash:free",
-  "gpt-5": "openai/gpt-5",
-  "gpt-5.3-codex": "openai/gpt-5.3-codex",
-  "gpt-5.4": "openai/gpt-5.4",
-  "gpt-5.4-mini": "openai/gpt-5.4-mini",
-  "gpt-5.5": "openai/gpt-5.5",
-  "gpt-5.6": "openai/gpt-5.6",
-  "gpt-5.6-luna": "openai/gpt-5.6-luna",
-  "gpt-5.6-sol": "openai/gpt-5.6-sol",
-  "gpt-5.6-terra": "openai/gpt-5.6-terra",
-  "gpt-5-mini": "openai/gpt-5-mini",
-};
+const PRICING_CANDIDATES = new WeakMap<Record<string, PricingInfo>, Map<string, string[]>>();
+
+function pricingCandidates(pricing: Record<string, PricingInfo>): Map<string, string[]> {
+  const cached = PRICING_CANDIDATES.get(pricing);
+  if (cached) {
+    return cached;
+  }
+
+  const candidates = new Map<string, string[]>();
+  for (const modelId of Object.keys(pricing)) {
+    const separator = modelId.indexOf("/");
+    const unqualifiedId = separator >= 0 ? modelId.slice(separator + 1) : modelId;
+    const normalized = normalizeModelId(unqualifiedId);
+    candidates.set(normalized, [...(candidates.get(normalized) ?? []), modelId]);
+  }
+  PRICING_CANDIDATES.set(pricing, candidates);
+  return candidates;
+}
+
+function normalizeModelId(modelId: string): string {
+  return modelId
+    .toLowerCase()
+    .replaceAll(".", "-")
+    .replace(/:free$/, "-free");
+}
+
+function canonicalPublisher(modelId: string): string | undefined {
+  const unqualifiedId = modelId.slice(modelId.lastIndexOf("/") + 1).toLowerCase();
+  if (unqualifiedId.startsWith("claude-")) {
+    return "anthropic";
+  }
+  if (/^(?:gpt-|o\d)/.test(unqualifiedId)) {
+    return "openai";
+  }
+  return undefined;
+}
 
 function originatorSections(source: SourceId, sessions: ParsedSession[]): SourceSection[] {
   const grouped = new Map<string, ParsedSession[]>();
@@ -1598,7 +1626,7 @@ function weightedInputEquivalent(
   request: SessionRequest,
   pricing: Record<string, PricingInfo>,
 ): number | undefined {
-  const rates = pricing[resolveModelId(request.model)];
+  const rates = pricing[resolveModelId(request.model, pricing)];
   if (!rates?.prompt) {
     return undefined;
   }
