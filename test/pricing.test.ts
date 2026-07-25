@@ -82,6 +82,51 @@ describe("pricing", () => {
     });
   });
 
+  it("resolves current Claude Code model names to Anthropic pricing", () => {
+    const pricing: Record<string, PricingInfo> = {
+      "anthropic/claude-opus-5": {
+        cacheRead: 0.5,
+        cacheWrite: 6.25,
+        completion: 25,
+        prompt: 5,
+      },
+      "anthropic/claude-sonnet-4-6": {
+        cacheRead: 0.3,
+        cacheWrite: 3.75,
+        completion: 15,
+        prompt: 3,
+      },
+    };
+    const usage = {
+      cacheWrite: 4,
+      cached: 3,
+      input: 2,
+      output: 1,
+      reasoning: 0,
+      total: 10,
+    };
+
+    expect(
+      Object.fromEntries(
+        [
+          "claude-haiku-4-5-20251001",
+          "claude-opus-4-6",
+          "claude-opus-4-7",
+          "claude-opus-5",
+          "claude-sonnet-4-6",
+        ].map((model) => [model, resolveModelId(model)]),
+      ),
+    ).toEqual({
+      "claude-haiku-4-5-20251001": "anthropic/claude-haiku-4-5-20251001",
+      "claude-opus-4-6": "anthropic/claude-opus-4-6",
+      "claude-opus-4-7": "anthropic/claude-opus-4-7",
+      "claude-opus-5": "anthropic/claude-opus-5",
+      "claude-sonnet-4-6": "anthropic/claude-sonnet-4-6",
+    });
+    expect(estimateCost("claude-opus-5", usage, pricing)).toBe(61.5);
+    expect(estimateCost("claude-sonnet-4-6", usage, pricing)).toBe(36.9);
+  });
+
   it("falls back cache-write rate to prompt when missing", () => {
     const cost = estimateCost(
       "openai/gpt-5",

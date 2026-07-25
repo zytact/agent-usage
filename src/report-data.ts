@@ -1415,10 +1415,11 @@ function effortRank(effort: string): number {
 }
 
 const MODEL_ALIASES: Record<string, string> = {
-  "claude-haiku-4-5-20251001": "anthropic/claude-haiku-4.5",
-  "claude-opus-4-6": "anthropic/claude-opus-4.6",
-  "claude-opus-4-7": "anthropic/claude-opus-4.7",
-  "claude-sonnet-4-6": "anthropic/claude-sonnet-4.6",
+  "claude-haiku-4-5-20251001": "anthropic/claude-haiku-4-5-20251001",
+  "claude-opus-4-6": "anthropic/claude-opus-4-6",
+  "claude-opus-4-7": "anthropic/claude-opus-4-7",
+  "claude-opus-5": "anthropic/claude-opus-5",
+  "claude-sonnet-4-6": "anthropic/claude-sonnet-4-6",
   "deepseek-v4-flash": "deepseek/deepseek-v4-flash",
   "deepseek-v4-flash-free": "deepseek/deepseek-v4-flash:free",
   "gpt-5": "openai/gpt-5",
