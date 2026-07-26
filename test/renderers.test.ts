@@ -93,6 +93,33 @@ describe("renderers", () => {
     expect(html).toContain("Codex via T3 Code");
   });
 
+  it("renders enough effort cost precision to explain comparisons", () => {
+    const comparisonPricing = { "openai/test": { prompt: 0.001 } };
+    const report = buildReport(
+      [
+        makeSession({
+          requests: [
+            makeRequest({ effort: "low", input: 69, model: "openai/test", total: 69 }),
+            makeRequest({ effort: "medium", input: 70, model: "openai/test", total: 70 }),
+          ],
+        }),
+      ],
+      "7d",
+      ["codex"],
+      new Date("2026-06-14T18:45:00+05:30"),
+      comparisonPricing,
+    );
+
+    for (const rendered of [
+      renderHtmlReport(report, comparisonPricing),
+      renderTerminalReport(report, comparisonPricing),
+    ]) {
+      expect(rendered).toContain("$0.069");
+      expect(rendered).toContain("$0.070");
+      expect(rendered).toContain("vs medium -1.4%");
+    }
+  });
+
   it("renders custom html section subset", async () => {
     const report = await makeReport();
     const html = renderHtmlReport(report, {}, "summary", ["request-summary", "token-mix"]);
