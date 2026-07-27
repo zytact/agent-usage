@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
 import { parsePiSessionText } from "../../src/parsers/pi.js";
+import { calendarDate } from "../../src/report-core.js";
 
 describe("parsePiSessionText", () => {
   it("parses pi session stats from jsonl", async () => {
@@ -42,7 +43,7 @@ describe("parsePiSessionText", () => {
     });
 
     expect(session?.dayStateActiveSeconds).toEqual({
-      "2026-04-24": {
+      [calendarDate(new Date("2026-04-24T22:36:33.924Z"))]: {
         "gpt-5.4-mini::medium": 31,
         "gpt-5.4::high": 10,
       },
@@ -52,6 +53,7 @@ describe("parsePiSessionText", () => {
       "gpt-5.4": {
         billableOutput: 65,
         cacheWrite: 25,
+        cacheWrite1h: 0,
         cached: 100,
         input: 400,
         output: 50,
@@ -61,6 +63,7 @@ describe("parsePiSessionText", () => {
       "gpt-5.4-mini": {
         billableOutput: 102,
         cacheWrite: 0,
+        cacheWrite1h: 0,
         cached: 0,
         input: 1450,
         output: 102,

@@ -22,18 +22,19 @@
 
 ## Token accounting
 
-| Term                       | Definition                                                                                                                     | Aliases to avoid                    |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- |
-| **Input tokens**           | Fresh prompt tokens sent to the model.                                                                                         | Prompt tokens, uncached prompt      |
-| **Cached tokens**          | Input tokens served from provider prompt cache reads.                                                                          | Cache read tokens, reused input     |
-| **Cache write tokens**     | Input tokens written into provider prompt cache.                                                                               | Cache creation tokens, cache writes |
-| **Output tokens**          | Provider-reported output after separating reasoning when the source exposes that split; otherwise the unsplit output total.    | Completion tokens, answer tokens    |
-| **Reasoning tokens**       | Model output tokens explicitly reported as reasoning by a provider. Thinking content alone does not establish a numeric value. | Thinking tokens, hidden output      |
-| **Telemetry availability** | Whether a token category is known for every contributing request, partially known, or unavailable. Explicit zero is known.     | Present, supported, exposed         |
-| **Total tokens**           | Provider-reported total tokens, or the local sum when provider total is absent.                                                | Token volume, all tokens            |
-| **Context size**           | Input, cached, and cache-write tokens available to a request.                                                                  | Context, prompt size                |
-| **Uncached input**         | Fresh input plus cache-write tokens for a request.                                                                             | Fresh context, noncached input      |
-| **Cache read ratio**       | Share of context size supplied by cached tokens.                                                                               | Cache ratio, cached share           |
+| Term                          | Definition                                                                                                                     | Aliases to avoid                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| **Input tokens**              | Fresh prompt tokens sent to the model.                                                                                         | Prompt tokens, uncached prompt       |
+| **Cached tokens**             | Input tokens served from provider prompt cache reads.                                                                          | Cache read tokens, reused input      |
+| **Cache write tokens**        | Input tokens written into provider prompt cache.                                                                               | Cache creation tokens, cache writes  |
+| **1-hour cache write tokens** | Cache write tokens explicitly stored with a one-hour lifetime and priced at the provider's one-hour cache-write rate.          | Long cache writes, 1h cache creation |
+| **Output tokens**             | Provider-reported output after separating reasoning when the source exposes that split; otherwise the unsplit output total.    | Completion tokens, answer tokens     |
+| **Reasoning tokens**          | Model output tokens explicitly reported as reasoning by a provider. Thinking content alone does not establish a numeric value. | Thinking tokens, hidden output       |
+| **Telemetry availability**    | Whether a token category is known for every contributing request, partially known, or unavailable. Explicit zero is known.     | Present, supported, exposed          |
+| **Total tokens**              | Provider-reported total tokens, or the local sum when provider total is absent.                                                | Token volume, all tokens             |
+| **Context size**              | Input, cached, and cache-write tokens available to a request.                                                                  | Context, prompt size                 |
+| **Uncached input**            | Fresh input plus cache-write tokens for a request.                                                                             | Fresh context, noncached input       |
+| **Cache read ratio**          | Share of context size supplied by cached tokens.                                                                               | Cache ratio, cached share            |
 
 ## Reporting
 
@@ -72,6 +73,7 @@
 - **Telemetry availability** is **known** when every contributing request reports the category, **partial** when only some do, and **unknown** when none do.
 - **Reasoning tokens** remain separate from reasoning effort. When reasoning is a subset of provider output, visible **Output tokens** exclude it while **Billable output** includes it once.
 - **Estimated cost** depends on the **Pricing map**, **Token mix**, and **Model breakdown**.
+- **1-hour cache write tokens** are a subset of **Cache write tokens** and must not also be charged at the default cache-write rate.
 
 ## Example dialogue
 

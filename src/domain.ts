@@ -4,6 +4,7 @@ export type TelemetryAvailability = "known" | "partial" | "unknown";
 
 export type TokenUsage = {
   cacheWrite: number;
+  cacheWrite1h: number;
   cached: number;
   input: number;
   output: number;
@@ -15,6 +16,7 @@ export type SessionRequest = {
   cacheRead: number;
   cacheReadRatio: number;
   cacheWrite: number;
+  cacheWrite1h: number;
   cacheWriteAvailability: TelemetryAvailability;
   contextSize: number;
   date: string;

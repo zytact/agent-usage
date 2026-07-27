@@ -7,6 +7,10 @@ import type {
 } from "./domain.js";
 import { originatorLabel } from "./ingest-shared.js";
 import {
+  allocateStateTime,
+  calendarDate,
+  collapseDayStateSeconds,
+  collapseStateSeconds,
   coefficientOfVariation,
   mean,
   percentile,
@@ -226,7 +230,65 @@ function filterSessionsByScope(
   now: Date,
 ): ParsedSession[] {
   const start = scopeStart(scope, now);
-  return sessions.filter((session) => session.end >= start);
+  return sessions
+    .map((session) => clipSessionToScope(session, start))
+    .filter((session): session is ParsedSession => session !== undefined);
+}
+
+function clipSessionToScope(session: ParsedSession, start: Date): ParsedSession | undefined {
+  if (session.end < start) {
+    return undefined;
+  }
+  if (session.start >= start) {
+    return session;
+  }
+
+  const requests = session.requests.filter((request) => request.ts >= start);
+  if (requests.length === 0) {
+    return undefined;
+  }
+
+  const allocated = allocateStateTime(
+    requests.map((request) => ({
+      effort: request.effort,
+      model: request.model,
+      ts: request.ts,
+    })),
+  );
+  const modelTokens: ParsedSession["modelTokens"] = {};
+  const models: Record<string, number> = {};
+  const efforts: Record<string, number> = {};
+
+  for (const request of requests) {
+    const bucket = (modelTokens[request.model] ??= {
+      ...zeroTokens(),
+      billableOutput: 0,
+    });
+    addRequestTokens(bucket, request);
+    models[request.model] = (models[request.model] ?? 0) + 1;
+    efforts[request.effort] = (efforts[request.effort] ?? 0) + 1;
+  }
+
+  const ratio = requests.length / Math.max(session.requests.length, 1);
+  return {
+    ...session,
+    activeSeconds: allocated.totalSeconds,
+    assistantTurns: Math.round(session.assistantTurns * ratio),
+    cacheWriteAvailability: telemetryAvailability(requests, "cacheWriteAvailability"),
+    dayModelActiveSeconds: collapseDayStateSeconds(allocated.byDayStateSeconds),
+    dayStateActiveSeconds: allocated.byDayStateSeconds,
+    efforts,
+    modelActiveSeconds: collapseStateSeconds(allocated.byStateSeconds),
+    modelTokens,
+    models,
+    reasoningAvailability: telemetryAvailability(requests, "reasoningAvailability"),
+    requestCount: requests.length,
+    requests,
+    start: new Date(Math.max(session.start.getTime(), start.getTime())),
+    stateActiveSeconds: allocated.byStateSeconds,
+    tokens: sumModelTokens(modelTokens),
+    userTurns: Math.round(session.userTurns * ratio),
+  };
 }
 
 export function aggregateSessions(sessions: ParsedSession[]): ReportStats {
@@ -259,7 +321,7 @@ export function aggregateSessions(sessions: ParsedSession[]): ReportStats {
     mergeCounts(stats.modelActiveSeconds, session.modelActiveSeconds);
     mergeTokens(stats.tokens, session.tokens);
     mergeModelTokens(stats.modelTokens, session.modelTokens);
-    mergeDayStats(stats.days, session.start, session.activeSeconds, session.requestCount);
+    mergeSessionDays(stats.days, session);
   }
 
   return stats;
@@ -540,6 +602,7 @@ function groupedDailyModelBreakdown(sessions: ParsedSession[]): DailyBreakdownRo
 
 type FilteredSessionSummary = {
   activeSeconds: number;
+  dayModelActiveSeconds: ParsedSession["dayModelActiveSeconds"];
   efforts: Record<string, number>;
   modelActiveSeconds: Record<string, number>;
   modelTokens: ParsedSession["modelTokens"];
@@ -592,6 +655,11 @@ function buildModelFilteredSummary(
   }
 
   const modelActiveSeconds = filterMap(session.modelActiveSeconds, predicate);
+  const dayModelActiveSeconds = Object.fromEntries(
+    Object.entries(session.dayModelActiveSeconds)
+      .map(([date, values]) => [date, filterMap(values, predicate)] as const)
+      .filter(([, values]) => Object.keys(values).length > 0),
+  );
   const stateActiveSeconds = filterStateMap(session.stateActiveSeconds, predicate);
   const tokens = sumModelTokens(modelTokens);
   const activeSeconds =
@@ -601,6 +669,7 @@ function buildModelFilteredSummary(
 
   return {
     activeSeconds,
+    dayModelActiveSeconds,
     efforts,
     modelActiveSeconds,
     modelTokens,
@@ -628,7 +697,7 @@ function mergeFilteredSessionStats(
   mergeCounts(stats.modelActiveSeconds, filtered.modelActiveSeconds);
   mergeTokens(stats.tokens, filtered.tokens);
   mergeModelTokens(stats.modelTokens, filtered.modelTokens);
-  mergeDayStats(stats.days, session.start, filtered.activeSeconds, filtered.requests.length);
+  mergeDailyStats(stats.days, filtered.dayModelActiveSeconds, filtered.requests);
 }
 
 function mergeModelTokens(
@@ -639,6 +708,7 @@ function mergeModelTokens(
     const bucket = (target[model] ??= { ...zeroTokens(), billableOutput: 0 });
     bucket.billableOutput += usage.billableOutput;
     bucket.cacheWrite += usage.cacheWrite;
+    bucket.cacheWrite1h += usage.cacheWrite1h;
     bucket.cached += usage.cached;
     bucket.input += usage.input;
     bucket.output += usage.output;
@@ -647,21 +717,31 @@ function mergeModelTokens(
   }
 }
 
-function mergeDayStats(
+function mergeDailyStats(
   days: ReportStats["days"],
-  start: Date,
-  activeSeconds: number,
-  requestCount: number,
+  dayModelActiveSeconds: ParsedSession["dayModelActiveSeconds"],
+  requests: SessionRequest[],
 ): void {
-  const dayKey = start.toISOString().slice(0, 10);
-  const day = (days[dayKey] ??= {
-    activeSeconds: 0,
-    requestCount: 0,
-    sessionCount: 0,
-  });
-  day.activeSeconds += activeSeconds;
-  day.requestCount += requestCount;
-  day.sessionCount += 1;
+  const requestCounts: Record<string, number> = {};
+  for (const request of requests) {
+    requestCounts[request.date] = (requestCounts[request.date] ?? 0) + 1;
+  }
+
+  const dates = new Set([...Object.keys(dayModelActiveSeconds), ...Object.keys(requestCounts)]);
+  for (const date of dates) {
+    const day = (days[date] ??= {
+      activeSeconds: 0,
+      requestCount: 0,
+      sessionCount: 0,
+    });
+    day.activeSeconds += sumValues(dayModelActiveSeconds[date] ?? {});
+    day.requestCount += requestCounts[date] ?? 0;
+    day.sessionCount += 1;
+  }
+}
+
+function mergeSessionDays(days: ReportStats["days"], session: ParsedSession): void {
+  mergeDailyStats(days, session.dayModelActiveSeconds, session.requests);
 }
 
 function summarizeRequestContexts(requests: SessionRequest[]): RequestContextSummary {
@@ -764,6 +844,7 @@ export function buildRequestSummaryData(
 export type PricingInfo = {
   cacheRead?: number;
   cacheWrite?: number;
+  cacheWrite1h?: number;
   completion?: number;
   prompt?: number;
 };
@@ -804,11 +885,14 @@ export function estimateCostBreakdown(
   const completion = rates.completion ?? 0;
   const cacheRead = rates.cacheRead ?? 0;
   const cacheWrite = rates.cacheWrite ?? prompt;
+  const cacheWrite1h = rates.cacheWrite1h ?? cacheWrite;
   const billableOutput =
     "billableOutput" in tokenInfo ? tokenInfo.billableOutput : tokenInfo.output;
   const input = tokenInfo.input * prompt;
   const cached = tokenInfo.cached * cacheRead;
-  const write = tokenInfo.cacheWrite * cacheWrite;
+  const oneHourWriteTokens = Math.min(tokenInfo.cacheWrite, tokenInfo.cacheWrite1h);
+  const write =
+    oneHourWriteTokens * cacheWrite1h + (tokenInfo.cacheWrite - oneHourWriteTokens) * cacheWrite;
   const output = billableOutput * completion;
 
   return {
@@ -850,7 +934,7 @@ export function estimateStatsTotalCost(
 function estimateRequestCost(
   request: Pick<
     SessionRequest,
-    "cacheRead" | "cacheWrite" | "input" | "model" | "output" | "reasoning"
+    "cacheRead" | "cacheWrite" | "cacheWrite1h" | "input" | "model" | "output" | "reasoning"
   >,
   pricing: Record<string, PricingInfo> = {},
 ): number {
@@ -860,6 +944,7 @@ function estimateRequestCost(
       {
         billableOutput: request.output + request.reasoning,
         cacheWrite: request.cacheWrite,
+        cacheWrite1h: request.cacheWrite1h,
         cached: request.cacheRead,
         input: request.input,
         output: request.output,
@@ -894,7 +979,7 @@ function attributionOverageRows(
 }
 
 function formatScopeTitle(scope: Scope, now: Date): string {
-  const today = now.toISOString().slice(0, 10);
+  const today = calendarDate(now);
   if (scope === "today") {
     return `Today · ${today}`;
   }
@@ -1106,6 +1191,7 @@ export function modelRows(
       ({
         billableOutput: 0,
         cacheWrite: 0,
+        cacheWrite1h: 0,
         cached: 0,
         input: 0,
         output: 0,
@@ -1258,6 +1344,7 @@ function addRequestMetrics(
 function addRequestTokens(tokenInfo: ModelTokenUsage, request: SessionRequest): void {
   tokenInfo.billableOutput += request.output + request.reasoning;
   tokenInfo.cacheWrite += request.cacheWrite;
+  tokenInfo.cacheWrite1h += request.cacheWrite1h;
   tokenInfo.cached += request.cacheRead;
   tokenInfo.input += request.input;
   tokenInfo.output += request.output;
@@ -1359,6 +1446,7 @@ function ensureEffortBucket(effortMap: Map<string, EffortAggregationBucket>, eff
       tokenInfo: {
         billableOutput: 0,
         cacheWrite: 0,
+        cacheWrite1h: 0,
         cached: 0,
         input: 0,
         output: 0,
@@ -1556,7 +1644,7 @@ function addSessionDistributions(
 function offsetIsoDay(now: Date, days: number): string {
   const value = new Date(now);
   value.setDate(value.getDate() - days);
-  return value.toISOString().slice(0, 10);
+  return calendarDate(value);
 }
 
 function scopeDays(scope: Scope, now: Date): string[] {
@@ -1579,6 +1667,7 @@ function mergeCounts(target: Record<string, number>, source: Record<string, numb
 
 function mergeTokens(target: TokenUsage, source: TokenUsage): void {
   target.cacheWrite += source.cacheWrite;
+  target.cacheWrite1h += source.cacheWrite1h;
   target.cached += source.cached;
   target.input += source.input;
   target.output += source.output;
@@ -1587,7 +1676,15 @@ function mergeTokens(target: TokenUsage, source: TokenUsage): void {
 }
 
 function zeroTokens(): TokenUsage {
-  return { cacheWrite: 0, cached: 0, input: 0, output: 0, reasoning: 0, total: 0 };
+  return {
+    cacheWrite: 0,
+    cacheWrite1h: 0,
+    cached: 0,
+    input: 0,
+    output: 0,
+    reasoning: 0,
+    total: 0,
+  };
 }
 
 function sumValues(values: Record<string, number>): number {
@@ -1634,9 +1731,15 @@ function weightedInputEquivalent(
   const prompt = rates.prompt;
   const cacheReadWeight = rates.cacheRead === undefined ? 1 : rates.cacheRead / prompt;
   const cacheWriteWeight = rates.cacheWrite === undefined ? 1 : rates.cacheWrite / prompt;
+  const cacheWrite1hWeight =
+    rates.cacheWrite1h === undefined ? cacheWriteWeight : rates.cacheWrite1h / prompt;
+  const oneHourWriteTokens = Math.min(request.cacheWrite, request.cacheWrite1h);
 
   return (
-    request.input + request.cacheRead * cacheReadWeight + request.cacheWrite * cacheWriteWeight
+    request.input +
+    request.cacheRead * cacheReadWeight +
+    (request.cacheWrite - oneHourWriteTokens) * cacheWriteWeight +
+    oneHourWriteTokens * cacheWrite1hWeight
   );
 }
 

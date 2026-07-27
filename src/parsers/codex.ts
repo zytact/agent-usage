@@ -235,6 +235,7 @@ function codexTotalTokens(usage: Record<string, unknown>): ParsedSession["tokens
   const output = asNumber(usage.output_tokens);
   return {
     cacheWrite: 0,
+    cacheWrite1h: 0,
     cached,
     input,
     output,
@@ -248,6 +249,7 @@ function codexRequestTokens(usage: Record<string, unknown>): ParsedSession["toke
   const cached = asNumber(usage.cached_input_tokens);
   return {
     cacheWrite: 0,
+    cacheWrite1h: 0,
     cached,
     input: Math.max(rawInput - cached, 0),
     output: asNumber(usage.output_tokens),
@@ -272,6 +274,7 @@ function distributeModelTokens(
     modelTokens[model] = {
       billableOutput: output,
       cacheWrite: Math.trunc(tokens.cacheWrite * ratio),
+      cacheWrite1h: Math.trunc(tokens.cacheWrite1h * ratio),
       cached: Math.trunc(tokens.cached * ratio),
       input: Math.trunc(tokens.input * ratio),
       output,

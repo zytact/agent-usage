@@ -3,6 +3,7 @@ import { basename, dirname } from "node:path";
 
 import type { ParsedSession, TokenUsage, WorkflowAgentUsage } from "../domain.js";
 import { addRequest, sessionLabel } from "../ingest-shared.js";
+import { calendarDate } from "../report-core.js";
 import { asNumber, asString, isRecord } from "./shared.js";
 
 const ORIGINATOR = "pi-dynamic-workflows";
@@ -74,7 +75,7 @@ export function parsePiWorkflowText(
   const modelTokens = tokens.total
     ? { [usageState.model]: { ...tokens, billableOutput: tokens.output } }
     : {};
-  const day = end.toISOString().slice(0, 10);
+  const day = calendarDate(end);
   const state = `${usageState.model}::${usageState.effort}`;
 
   return {
@@ -131,7 +132,7 @@ export function removePersistedWorkflowUsage(
     0,
     workflow.activeSeconds - matches.reduce((sum, session) => sum + session.activeSeconds, 0),
   );
-  const day = workflow.end.toISOString().slice(0, 10);
+  const day = calendarDate(workflow.end);
   const state = `${request.model}::${request.effort}`;
   return {
     ...workflow,
@@ -156,6 +157,7 @@ function parseRequiredTokens(value: Record<string, unknown>): TokenUsage | undef
   if (keys.some((key) => !isNonnegativeFinite(value[key]))) return undefined;
   return {
     cacheWrite: asNumber(value.cacheWrite),
+    cacheWrite1h: 0,
     cached: asNumber(value.cacheRead),
     input: asNumber(value.input),
     output: asNumber(value.output),
@@ -237,6 +239,7 @@ function subtractTokens(total: TokenUsage, parts: TokenUsage[]): TokenUsage | un
   const persisted = parts.reduce(
     (sum, part) => ({
       cacheWrite: sum.cacheWrite + part.cacheWrite,
+      cacheWrite1h: sum.cacheWrite1h + part.cacheWrite1h,
       cached: sum.cached + part.cached,
       input: sum.input + part.input,
       output: sum.output + part.output,
@@ -248,6 +251,7 @@ function subtractTokens(total: TokenUsage, parts: TokenUsage[]): TokenUsage | un
   if (persisted.total >= total.total) return undefined;
   return {
     cacheWrite: Math.max(0, total.cacheWrite - persisted.cacheWrite),
+    cacheWrite1h: Math.max(0, total.cacheWrite1h - persisted.cacheWrite1h),
     cached: Math.max(0, total.cached - persisted.cached),
     input: Math.max(0, total.input - persisted.input),
     output: Math.max(0, total.output - persisted.output),
@@ -257,7 +261,15 @@ function subtractTokens(total: TokenUsage, parts: TokenUsage[]): TokenUsage | un
 }
 
 function zeroTokenUsage(): TokenUsage {
-  return { cacheWrite: 0, cached: 0, input: 0, output: 0, reasoning: 0, total: 0 };
+  return {
+    cacheWrite: 0,
+    cacheWrite1h: 0,
+    cached: 0,
+    input: 0,
+    output: 0,
+    reasoning: 0,
+    total: 0,
+  };
 }
 
 function requestTokens(tokens: TokenUsage) {
@@ -266,6 +278,7 @@ function requestTokens(tokens: TokenUsage) {
     cacheRead: tokens.cached,
     cacheReadRatio: contextSize ? tokens.cached / contextSize : 0,
     cacheWrite: tokens.cacheWrite,
+    cacheWrite1h: tokens.cacheWrite1h,
     contextSize,
     input: tokens.input,
     output: tokens.output,

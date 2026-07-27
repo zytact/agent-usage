@@ -35,6 +35,7 @@ function defaultRequest(model: string): SessionRequest {
     cacheRead: 0,
     cacheReadRatio: 0,
     cacheWrite: 0,
+    cacheWrite1h: 0,
     cacheWriteAvailability: "known",
     contextSize: 0,
     date: "2026-06-14",
@@ -123,6 +124,7 @@ function tokensByModel(requests: SessionRequest[]): ParsedSession["modelTokens"]
       {
         billableOutput: request.output + request.reasoning,
         cacheWrite: request.cacheWrite,
+        cacheWrite1h: request.cacheWrite1h,
         cached: request.cacheRead,
         input: request.input,
         output: request.output,
@@ -154,6 +156,7 @@ function effortsByRequest(requests: SessionRequest[]): Record<string, number> {
 function totalTokens(requests: SessionRequest[]): ParsedSession["tokens"] {
   return {
     cacheWrite: sumRequests(requests, "cacheWrite"),
+    cacheWrite1h: sumRequests(requests, "cacheWrite1h"),
     cached: sumRequests(requests, "cacheRead"),
     input: sumRequests(requests, "input"),
     output: sumRequests(requests, "output"),

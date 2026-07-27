@@ -14,6 +14,7 @@ import {
   type PricingInfo,
   workflowModelAttributions,
 } from "../src/report-data.js";
+import { calendarDate } from "../src/report-core.js";
 import { makeRequest, makeSession } from "./fixtures.js";
 
 const pricing: Record<string, PricingInfo> = {
@@ -145,6 +146,135 @@ describe("buildReport", () => {
 
     expect(report.scopeTitle).toBe("Last 24 Hours · since 2026-06-13 13:15 UTC");
     expect(report.dailyUsage.rows.map((row) => row.date)).toEqual(["2026-06-13", "2026-06-14"]);
+  });
+
+  it("clips a session crossing local midnight to requests from today", () => {
+    const yesterday = new Date(2026, 6, 26, 23, 55);
+    const today = new Date(2026, 6, 27, 0, 5);
+    const now = new Date(2026, 6, 27, 12, 0);
+    const requests = [
+      makeRequest({
+        date: calendarDate(yesterday),
+        input: 100,
+        model: "claude-opus-5",
+        source: "claude",
+        total: 100,
+        ts: yesterday,
+      }),
+      makeRequest({
+        cacheWrite: 20,
+        cacheWrite1h: 20,
+        date: calendarDate(today),
+        model: "claude-opus-5",
+        output: 5,
+        source: "claude",
+        total: 25,
+        ts: today,
+      }),
+    ];
+    const report = buildReport(
+      [
+        makeSession({
+          end: today,
+          requests,
+          source: "claude",
+          sourceLabel: "Claude Code",
+          start: yesterday,
+        }),
+      ],
+      "today",
+      ["claude"],
+      now,
+      {
+        "anthropic/claude-opus-5": {
+          cacheWrite: 0.00000625,
+          cacheWrite1h: 0.00001,
+          completion: 0.000025,
+          prompt: 0.000005,
+        },
+      },
+    );
+
+    expect(report.scopeTitle).toBe("Today · 2026-07-27");
+    expect(report.combined.stats.requestCount).toBe(1);
+    expect(report.combined.stats.days).toEqual({
+      "2026-07-27": {
+        activeSeconds: 60,
+        requestCount: 1,
+        sessionCount: 1,
+      },
+    });
+    expect(report.combined.stats.tokens).toMatchObject({
+      cacheWrite: 20,
+      cacheWrite1h: 20,
+      input: 0,
+      output: 5,
+      total: 25,
+    });
+    expect(report.dailyUsage.rows).toEqual([
+      {
+        activeSeconds: 60,
+        cost: 0.000325,
+        date: "2026-07-27",
+        requestCount: 1,
+        tokens: 25,
+      },
+    ]);
+  });
+
+  it("splits GPT-only daily statistics across local calendar days", () => {
+    const yesterday = new Date(2026, 6, 26, 23, 55);
+    const today = new Date(2026, 6, 27, 0, 5);
+    const requests = [
+      makeRequest({
+        date: calendarDate(yesterday),
+        model: "gpt-5",
+        total: 10,
+        ts: yesterday,
+      }),
+      makeRequest({
+        date: calendarDate(today),
+        model: "gpt-5",
+        total: 20,
+        ts: today,
+      }),
+    ];
+    const report = buildReport(
+      [
+        makeSession({
+          dayModelActiveSeconds: {
+            [calendarDate(yesterday)]: { "gpt-5": 300 },
+            [calendarDate(today)]: { "gpt-5": 300 },
+          },
+          dayStateActiveSeconds: {
+            [calendarDate(yesterday)]: { "gpt-5::medium": 300 },
+            [calendarDate(today)]: { "gpt-5::medium": 300 },
+          },
+          end: today,
+          modelActiveSeconds: { "gpt-5": 600 },
+          requests,
+          start: yesterday,
+          stateActiveSeconds: { "gpt-5::medium": 600 },
+        }),
+      ],
+      "7d",
+      ["codex"],
+      new Date(2026, 6, 27, 12, 0),
+      pricing,
+    );
+
+    expect(report.gptOnly.stats.days).toEqual({
+      [calendarDate(yesterday)]: {
+        activeSeconds: 300,
+        requestCount: 1,
+        sessionCount: 1,
+      },
+      [calendarDate(today)]: {
+        activeSeconds: 300,
+        requestCount: 1,
+        sessionCount: 1,
+      },
+    });
   });
 
   it("estimates cost when rates exist", async () => {

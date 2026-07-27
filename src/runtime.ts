@@ -397,12 +397,13 @@ function deduplicateWorkflowSessions(sessions: ParsedSession[]): ParsedSession[]
 
 const PARSE_CONCURRENCY = 8;
 
-const SESSION_CACHE_VERSION = 8;
+const SESSION_CACHE_VERSION = 9;
 
 type SessionCacheRecord = {
   mtimeMs: number;
   parsed: ParsedSession | null;
   size: number;
+  timeZone: string;
   version: number;
 };
 
@@ -439,6 +440,7 @@ async function loadOrParseSession(
     mtimeMs,
     parsed: parsed ?? null,
     size,
+    timeZone: systemTimeZone(),
     version: SESSION_CACHE_VERSION,
   });
   return parsed;
@@ -458,7 +460,12 @@ async function readCachedSession(
 ): Promise<ParsedSession | null | undefined> {
   try {
     const raw = JSON.parse(await readFile(cachePath, "utf8")) as SessionCacheRecord;
-    if (raw.version !== SESSION_CACHE_VERSION || raw.size !== size || raw.mtimeMs !== mtimeMs) {
+    if (
+      raw.version !== SESSION_CACHE_VERSION ||
+      raw.size !== size ||
+      raw.mtimeMs !== mtimeMs ||
+      raw.timeZone !== systemTimeZone()
+    ) {
       return undefined;
     }
     return reviveParsedSession(raw.parsed);
@@ -469,6 +476,10 @@ async function readCachedSession(
 
 async function writeSessionCache(cachePath: string, record: SessionCacheRecord): Promise<void> {
   await writeFile(cachePath, JSON.stringify(record));
+}
+
+function systemTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
 function reviveParsedSession(session: ParsedSession | null): ParsedSession | null {

@@ -256,6 +256,8 @@ function claudeUsageTokens(usage: Record<string, unknown>): ClaudeUsage {
   const input = asNumber(usage.input_tokens);
   const cached = asNumber(usage.cache_read_input_tokens);
   const cacheWrite = asNumber(usage.cache_creation_input_tokens);
+  const cacheCreation = isRecord(usage.cache_creation) ? usage.cache_creation : undefined;
+  const cacheWrite1h = Math.min(cacheWrite, asNumber(cacheCreation?.ephemeral_1h_input_tokens));
   const rawOutput = asNumber(usage.output_tokens);
   const reasoning = explicitReasoningTokens(usage);
   const output = splitClaudeOutput(rawOutput, reasoning);
@@ -265,6 +267,7 @@ function claudeUsageTokens(usage: Record<string, unknown>): ClaudeUsage {
     reasoningAvailability: valueAvailability(reasoning),
     tokens: {
       cacheWrite,
+      cacheWrite1h,
       cached,
       input,
       output: output.visible,

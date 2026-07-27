@@ -40,6 +40,7 @@ describe("parseClaudeSessionText", () => {
       "claude-sonnet-4-6": {
         billableOutput: 862,
         cacheWrite: 29056,
+        cacheWrite1h: 0,
         cached: 0,
         input: 4,
         output: 862,
@@ -193,6 +194,37 @@ describe("parseClaudeSessionText", () => {
       "unknown",
       "unknown",
     ]);
+  });
+
+  it("preserves one-hour cache writes as a priced subset of cache writes", () => {
+    const session = parseClaudeSessionText(
+      [
+        JSON.stringify({ timestamp: "2026-07-27T10:00:00.000Z", type: "user" }),
+        JSON.stringify({
+          message: {
+            model: "claude-opus-5",
+            usage: {
+              cache_creation: {
+                ephemeral_1h_input_tokens: 7,
+                ephemeral_5m_input_tokens: 4,
+              },
+              cache_creation_input_tokens: 11,
+              input_tokens: 2,
+              output_tokens: 3,
+            },
+          },
+          timestamp: "2026-07-27T10:00:01.000Z",
+          type: "assistant",
+        }),
+      ].join("\n"),
+    );
+
+    expect(session?.tokens).toMatchObject({ cacheWrite: 11, cacheWrite1h: 7 });
+    expect(session?.modelTokens["claude-opus-5"]).toMatchObject({
+      cacheWrite: 11,
+      cacheWrite1h: 7,
+    });
+    expect(session?.requests[0]).toMatchObject({ cacheWrite: 11, cacheWrite1h: 7 });
   });
 
   it.each([

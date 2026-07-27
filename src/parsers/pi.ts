@@ -214,6 +214,7 @@ function piUsageTokens(usage: Record<string, unknown>): ParsedSession["tokens"] 
   const reasoning = asNumber(usage.reasoning);
   return {
     cacheWrite,
+    cacheWrite1h: 0,
     cached,
     input,
     output,
