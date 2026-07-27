@@ -131,6 +131,41 @@ describe("renderers", () => {
     expect(html).toContain("<b>Custom</b>");
   });
 
+  it("scales estimated source costs against their total", () => {
+    const sourcePricing = { "test/model": { prompt: 0.001 } };
+    const report = buildReport(
+      [
+        makeSession({
+          requests: [makeRequest({ input: 100, model: "test/model", total: 100 })],
+        }),
+        makeSession({
+          path: "/tmp/claude-session.jsonl",
+          requests: [
+            makeRequest({
+              input: 50,
+              model: "test/model",
+              source: "claude",
+              sourceLabel: "Claude Code",
+              total: 50,
+            }),
+          ],
+          sessionId: "session-2",
+          source: "claude",
+          sourceLabel: "Claude Code",
+        }),
+      ],
+      "7d",
+      ["codex", "claude"],
+      new Date("2026-06-14T18:45:00+05:30"),
+      sourcePricing,
+    );
+
+    const html = renderHtmlReport(report, sourcePricing, "summary", ["source-share"]);
+
+    expect(html).toMatch(/Codex<\/span><b>\$0\.10<\/b>.*?width:66\.7%/s);
+    expect(html).toMatch(/Claude Code<\/span><b>\$0\.05<\/b>.*?width:33\.3%/s);
+  });
+
   it("renders terminal dashboard text", async () => {
     const report = await makeReport();
     const output = renderTerminalReport(report, pricing);

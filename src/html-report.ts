@@ -1365,6 +1365,7 @@ function renderSelectedChartGrid(
       valueLabel: formatUsd(estimateStatsTotalCost(section.stats, pricing)),
     }))
     .filter((row) => row.value > 0);
+  const totalEstimatedCost = costRows.reduce((total, row) => total + row.value, 0);
   const tokenRows = [
     { label: "Fresh input", tone: "var(--input)", value: report.combined.stats.tokens.input },
     { label: "Cached", tone: "var(--cache)", value: report.combined.stats.tokens.cached },
@@ -1390,7 +1391,7 @@ function renderSelectedChartGrid(
   </section>`);
     panels.push(`<section class="chart-panel">
     <h2>Estimated cost by source</h2>
-    ${renderBarList(costRows, Math.max(...costRows.map((row) => row.value), 1), "No priced usage")}
+    ${renderBarList(costRows, totalEstimatedCost, "No priced usage")}
   </section>`);
   }
   if (sections.has("token-mix")) {
@@ -1592,7 +1593,7 @@ function renderBarList(
     return `<p class="empty">${escapeHtml(emptyLabel)}</p>`;
   }
 
-  const max = Math.max(maxValue, 1);
+  const max = maxValue > 0 ? maxValue : 1;
   return `<ul class="bar-list">${rows
     .map((row) => {
       const width = Math.max(2, Math.min(100, (row.value / max) * 100));
