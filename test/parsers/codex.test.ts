@@ -52,6 +52,7 @@ describe("parseCodexSessionText", () => {
       "gpt-5": {
         billableOutput: 350,
         cacheWrite: 0,
+        cacheWrite1h: 0,
         cached: 250,
         input: 750,
         output: 350,
@@ -61,6 +62,7 @@ describe("parseCodexSessionText", () => {
       "gpt-5-mini": {
         billableOutput: 350,
         cacheWrite: 0,
+        cacheWrite1h: 0,
         cached: 250,
         input: 750,
         output: 350,

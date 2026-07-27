@@ -3,7 +3,7 @@ import { writeFile } from "node:fs/promises";
 import type { ReportMode } from "./args.js";
 import { compactMetric, formatEffortMetricValue } from "./effort-format.js";
 import { shouldShowSection } from "./render-shared.js";
-import { compactTokens, humanSeconds } from "./report-core.js";
+import { calendarDate, compactTokens, humanSeconds } from "./report-core.js";
 import {
   availabilityNote,
   displayCacheWrite,
@@ -1539,7 +1539,7 @@ function renderDailyStrip(report: BuiltReport): string {
   const values = Array.from({ length: days }, (_, index) => {
     const day = new Date(start);
     day.setDate(start.getDate() + index);
-    const key = day.toISOString().slice(0, 10);
+    const key = calendarDate(day);
     return { active: report.combined.stats.days[key]?.activeSeconds ?? 0, key };
   });
   const maxValue = Math.max(...values.map((value) => value.active), 1);

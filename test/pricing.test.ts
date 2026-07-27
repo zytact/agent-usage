@@ -47,6 +47,30 @@ describe("pricing", () => {
     });
   });
 
+  it("derives Anthropic one-hour cache-write pricing from the documented multiplier", async () => {
+    const pricing = await loadPricingMap(
+      async () =>
+        new Response(
+          JSON.stringify({
+            anthropic: {
+              models: {
+                "claude-opus-5": {
+                  cost: {
+                    cache_read: 0.5,
+                    cache_write: 6.25,
+                    input: 5,
+                    output: 25,
+                  },
+                },
+              },
+            },
+          }),
+        ),
+    );
+
+    expect(pricing["anthropic/claude-opus-5"]?.cacheWrite1h).toBe(0.00001);
+  });
+
   it("uses dynamic model resolution and billable output for cost breakdown", () => {
     const pricing: Record<string, PricingInfo> = {
       "openai/gpt-5.4": {
@@ -62,6 +86,7 @@ describe("pricing", () => {
       {
         billableOutput: 11,
         cacheWrite: 7,
+        cacheWrite1h: 0,
         cached: 5,
         input: 10,
         output: 13,
@@ -105,6 +130,7 @@ describe("pricing", () => {
     };
     const usage = {
       cacheWrite: 4,
+      cacheWrite1h: 0,
       cached: 3,
       input: 2,
       output: 1,
@@ -135,6 +161,7 @@ describe("pricing", () => {
       "openai/gpt-5",
       {
         cacheWrite: 4,
+        cacheWrite1h: 0,
         cached: 0,
         input: 2,
         output: 3,
@@ -152,6 +179,30 @@ describe("pricing", () => {
     expect(cost).toBe(21);
   });
 
+  it("prices one-hour cache writes separately from default cache writes", () => {
+    const cost = estimateCost(
+      "claude-opus-5",
+      {
+        cacheWrite: 7,
+        cacheWrite1h: 4,
+        cached: 0,
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        total: 7,
+      },
+      {
+        "anthropic/claude-opus-5": {
+          cacheWrite: 2,
+          cacheWrite1h: 3,
+          prompt: 1,
+        },
+      },
+    );
+
+    expect(cost).toBe(18);
+  });
+
   it("sums known model costs and ignores unknown pricing", () => {
     const stats = aggregateSessions([
       makeSession({
@@ -159,6 +210,7 @@ describe("pricing", () => {
           "gpt-5": {
             billableOutput: 2,
             cacheWrite: 0,
+            cacheWrite1h: 0,
             cached: 0,
             input: 1,
             output: 2,
@@ -168,6 +220,7 @@ describe("pricing", () => {
           unknown: {
             billableOutput: 99,
             cacheWrite: 0,
+            cacheWrite1h: 0,
             cached: 0,
             input: 99,
             output: 99,

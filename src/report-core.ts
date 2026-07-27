@@ -55,6 +55,13 @@ export function scopeStart(scope: Scope, now: Date): Date {
   return new Date(year, month, day - days, 0, 0, 0, 0);
 }
 
+export function calendarDate(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function activeSeconds(events: Date[]): number {
   const ordered = [...events].sort((a, b) => a.getTime() - b.getTime());
   let active = 0;
@@ -90,12 +97,12 @@ export function splitIntervalByDay(start: Date, end: Date): Array<[Date, Date]> 
   let current = new Date(start);
 
   while (
-    current.getUTCFullYear() !== end.getUTCFullYear() ||
-    current.getUTCMonth() !== end.getUTCMonth() ||
-    current.getUTCDate() !== end.getUTCDate()
+    current.getFullYear() !== end.getFullYear() ||
+    current.getMonth() !== end.getMonth() ||
+    current.getDate() !== end.getDate()
   ) {
     const midnight = new Date(current);
-    midnight.setUTCHours(24, 0, 0, 0);
+    midnight.setHours(24, 0, 0, 0);
     segments.push([new Date(current), midnight]);
     current = midnight;
   }
@@ -142,7 +149,7 @@ export function allocateStateTime(eventMarks: EventMark[]): {
       }
 
       byStateSeconds[key] = (byStateSeconds[key] ?? 0) + seconds;
-      const day = segmentStart.toISOString().slice(0, 10);
+      const day = calendarDate(segmentStart);
       byDayStateSeconds[day] ??= {};
       byDayStateSeconds[day][key] = (byDayStateSeconds[day][key] ?? 0) + seconds;
     }
@@ -151,7 +158,7 @@ export function allocateStateTime(eventMarks: EventMark[]): {
   if (totalSeconds === 0) {
     const fallback = ordered[ordered.length - 1];
     const key = stateKey(fallback.model, fallback.effort);
-    const day = fallback.ts.toISOString().slice(0, 10);
+    const day = calendarDate(fallback.ts);
     byStateSeconds[key] = (byStateSeconds[key] ?? 0) + 60;
     byDayStateSeconds[day] ??= {};
     byDayStateSeconds[day][key] = (byDayStateSeconds[day][key] ?? 0) + 60;

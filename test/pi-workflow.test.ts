@@ -147,6 +147,7 @@ describe("pi-dynamic-workflows parsing", () => {
 
     expect(remainder?.tokens).toEqual({
       cacheWrite: 0,
+      cacheWrite1h: 0,
       cached: 30,
       input: 40,
       output: 10,

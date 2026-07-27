@@ -324,6 +324,7 @@ function usageFromMessage(data: Record<string, any>): ParsedSession["tokens"] {
   const cache = toRecord(usage?.cache);
   const values = {
     cacheWrite: asNumber(cache?.write),
+    cacheWrite1h: 0,
     cached: asNumber(cache?.read),
     input: asNumber(usage?.input),
     output: asNumber(usage?.output),
@@ -346,6 +347,7 @@ function applyUsage(
   context.tokens.input += usage.input;
   context.tokens.cached += usage.cached;
   context.tokens.cacheWrite += usage.cacheWrite;
+  context.tokens.cacheWrite1h += usage.cacheWrite1h;
   context.tokens.output += usage.output;
   context.tokens.reasoning += usage.reasoning;
   context.tokens.total += usage.total;
@@ -357,6 +359,7 @@ function applyUsage(
   const bucket = (context.modelTokens[model] ??= {
     billableOutput: 0,
     cacheWrite: 0,
+    cacheWrite1h: 0,
     cached: 0,
     input: 0,
     output: 0,
@@ -366,6 +369,7 @@ function applyUsage(
   bucket.input += usage.input;
   bucket.cached += usage.cached;
   bucket.cacheWrite += usage.cacheWrite;
+  bucket.cacheWrite1h += usage.cacheWrite1h;
   bucket.output += usage.output;
   bucket.reasoning += usage.reasoning;
   bucket.billableOutput += usage.output + usage.reasoning;
@@ -388,6 +392,7 @@ function applyFallbackUsage(
 
   context.tokens = {
     cacheWrite: asNumber(row.tokens_cache_write),
+    cacheWrite1h: 0,
     cached: asNumber(row.tokens_cache_read),
     input: asNumber(row.tokens_input),
     output: asNumber(row.tokens_output),
@@ -408,6 +413,7 @@ function applyFallbackUsage(
   context.modelTokens[fallbackModel] = {
     billableOutput: context.tokens.output + context.tokens.reasoning,
     cacheWrite: context.tokens.cacheWrite,
+    cacheWrite1h: context.tokens.cacheWrite1h,
     cached: context.tokens.cached,
     input: context.tokens.input,
     output: context.tokens.output,

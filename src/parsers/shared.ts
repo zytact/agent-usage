@@ -126,6 +126,7 @@ export function addTokens(target: ParsedSession["tokens"], value: ParsedSession[
   target.input += value.input;
   target.cached += value.cached;
   target.cacheWrite += value.cacheWrite;
+  target.cacheWrite1h += value.cacheWrite1h;
   target.output += value.output;
   target.reasoning += value.reasoning;
   target.total += value.total;
@@ -236,6 +237,7 @@ function modelTokenBucket(): ParsedSession["modelTokens"][string] {
   return {
     billableOutput: 0,
     cacheWrite: 0,
+    cacheWrite1h: 0,
     cached: 0,
     input: 0,
     output: 0,

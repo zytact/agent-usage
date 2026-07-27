@@ -1,6 +1,7 @@
 import { basename, extname } from "node:path";
 
 import type { SessionRequest, SourceId, TokenUsage } from "./domain.js";
+import { calendarDate } from "./report-core.js";
 
 const ORIGINATOR_LABELS: Partial<Record<SourceId, Record<string, string>>> = {
   claude: {
@@ -97,6 +98,7 @@ export function mergeCounts(
 export function zeroTokens(): TokenUsage {
   return {
     cacheWrite: 0,
+    cacheWrite1h: 0,
     cached: 0,
     input: 0,
     output: 0,
@@ -193,9 +195,10 @@ export function addRequest(
     cacheRead: tokens.cached,
     cacheReadRatio: contextSize > 0 ? tokens.cached / contextSize : 0,
     cacheWrite: tokens.cacheWrite,
+    cacheWrite1h: tokens.cacheWrite1h,
     cacheWriteAvailability: telemetry?.cacheWrite ?? "known",
     contextSize,
-    date: ts.toISOString().slice(0, 10),
+    date: calendarDate(ts),
     effort: effort ?? "unknown",
     input: tokens.input,
     model: model ?? "unknown",

@@ -4,6 +4,7 @@ import {
   ACTIVE_GAP_SECONDS,
   activeSeconds,
   allocateStateTime,
+  calendarDate,
   collapseDayStateSeconds,
   collapseStateSeconds,
   coefficientOfVariation,
@@ -56,23 +57,21 @@ describe("report-core", () => {
   });
 
   it("splits intervals across day boundaries", () => {
-    const parts = splitIntervalByDay(
-      new Date("2026-06-14T23:55:00.000Z"),
-      new Date("2026-06-15T00:05:00.000Z"),
-    );
+    const start = new Date(2026, 5, 14, 23, 55);
+    const midnight = new Date(2026, 5, 15, 0, 0);
+    const end = new Date(2026, 5, 15, 0, 5);
+    const parts = splitIntervalByDay(start, end);
     expect(parts).toHaveLength(2);
-    expect(parts[0][0].toISOString()).toBe("2026-06-14T23:55:00.000Z");
-    expect(parts[0][1].toISOString()).toBe("2026-06-15T00:00:00.000Z");
-    expect(parts[1][0].toISOString()).toBe("2026-06-15T00:00:00.000Z");
-    expect(parts[1][1].toISOString()).toBe("2026-06-15T00:05:00.000Z");
+    expect(parts[0]).toEqual([start, midnight]);
+    expect(parts[1]).toEqual([midnight, end]);
   });
 
   it("allocates state time and collapses by model", () => {
     const allocated = allocateStateTime([
-      { effort: "medium", model: "gpt-5", ts: new Date("2026-06-14T23:55:00.000Z") },
-      { effort: "medium", model: "gpt-5", ts: new Date("2026-06-15T00:05:00.000Z") },
-      { effort: "high", model: "gpt-5", ts: new Date("2026-06-15T00:05:00.000Z") },
-      { effort: "high", model: "gpt-5", ts: new Date("2026-06-15T00:10:00.000Z") },
+      { effort: "medium", model: "gpt-5", ts: new Date(2026, 5, 14, 23, 55) },
+      { effort: "medium", model: "gpt-5", ts: new Date(2026, 5, 15, 0, 5) },
+      { effort: "high", model: "gpt-5", ts: new Date(2026, 5, 15, 0, 5) },
+      { effort: "high", model: "gpt-5", ts: new Date(2026, 5, 15, 0, 10) },
     ]);
 
     expect(allocated.totalSeconds).toBe(15 * 60);
@@ -104,6 +103,7 @@ describe("report-core", () => {
   });
 
   it("formats durations and token counts", () => {
+    expect(calendarDate(new Date(2026, 5, 14, 23, 55))).toBe("2026-06-14");
     expect(humanSeconds(0)).toBe("0m");
     expect(humanSeconds(59)).toBe("<1m");
     expect(humanSeconds(3_720)).toBe("1h 2m");

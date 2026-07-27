@@ -31,13 +31,7 @@ export async function loadPricingMap(
           continue;
         }
 
-        const cost = model.cost;
-        out[`${providerId}/${modelId}`] = {
-          cacheRead: perToken(cost.cache_read),
-          cacheWrite: perToken(cost.cache_write),
-          completion: perToken(cost.output),
-          prompt: perToken(cost.input),
-        };
+        out[`${providerId}/${modelId}`] = pricingInfo(providerId, model.cost);
       }
     }
 
@@ -45,6 +39,17 @@ export async function loadPricingMap(
   } catch {
     return {};
   }
+}
+
+function pricingInfo(providerId: string, cost: Record<string, unknown>): PricingInfo {
+  const prompt = perToken(cost.input);
+  return {
+    cacheRead: perToken(cost.cache_read),
+    cacheWrite: perToken(cost.cache_write),
+    ...(providerId === "anthropic" && prompt !== undefined ? { cacheWrite1h: prompt * 2 } : {}),
+    completion: perToken(cost.output),
+    prompt,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
