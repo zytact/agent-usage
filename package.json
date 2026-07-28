@@ -14,7 +14,7 @@
     "check": "vp check",
     "test": "vp test run",
     "prepare": "vp config && vp pack",
-    "fallow": "fallow",
+    "fallow": "fallow audit --base origin/main",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
