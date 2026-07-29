@@ -287,7 +287,7 @@ function renderModelList(
       continue;
     }
     lines.push(
-      `    - ${row.key} · ${row.pct.toFixed(0)}% model share · time ${humanSeconds(row.activeSeconds)} · in ${compactTokens(row.tokenInfo.input)} (${row.inputRate}) · cached ${compactTokens(row.tokenInfo.cached)} · write ${displayCacheWrite(row.tokenInfo.cacheWrite, rowAvailability.cacheWrite)} · out ${compactTokens(row.tokenInfo.output)} (${row.outputRate}) · reason ${displayTelemetry(row.tokenInfo.reasoning, rowAvailability.reasoning)} · est ${displayPartialCost(row.cost, rowAvailability.cacheWrite)}`,
+      `    - ${row.key} · ${row.pct.toFixed(0)}% model share · active time ${humanSeconds(row.activeSeconds)} · in ${compactTokens(row.tokenInfo.input)} (${row.inputRate}) · cached ${compactTokens(row.tokenInfo.cached)} · write ${displayCacheWrite(row.tokenInfo.cacheWrite, rowAvailability.cacheWrite)} · out ${compactTokens(row.tokenInfo.output)} (${row.outputRate}) · reason ${displayTelemetry(row.tokenInfo.reasoning, rowAvailability.reasoning)} · est ${displayPartialCost(row.cost, rowAvailability.cacheWrite)}`,
     );
     for (const effort of effortBreakdowns.get(row.key) ?? []) {
       const metrics = effortMetricCells(effort)
@@ -306,7 +306,7 @@ function renderModelList(
   if (mixedUsage) {
     lines.push("    Combined mixed workflow usage");
     lines.push(
-      `      total ${compactTokens(mixedUsage.tokenInfo.total)} · input ${compactTokens(mixedUsage.tokenInfo.input)} · cached ${compactTokens(mixedUsage.tokenInfo.cached)} · write ${displayCacheWrite(mixedUsage.tokenInfo.cacheWrite, writeAvailability)} · output ${compactTokens(mixedUsage.tokenInfo.output)} · reason ${displayTelemetry(mixedUsage.tokenInfo.reasoning, reasonAvailability)} · time ${humanSeconds(mixedUsage.activeSeconds)}`,
+      `      total ${compactTokens(mixedUsage.tokenInfo.total)} · input ${compactTokens(mixedUsage.tokenInfo.input)} · cached ${compactTokens(mixedUsage.tokenInfo.cached)} · write ${displayCacheWrite(mixedUsage.tokenInfo.cacheWrite, writeAvailability)} · output ${compactTokens(mixedUsage.tokenInfo.output)} · reason ${displayTelemetry(mixedUsage.tokenInfo.reasoning, reasonAvailability)} · active time ${humanSeconds(mixedUsage.activeSeconds)}`,
     );
     lines.push(
       "      These totals apply collectively to the workflow models above and cannot be split by model.",
