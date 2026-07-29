@@ -18,6 +18,7 @@ import {
   type SectionKey,
 } from "./sections.js";
 import {
+  attributedModelTokenTotals,
   buildRequestSummaryData,
   cacheWriteAvailability,
   effortCostMix,
@@ -1350,12 +1351,22 @@ function renderSelectedChartGrid(
       valueLabel: humanSeconds(section.stats.activeSeconds),
     }))
     .filter((row) => row.value > 0);
-  const modelMix = modelRows(report.combined.stats, pricing, 6).map((row) => ({
-    label: row.key,
-    tone: "var(--primary)",
-    value: row.pct,
-    valueLabel: `${row.pct.toFixed(0)}%`,
-  }));
+  const modelTokenTotals = attributedModelTokenTotals(report.combined.sessions);
+  const totalAttributedModelTokens = Object.values(modelTokenTotals).reduce(
+    (total, tokens) => total + tokens,
+    0,
+  );
+  const modelTokenRows = topEntries(modelTokenTotals, 6)
+    .filter((row) => row.value > 0)
+    .map((row) => {
+      const share = (row.value / totalAttributedModelTokens) * 100;
+      return {
+        label: row.key,
+        tone: "var(--primary)",
+        value: row.value,
+        valueLabel: `${share.toFixed(0)}% · ${compactTokens(row.value)}`,
+      };
+    });
   const costRows = report.sections
     .filter((section) => section.kind === "primary")
     .map((section) => ({
@@ -1402,8 +1413,8 @@ function renderSelectedChartGrid(
   }
   if (sections.has("model-breakdown")) {
     panels.push(`<section class="chart-panel">
-    <h2>Model mix</h2>
-    ${renderBarList(modelMix, 100, "No model markers")}
+    <h2>Tokens by model</h2>
+    ${renderBarList(modelTokenRows, totalAttributedModelTokens, "No attributed model tokens")}
   </section>`);
   }
 

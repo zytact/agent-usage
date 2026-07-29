@@ -1265,6 +1265,24 @@ export function workflowModelAttributions(sessions: ParsedSession[]): WorkflowMo
   );
 }
 
+export function attributedModelTokenTotals(sessions: ParsedSession[]): Record<string, number> {
+  const totals: Record<string, number> = {};
+
+  for (const session of sessions) {
+    for (const [model, tokens] of Object.entries(session.modelTokens)) {
+      if (model !== "mixed usage") {
+        totals[model] = (totals[model] ?? 0) + tokens.total;
+      }
+    }
+    if (!session.requests.some((request) => request.model === "mixed usage")) continue;
+    for (const agent of session.workflowAgentUsage ?? []) {
+      totals[agent.model] = (totals[agent.model] ?? 0) + agent.total;
+    }
+  }
+
+  return totals;
+}
+
 export function modelEffortBreakdownMap(
   sessions: ParsedSession[],
   pricing: Record<string, PricingInfo>,

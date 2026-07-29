@@ -166,6 +166,31 @@ describe("renderers", () => {
     expect(html).toMatch(/Claude Code<\/span><b>\$0\.05<\/b>.*?width:33\.3%/s);
   });
 
+  it("ranks model share by attributed tokens instead of request count", () => {
+    const report = buildReport(
+      [
+        makeSession({
+          models: { "high-request-model": 9, "high-token-model": 1 },
+          requests: [
+            makeRequest({ input: 100, model: "high-request-model", total: 100 }),
+            makeRequest({ input: 900, model: "high-token-model", total: 900 }),
+          ],
+        }),
+      ],
+      "7d",
+      ["codex"],
+      new Date("2026-06-14T18:45:00+05:30"),
+    );
+
+    const html = renderHtmlReport(report, {}, "summary", ["model-breakdown"]);
+
+    expect(html).toContain("Tokens by model");
+    expect(html).toMatch(
+      /high-token-model<\/span><b>90% · 900<\/b>.*?width:90\.0%.*?high-request-model<\/span><b>10% · 100<\/b>.*?width:10\.0%/s,
+    );
+    expect(html).not.toContain("Model mix");
+  });
+
   it("renders terminal dashboard text", async () => {
     const report = await makeReport();
     const output = renderTerminalReport(report, pricing);
@@ -249,6 +274,49 @@ describe("renderers", () => {
       expect(rendered).toContain("Combined mixed workflow usage");
       expect(rendered).toContain("cannot be split by model");
     }
+    expect(html).toMatch(
+      /gpt-5\.6-sol<\/span><b>59% · 100<\/b>.*?width:58\.8%.*?deepseek-v4-flash-free<\/span><b>41% · 70<\/b>.*?width:41\.2%/s,
+    );
+    expect(html).not.toContain(">mixed usage</span>");
+  });
+
+  it("includes mixed workflow attribution alongside ordinary model token usage", () => {
+    const report = buildReport(
+      [
+        makeSession({
+          models: { "workflow-model": 1 },
+          path: "/tmp/workflow.jsonl",
+          requests: [
+            makeRequest({
+              model: "mixed usage",
+              source: "pi",
+              sourceLabel: "Pi",
+              total: 300,
+            }),
+          ],
+          sessionId: "workflow",
+          source: "pi",
+          sourceLabel: "Pi",
+          workflowAgentUsage: [
+            { effort: "medium", label: "worker", model: "workflow-model", total: 300 },
+          ],
+        }),
+        makeSession({
+          path: "/tmp/ordinary.jsonl",
+          requests: [makeRequest({ model: "ordinary-model", total: 100 })],
+          sessionId: "ordinary",
+        }),
+      ],
+      "7d",
+      ["codex", "pi"],
+      new Date("2026-06-14T18:45:00+05:30"),
+    );
+
+    const html = renderHtmlReport(report, {}, "summary", ["model-breakdown"]);
+
+    expect(html).toMatch(
+      /workflow-model<\/span><b>75% · 300<\/b>.*?width:75\.0%.*?ordinary-model<\/span><b>25% · 100<\/b>.*?width:25\.0%/s,
+    );
     expect(html).not.toContain(">mixed usage</span>");
   });
 
