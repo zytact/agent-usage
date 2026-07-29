@@ -134,7 +134,7 @@ export type EffortBreakdownRow = {
   costPerActiveMinute?: number;
   costPerRequest?: number;
   costPerRequestUplift?: number;
-  costPerMinuteUplift?: number;
+  costPerActiveMinuteUplift?: number;
   effort: string;
   inputPerRequest: number;
   outputPerRequest: number;
@@ -1113,8 +1113,8 @@ export function effortMetricCells(row: EffortBreakdownRow): EffortMetricCell[] {
     },
     {
       kind: "usd",
-      label: "Cost/min",
-      note: row.effort === "medium" ? "baseline" : formatUpliftNote(row.costPerMinuteUplift),
+      label: "Cost/active min",
+      note: row.effort === "medium" ? "baseline" : formatUpliftNote(row.costPerActiveMinuteUplift),
       value: row.costPerActiveMinute,
     },
     {
@@ -1150,7 +1150,12 @@ export function effortMetricCells(row: EffortBreakdownRow): EffortMetricCell[] {
     },
     { kind: "tokens", label: "Fresh/req", note: "uncached input", value: row.inputPerRequest },
     { kind: "tokens", label: "Cached/req", note: "cache read", value: row.cachedPerRequest },
-    { kind: "duration", label: "Time/req", note: "inferred", value: row.activeSecondsPerRequest },
+    {
+      kind: "duration",
+      label: "Active/req",
+      note: "inferred",
+      value: row.activeSecondsPerRequest,
+    },
   ];
 }
 
@@ -1424,7 +1429,7 @@ function buildEffortBreakdownRow(
     contextPerRequestUplift: uplift(contextPerRequest, baseline.contextPerRequest),
     costBreakdownPerRequest: divideCostBreakdown(bucket.costBreakdown, requestCount),
     costPerActiveMinute,
-    costPerMinuteUplift: uplift(costPerActiveMinute, baseline.costPerActiveMinute),
+    costPerActiveMinuteUplift: uplift(costPerActiveMinute, baseline.costPerActiveMinute),
     costPerRequest,
     costPerRequestUplift: uplift(costPerRequest, baseline.costPerRequest),
     effort,

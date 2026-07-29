@@ -347,7 +347,7 @@ describe("buildReport", () => {
       reasoningPerRequest: 40,
       contextPerRequest: 1000,
       activeSecondsPerRequest: 360,
-      costPerMinuteUplift: 0,
+      costPerActiveMinuteUplift: 0,
       costPerRequestUplift: 0,
       tokensPerRequestUplift: 0,
     });
@@ -355,7 +355,7 @@ describe("buildReport", () => {
       effort: "high",
       requests: 1,
       costPerRequestUplift: 0.2556818181818181,
-      costPerMinuteUplift: -0.058238636363636354,
+      costPerActiveMinuteUplift: -0.058238636363636354,
       outputPerRequestUplift: 0.19999999999999996,
       reasoningPerRequestUplift: 1,
       tokensPerRequestUplift: 0.22388059701492535,

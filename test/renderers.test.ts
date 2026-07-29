@@ -68,7 +68,7 @@ describe("renderers", () => {
     expect(html).not.toContain("GPT-only request summary");
     expect(html).not.toContain("Per-day / per-harness / per-model");
     expect(html).toContain("Claude Code");
-    expect(html).toContain("<dt>Time</dt>");
+    expect(html).toContain("<dt>Active time</dt>");
     expect(html).toContain("Effort-normalized");
     expect(html).toContain("Cost/req");
     expect(html).toContain("vs medium");
@@ -114,6 +114,8 @@ describe("renderers", () => {
       renderHtmlReport(report, comparisonPricing),
       renderTerminalReport(report, comparisonPricing),
     ]) {
+      expect(rendered.toLowerCase()).toContain("cost/active min");
+      expect(rendered.toLowerCase()).not.toContain("cost/min");
       expect(rendered).toContain("$0.069");
       expect(rendered).toContain("$0.070");
       expect(rendered).toContain("vs medium -1.4%");
