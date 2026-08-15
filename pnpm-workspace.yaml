@@ -2,7 +2,7 @@ allowBuilds:
   esbuild: true
   usocket: set this to true or false
 catalog:
-  vite-plus: latest
+  vite-plus: 0.2.9
 peerDependencyRules:
   allowAny:
     - vite

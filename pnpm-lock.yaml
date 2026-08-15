@@ -206,7 +206,7 @@ settings:
 catalogs:
   default:
     vite-plus:
-      specifier: latest
+      specifier: 0.2.9
       version: 0.2.9
 
 importers:
