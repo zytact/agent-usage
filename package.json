@@ -23,12 +23,15 @@
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
-    "@types/node": "^25.9.3",
+    "@types/node": "^24",
     "@types/sql.js": "^1.4.11",
     "fallow": "^2.96.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": "24.x"
   },
   "packageManager": "pnpm@11.6.0"
 }
