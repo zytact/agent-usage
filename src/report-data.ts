@@ -580,18 +580,12 @@ function groupedDailyModelBreakdown(sessions: ParsedSession[]): DailyBreakdownRo
   }
 
   return [...grouped.values()]
-    .map(
-      ({ _reasoningKnown, _sessionIds, ...row }): DailyBreakdownRow => ({
-        ...row,
-        reasoningAvailability:
-          _reasoningKnown === 0
-            ? "unknown"
-            : _reasoningKnown === row.requests
-              ? "known"
-              : "partial",
-        sessions: _sessionIds.size,
-      }),
-    )
+    .map(({ _reasoningKnown, _sessionIds, ...row }): DailyBreakdownRow => ({
+      ...row,
+      reasoningAvailability:
+        _reasoningKnown === 0 ? "unknown" : _reasoningKnown === row.requests ? "known" : "partial",
+      sessions: _sessionIds.size,
+    }))
     .sort((a, b) =>
       compareRows(
         [b.date, b.harness, b.subharness, b.model, b.effort],
