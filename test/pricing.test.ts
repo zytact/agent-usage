@@ -47,6 +47,33 @@ describe("pricing", () => {
     });
   });
 
+  it("loads rates from the models.dev catalog response", async () => {
+    const pricing = await loadPricingMap(async (input) => {
+      expect(input).toBe("https://models.dev/catalog.json");
+      return new Response(
+        JSON.stringify({
+          models: {},
+          providers: {
+            openai: {
+              models: {
+                "gpt-5.6-sol": {
+                  cost: { input: 4, output: 20 },
+                },
+              },
+            },
+          },
+        }),
+      );
+    });
+
+    expect(pricing["openai/gpt-5.6-sol"]).toEqual({
+      cacheRead: undefined,
+      cacheWrite: undefined,
+      completion: 0.00002,
+      prompt: 0.000004,
+    });
+  });
+
   it("derives Anthropic one-hour cache-write pricing from the documented multiplier", async () => {
     const pricing = await loadPricingMap(
       async () =>
