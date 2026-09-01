@@ -1,6 +1,6 @@
 import type { PricingInfo } from "./report-data.js";
 
-const MODELS_DEV_URL = "https://models.dev/api.json";
+const MODELS_DEV_URL = "https://models.dev/catalog.json";
 const TOKENS_PER_MILLION = 1_000_000;
 
 export async function loadPricingMap(
@@ -21,7 +21,9 @@ export async function loadPricingMap(
       return out;
     }
 
-    for (const [providerId, provider] of Object.entries(payload)) {
+    const providers = isRecord(payload.providers) ? payload.providers : payload;
+
+    for (const [providerId, provider] of Object.entries(providers)) {
       if (!isRecord(provider) || !isRecord(provider.models)) {
         continue;
       }
