@@ -1,3 +1,4 @@
 .pi-subagents/
+.local/
 dist/
 node_modules/
