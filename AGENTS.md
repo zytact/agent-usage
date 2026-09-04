@@ -1,13 +1,8 @@
 # AGENTS.md
 
-At the end of a successful change, run:
+## Project
 
-```sh
-vp check
-vp run fallow
-```
-
-to verify them.
+A tool to easily check Claude Code, Codex, Pi and OpenCode usage.
 
 ## Ubiquitous language
 
@@ -15,7 +10,7 @@ This repo has a domain glossary at `UBIQUITOUS_LANGUAGE.md`.
 
 Read it when working on domain terminology, product concepts, naming, business rules, user-facing language, or when interpreting ambiguous terms. Prefer the canonical terms defined there, and avoid aliases listed as discouraged.
 
-# Impeccable
+# Frontend Changes
 
 Use impeccable skill when making UI changes
 
@@ -38,11 +33,18 @@ release. Add a tool name to select part of the graph. For example, run
 `vp toolchain vite`. Use `--global` to ignore the local `vite-plus` package. Use
 `vp why <package>` to show the package-manager dependency graph.
 
-## Review Checklist
-
-- [ ] Run `vp install` after pulling remote changes and before getting started.
-- [ ] Run `vp check` and `vp test` to format, lint, type check and test changes.
-- [ ] Check if there are `vite.config.ts` tasks or `package.json` scripts necessary for validation, run via `vp run <script>`.
-- [ ] If setup, runtime, or package-manager behavior looks wrong, run `vp env doctor` and include its output when asking for help.
-
 <!--VITE PLUS END-->
+
+## Validation
+
+Run `vp install` after pulling remote changes. After any change, run:
+
+```sh
+vp check
+vp test run
+vp run fallow
+```
+
+`vp check` formats, lints and type checks in one pass. Never overwrite fallow thresholds or get fallow issues ignored unless it is genuinely needed for good code, and justify it to the developer when you do.
+
+Check `package.json` and `vite.config.ts` for scripts or tasks a change touches, and run them with `vp run <name>`. If setup, runtime, or package-manager behavior looks wrong, run `vp env doctor` and include its output when asking for help.
