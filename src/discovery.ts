@@ -1,6 +1,6 @@
 import { existsSync, type Dirent } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 
 import type { DiscoveredSessionFile, SessionDiscovery } from "./domain.js";
 
@@ -13,15 +13,38 @@ type DiscoveryRoots = {
   piWorkflowsDir: string;
 };
 
-export function defaultDiscoveryRoots(homeDir: string): DiscoveryRoots {
+/**
+ * Pi resolves its session root the same way: PI_CODING_AGENT_SESSION_DIR wins outright,
+ * otherwise sessions live under PI_CODING_AGENT_DIR (default ~/.pi/agent).
+ */
+export function defaultDiscoveryRoots(
+  homeDir: string,
+  env: NodeJS.ProcessEnv = process.env,
+): DiscoveryRoots {
+  const piAgentDir = expandHome(env.PI_CODING_AGENT_DIR, homeDir) ?? join(homeDir, ".pi", "agent");
+
   return {
     claudeDir: join(homeDir, ".claude", "projects"),
     codexDir: join(homeDir, ".codex", "sessions"),
     homeDir,
     opencodeDir: join(homeDir, ".local", "share", "opencode"),
-    piDir: join(homeDir, ".pi", "agent", "sessions"),
+    piDir: expandHome(env.PI_CODING_AGENT_SESSION_DIR, homeDir) ?? join(piAgentDir, "sessions"),
     piWorkflowsDir: join(homeDir, ".pi", "workflows", "projects"),
   };
+}
+
+function expandHome(value: string | undefined, homeDir: string): string | undefined {
+  const path = value?.trim();
+  if (!path) {
+    return undefined;
+  }
+  if (path === "~") {
+    return homeDir;
+  }
+  if (path.startsWith("~/")) {
+    return join(homeDir, path.slice(2));
+  }
+  return isAbsolute(path) ? path : resolve(path);
 }
 
 export async function discoverSessionFiles(
@@ -57,40 +80,37 @@ async function collectFiles(
   }
 
   const files: DiscoveredSessionFile[] = [];
-  await walk(root, root, suffix, files, cutoffMs);
+  await walk(root, suffix, files, cutoffMs);
   files.sort((a, b) => a.path.localeCompare(b.path));
   return files;
 }
 
 async function walk(
   root: string,
-  walkRoot: string,
   suffix: string,
   files: DiscoveredSessionFile[],
   cutoffMs?: number,
 ): Promise<void> {
-  if (shouldSkipByPath(root, walkRoot, cutoffMs)) {
-    return;
-  }
-
   const entries = await readdir(root, { withFileTypes: true });
 
   for (const entry of entries) {
     const fullPath = join(root, entry.name);
     if (entry.isDirectory()) {
-      await walk(fullPath, walkRoot, suffix, files, cutoffMs);
+      await walk(fullPath, suffix, files, cutoffMs);
       continue;
     }
     if (!isMatchingFileEntry(entry, suffix)) {
-      continue;
-    }
-    if (shouldSkipByPath(fullPath, walkRoot, cutoffMs)) {
       continue;
     }
     await addDiscoveredFile(fullPath, files, cutoffMs);
   }
 }
 
+/**
+ * Modification time is the only trustworthy freshness signal. Session filenames and the
+ * dated directories above them record creation, so a resumed session keeps an old name
+ * while still gaining requests inside Scope.
+ */
 async function addDiscoveredFile(
   fullPath: string,
   files: DiscoveredSessionFile[],
@@ -110,33 +130,4 @@ async function addDiscoveredFile(
 
 function isMatchingFileEntry(entry: Dirent, suffix: string): boolean {
   return entry.isFile() && entry.name.endsWith(suffix);
-}
-
-function shouldSkipByPath(fullPath: string, root: string, cutoffMs?: number): boolean {
-  return cutoffMs ? definitelyBeforeScope(fullPath, root, cutoffMs) : false;
-}
-
-function definitelyBeforeScope(fullPath: string, root: string, cutoffMs: number): boolean {
-  const hinted = dateHintFromPath(relative(root, fullPath));
-  return hinted ? hinted.getTime() < cutoffMs : false;
-}
-
-function dateHintFromPath(relativePath: string): Date | undefined {
-  const parts = relativePath.split(sep).filter(Boolean);
-  if (parts.length >= 3) {
-    const year = Number(parts[0]);
-    const month = Number(parts[1]);
-    const day = Number(parts[2]);
-    if (Number.isInteger(year) && Number.isInteger(month) && Number.isInteger(day)) {
-      return new Date(Date.UTC(year, month - 1, day + 1));
-    }
-  }
-
-  const match = (parts.at(-1) ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!match) {
-    return undefined;
-  }
-
-  const [, year, month, day] = match;
-  return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day) + 1));
 }
