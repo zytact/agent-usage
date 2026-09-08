@@ -1,5 +1,5 @@
-import type { ParsedSession } from "../domain.js";
-import { inferLanguages, mergeCounts, repoName } from "../ingest-shared.js";
+import type { ModelTokenUsage, ParsedSession } from "../domain.js";
+import { inferLanguages, mergeCounts, narrowProvider, repoName } from "../ingest-shared.js";
 import {
   allocateStateTime,
   collapseDayStateSeconds,
@@ -136,11 +136,13 @@ export function addModelTokens(
   modelTokens: ParsedSession["modelTokens"],
   model: string | undefined,
   value: ParsedSession["tokens"],
+  provider?: string,
 ): void {
   if (!model) {
     return;
   }
   const bucket = (modelTokens[model] ??= modelTokenBucket());
+  narrowProvider(bucket, provider);
   addTokens(bucket, value);
   bucket.billableOutput += value.output + value.reasoning;
 }
@@ -212,7 +214,7 @@ export function finalSessionId(sessionId: string | undefined, path: string): str
   );
 }
 
-function parseJsonObject(line: string): Record<string, unknown> | undefined {
+export function parseJsonObject(line: string): Record<string, unknown> | undefined {
   try {
     const item: unknown = JSON.parse(line);
     return isRecord(item) ? item : undefined;
@@ -233,7 +235,7 @@ export function asString(value: unknown): string | undefined {
   return typeof value === "string" && value ? value : undefined;
 }
 
-function modelTokenBucket(): ParsedSession["modelTokens"][string] {
+function modelTokenBucket(): ModelTokenUsage {
   return {
     billableOutput: 0,
     cacheWrite: 0,

@@ -178,6 +178,10 @@ describe("pricing", () => {
       "openrouter/qwen/qwen4-coder:free",
     );
     expect(resolveModelId("shared-model", pricing)).toBe("shared-model");
+    expect(resolveModelId("shared-model", pricing, "provider-b")).toBe("provider-b/shared-model");
+    expect(resolveModelId("gpt-6-codex", pricing, "gateway")).toBe("gateway/gpt-6-codex");
+    // openai-codex sells a subscription and has no catalog entry, so fall back to the publisher.
+    expect(resolveModelId("gpt-6-codex", pricing, "openai-codex")).toBe("openai/gpt-6-codex");
     expect(resolveModelId("constructor", pricing)).toBe("constructor");
     expect(estimateCost("claude-opus-5", usage, pricing)).toBe(61.5);
     expect(estimateCost("claude-sonnet-4-6", usage, pricing)).toBe(36.9);

@@ -1,11 +1,12 @@
 import type {
+  ModelTokenUsage,
   ParsedSession,
   SessionRequest,
   SourceId,
   TelemetryAvailability,
   TokenUsage,
 } from "./domain.js";
-import { originatorLabel } from "./ingest-shared.js";
+import { narrowProvider, originatorLabel } from "./ingest-shared.js";
 import {
   allocateStateTime,
   calendarDate,
@@ -18,8 +19,6 @@ import {
   splitStateKey,
   type Scope,
 } from "./report-core.js";
-
-export type ModelTokenUsage = TokenUsage & { billableOutput: number };
 
 export type ReportDay = {
   activeSeconds: number;
@@ -260,10 +259,7 @@ function clipSessionToScope(session: ParsedSession, start: Date): ParsedSession 
   const efforts: Record<string, number> = {};
 
   for (const request of requests) {
-    const bucket = (modelTokens[request.model] ??= {
-      ...zeroTokens(),
-      billableOutput: 0,
-    });
+    const bucket = (modelTokens[request.model] ??= { ...zeroTokens(), billableOutput: 0 });
     addRequestTokens(bucket, request);
     models[request.model] = (models[request.model] ?? 0) + 1;
     efforts[request.effort] = (efforts[request.effort] ?? 0) + 1;
@@ -700,6 +696,7 @@ function mergeModelTokens(
 ): void {
   for (const [model, usage] of Object.entries(source)) {
     const bucket = (target[model] ??= { ...zeroTokens(), billableOutput: 0 });
+    narrowProvider(bucket, usage.provider);
     bucket.billableOutput += usage.billableOutput;
     bucket.cacheWrite += usage.cacheWrite;
     bucket.cacheWrite1h += usage.cacheWrite1h;
@@ -851,26 +848,42 @@ export type CostBreakdown = {
   total: number;
 };
 
-export function resolveModelId(modelName: string, pricing: Record<string, PricingInfo>): string {
+/**
+ * Prefers the provider that actually served the request, so subscriptions and gateways are
+ * not priced at the model publisher's list rates and two providers offering the same model
+ * stay distinguishable. Falls back to the publisher when the provider has no pricing entry.
+ */
+export function resolveModelId(
+  modelName: string,
+  pricing: Record<string, PricingInfo>,
+  provider?: string,
+): string {
+  if (provider && Object.hasOwn(pricing, `${provider}/${modelName}`)) {
+    return `${provider}/${modelName}`;
+  }
   if (Object.hasOwn(pricing, modelName)) {
     return modelName;
   }
 
   const candidates = pricingCandidates(pricing).get(normalizeModelId(modelName)) ?? [];
+  const providerMatch = provider
+    ? candidates.find((candidate) => candidate.startsWith(`${provider}/`))
+    : undefined;
   const publisher = canonicalPublisher(modelName);
   const publisherMatch = publisher
     ? candidates.find((candidate) => candidate.startsWith(`${publisher}/`))
     : undefined;
 
-  return publisherMatch ?? (candidates.length === 1 ? candidates[0] : modelName);
+  return providerMatch ?? publisherMatch ?? (candidates.length === 1 ? candidates[0] : modelName);
 }
 
 export function estimateCostBreakdown(
   modelName: string,
   tokenInfo: ModelTokenUsage | TokenUsage,
   pricing: Record<string, PricingInfo>,
+  provider?: string,
 ): CostBreakdown | undefined {
-  const rates = pricing[resolveModelId(modelName, pricing)];
+  const rates = pricing[resolveModelId(modelName, pricing, provider ?? tokenProvider(tokenInfo))];
   if (!rates) {
     return undefined;
   }
@@ -902,8 +915,13 @@ export function estimateCost(
   modelName: string,
   tokenInfo: ModelTokenUsage | TokenUsage,
   pricing: Record<string, PricingInfo>,
+  provider?: string,
 ): number | undefined {
-  return estimateCostBreakdown(modelName, tokenInfo, pricing)?.total;
+  return estimateCostBreakdown(modelName, tokenInfo, pricing, provider)?.total;
+}
+
+function tokenProvider(tokenInfo: ModelTokenUsage | TokenUsage): string | undefined {
+  return "provider" in tokenInfo ? tokenInfo.provider : undefined;
 }
 
 export function estimateStatsTotalCost(
@@ -928,7 +946,14 @@ export function estimateStatsTotalCost(
 function estimateRequestCost(
   request: Pick<
     SessionRequest,
-    "cacheRead" | "cacheWrite" | "cacheWrite1h" | "input" | "model" | "output" | "reasoning"
+    | "cacheRead"
+    | "cacheWrite"
+    | "cacheWrite1h"
+    | "input"
+    | "model"
+    | "output"
+    | "provider"
+    | "reasoning"
   >,
   pricing: Record<string, PricingInfo> = {},
 ): number {
@@ -942,6 +967,7 @@ function estimateRequestCost(
         cached: request.cacheRead,
         input: request.input,
         output: request.output,
+        provider: request.provider,
         reasoning: request.reasoning,
         total:
           request.input +
@@ -1359,6 +1385,7 @@ function addRequestMetrics(
 }
 
 function addRequestTokens(tokenInfo: ModelTokenUsage, request: SessionRequest): void {
+  narrowProvider(tokenInfo, request.provider);
   tokenInfo.billableOutput += request.output + request.reasoning;
   tokenInfo.cacheWrite += request.cacheWrite;
   tokenInfo.cacheWrite1h += request.cacheWrite1h;
@@ -1740,7 +1767,7 @@ function weightedInputEquivalent(
   request: SessionRequest,
   pricing: Record<string, PricingInfo>,
 ): number | undefined {
-  const rates = pricing[resolveModelId(request.model, pricing)];
+  const rates = pricing[resolveModelId(request.model, pricing, request.provider)];
   if (!rates?.prompt) {
     return undefined;
   }

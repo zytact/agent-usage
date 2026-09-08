@@ -1,6 +1,6 @@
-import { basename, extname } from "node:path";
+import { basename } from "node:path";
 
-import type { SessionRequest, SourceId, TokenUsage } from "./domain.js";
+import type { ModelTokenUsage, SessionRequest, SourceId, TokenUsage } from "./domain.js";
 import { calendarDate } from "./report-core.js";
 
 const ORIGINATOR_LABELS: Partial<Record<SourceId, Record<string, string>>> = {
@@ -62,7 +62,14 @@ const EXTENSION_LANGUAGES: Record<string, string> = {
   ".zsh": "Shell",
 };
 
-const FILE_PATH_RE = /([/~]?[A-Za-z0-9._/-]+\.[A-Za-z0-9]+)/g;
+/**
+ * Both patterns end in a single greedy character class with nothing to satisfy after it,
+ * so neither can backtrack. Matching a path and its extension in one pattern instead makes
+ * the engine retry every split point of long non-path runs such as embedded base64 image
+ * data, which costs time quadratic in the line length.
+ */
+const PATH_TOKEN_RE = /[A-Za-z0-9._/~-]+/g;
+const EXTENSION_RE = /\.[A-Za-z0-9]+/g;
 
 export function repoName(cwd: string | undefined): string {
   if (!cwd) {
@@ -75,14 +82,22 @@ export function repoName(cwd: string | undefined): string {
 
 export function inferLanguages(text: string): Record<string, number> {
   const counts: Record<string, number> = {};
-  for (const match of text.matchAll(FILE_PATH_RE)) {
-    const extension = extname(match[1]).toLowerCase();
-    const language = EXTENSION_LANGUAGES[extension];
+  for (const token of text.matchAll(PATH_TOKEN_RE)) {
+    const language = EXTENSION_LANGUAGES[lastExtension(token[0])];
     if (language) {
       counts[language] = (counts[language] ?? 0) + 1;
     }
   }
   return counts;
+}
+
+/** Trailing extension of a path-like token, ignoring any junk after it: `src/a.ts.` is `.ts`. */
+function lastExtension(token: string): string {
+  let extension = "";
+  for (const match of token.matchAll(EXTENSION_RE)) {
+    extension = match[0];
+  }
+  return extension.toLowerCase();
 }
 
 export function mergeCounts(
@@ -105,6 +120,21 @@ export function zeroTokens(): TokenUsage {
     reasoning: 0,
     total: 0,
   };
+}
+
+/**
+ * A bucket keeps its provider only while every contribution agrees, so mixed providers fall
+ * back to the model publisher rather than picking one arbitrarily. Call this before adding
+ * tokens: an empty bucket has no provider yet and takes the first contribution's.
+ */
+export function narrowProvider(bucket: ModelTokenUsage, provider: string | undefined): void {
+  if (bucket.total === 0 && bucket.provider === undefined) {
+    bucket.provider = provider;
+    return;
+  }
+  if (bucket.provider !== provider) {
+    bucket.provider = undefined;
+  }
 }
 
 export function originatorLabel(
@@ -165,6 +195,7 @@ export function addRequest(
     effort,
     model,
     originator,
+    provider,
     repo,
     sessionId,
     source,
@@ -175,6 +206,7 @@ export function addRequest(
     effort?: string;
     model?: string;
     originator?: string;
+    provider?: string;
     repo: string;
     sessionId: string;
     source: SourceId;
@@ -203,6 +235,7 @@ export function addRequest(
     input: tokens.input,
     model: model ?? "unknown",
     output: tokens.output,
+    provider,
     reasoning: tokens.reasoning,
     reasoningAvailability: telemetry?.reasoning ?? "known",
     repo,
