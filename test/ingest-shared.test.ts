@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { originatorLabel, sessionLabel } from "../src/ingest-shared.js";
+import { inferLanguages, originatorLabel, sessionLabel } from "../src/ingest-shared.js";
 
 describe("originator labels", () => {
   it("maps claude originators", () => {
@@ -38,5 +38,25 @@ describe("originator labels", () => {
     expect(sessionLabel("opencode", "subagent")).toBe("opencode");
     expect(sessionLabel("codex", "t3code_desktop")).toBe("T3 Code");
     expect(sessionLabel("pi", undefined)).toBe("Pi");
+  });
+});
+
+describe("inferLanguages", () => {
+  it("counts languages from paths and bare extensions", () => {
+    expect(inferLanguages('{"file":"src/report.ts","also":"~/notes.md"}')).toEqual({
+      TypeScript: 1,
+      Markdown: 1,
+    });
+    expect(inferLanguages("see src/a.ts. and `.jsonl` files")).toEqual({
+      TypeScript: 1,
+      JSONL: 1,
+    });
+    expect(inferLanguages("a.ts/b.py")).toEqual({ Python: 1 });
+  });
+
+  it("stays linear on long runs that are not paths", () => {
+    const started = performance.now();
+    inferLanguages("a".repeat(400_000));
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 });

@@ -120,12 +120,12 @@ describe("parsePiSessionText", () => {
     });
   });
 
-  it("classifies pi parent sessions as subagent originators", () => {
+  it("treats a forked parent session as a normal session, not a subagent", () => {
     const session = parsePiSessionText(
       [
         JSON.stringify({
           type: "session",
-          id: "pi-subagent",
+          id: "pi-fork",
           timestamp: "2026-04-24T22:36:00.000Z",
           cwd: "/repo",
           originator: "direct",
@@ -144,13 +144,169 @@ describe("parsePiSessionText", () => {
     );
 
     expect(session).toMatchObject({
-      originator: "subagent",
+      originator: "direct",
       sourceLabel: "Pi",
     });
     expect(session?.requests[0]).toMatchObject({
       sourceLabel: "Pi",
       subharness: "pi",
     });
+  });
+
+  it("ignores history a fork copied from its parent session", () => {
+    const inherited = JSON.stringify({
+      type: "message",
+      timestamp: "2026-04-24T22:00:00.000Z",
+      message: {
+        role: "assistant",
+        model: "gpt-5.4",
+        usage: { input: 100, output: 60, totalTokens: 160 },
+      },
+    });
+    const own = JSON.stringify({
+      type: "message",
+      timestamp: "2026-04-24T22:40:00.000Z",
+      message: {
+        role: "assistant",
+        model: "gpt-5.4",
+        usage: { input: 20, output: 10, totalTokens: 30 },
+      },
+    });
+    const header = JSON.stringify({
+      type: "session",
+      id: "pi-fork",
+      timestamp: "2026-04-24T22:36:00.000Z",
+      cwd: "/repo",
+      parentSession: "/parent.jsonl",
+    });
+
+    const forked = parsePiSessionText([header, inherited, own].join("\n"));
+
+    expect(forked?.requestCount).toBe(1);
+    expect(forked?.tokens).toMatchObject({ input: 20, output: 10, total: 30 });
+  });
+
+  it("drops a fork that only ever held its parent's history", () => {
+    const session = parsePiSessionText(
+      [
+        JSON.stringify({
+          type: "session",
+          id: "pi-empty-fork",
+          timestamp: "2026-04-24T22:36:00.000Z",
+          cwd: "/repo",
+          parentSession: "/parent.jsonl",
+        }),
+        JSON.stringify({
+          type: "message",
+          timestamp: "2026-04-24T22:00:00.000Z",
+          message: {
+            role: "assistant",
+            model: "gpt-5.4",
+            usage: { input: 100, output: 60, totalTokens: 160 },
+          },
+        }),
+      ].join("\n"),
+    );
+
+    expect(session).toBeUndefined();
+  });
+
+  it("counts compaction, branch summary, and tool result usage as requests", () => {
+    const session = parsePiSessionText(
+      [
+        JSON.stringify({
+          type: "session",
+          id: "pi-aux",
+          timestamp: "2026-04-24T22:36:00.000Z",
+          cwd: "/repo",
+        }),
+        JSON.stringify({
+          type: "model_change",
+          timestamp: "2026-04-24T22:36:01.000Z",
+          provider: "openai-codex",
+          modelId: "gpt-5.4",
+        }),
+        JSON.stringify({
+          type: "message",
+          timestamp: "2026-04-24T22:36:02.000Z",
+          message: {
+            role: "assistant",
+            model: "gpt-5.4",
+            provider: "openai-codex",
+            usage: { input: 10, output: 5, totalTokens: 15 },
+          },
+        }),
+        JSON.stringify({
+          type: "message",
+          timestamp: "2026-04-24T22:36:03.000Z",
+          message: { role: "toolResult", usage: { input: 4, output: 1, totalTokens: 5 } },
+        }),
+        JSON.stringify({
+          type: "compaction",
+          timestamp: "2026-04-24T22:36:04.000Z",
+          summary: "so far",
+          firstKeptEntryId: "abc",
+          tokensBefore: 1000,
+          usage: { input: 200, output: 20, totalTokens: 220 },
+        }),
+        JSON.stringify({
+          type: "branch_summary",
+          timestamp: "2026-04-24T22:36:05.000Z",
+          fromId: "abc",
+          summary: "abandoned path",
+          usage: { input: 30, output: 3, totalTokens: 33 },
+        }),
+      ].join("\n"),
+    );
+
+    expect(session?.requestCount).toBe(4);
+    expect(session?.tokens).toMatchObject({ input: 244, output: 29, total: 273 });
+    expect(sumRequestTotals(session)).toBe(session?.tokens.total);
+    expect(session?.modelTokens["gpt-5.4"]).toMatchObject({
+      provider: "openai-codex",
+      total: 273,
+    });
+    expect(session?.requests.map((request) => request.provider)).toEqual([
+      "openai-codex",
+      "openai-codex",
+      "openai-codex",
+      "openai-codex",
+    ]);
+  });
+
+  it("unsets the model provider when providers disagree", () => {
+    const session = parsePiSessionText(
+      [
+        JSON.stringify({
+          type: "session",
+          id: "pi-mixed",
+          timestamp: "2026-04-24T22:36:00.000Z",
+          cwd: "/repo",
+        }),
+        JSON.stringify({
+          type: "message",
+          timestamp: "2026-04-24T22:36:01.000Z",
+          message: {
+            role: "assistant",
+            model: "gpt-5.4",
+            provider: "openai-codex",
+            usage: { input: 10, output: 5, totalTokens: 15 },
+          },
+        }),
+        JSON.stringify({
+          type: "message",
+          timestamp: "2026-04-24T22:36:02.000Z",
+          message: {
+            role: "assistant",
+            model: "gpt-5.4",
+            provider: "cliproxyapi",
+            usage: { input: 10, output: 5, totalTokens: 15 },
+          },
+        }),
+      ].join("\n"),
+    );
+
+    expect(session?.modelTokens["gpt-5.4"]?.provider).toBeUndefined();
   });
 
   it("classifies pi subagent extension session paths as subagent originators", () => {
@@ -180,3 +336,7 @@ describe("parsePiSessionText", () => {
     });
   });
 });
+
+function sumRequestTotals(session: ReturnType<typeof parsePiSessionText>): number {
+  return (session?.requests ?? []).reduce((sum, request) => sum + request.total, 0);
+}

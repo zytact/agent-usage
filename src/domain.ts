@@ -12,6 +12,15 @@ export type TokenUsage = {
   total: number;
 };
 
+/**
+ * Provider is the service that actually served the model. It stays separate from the model
+ * name so two providers serving the same model can still resolve to their own pricing.
+ */
+export type ModelTokenUsage = TokenUsage & {
+  billableOutput: number;
+  provider?: string;
+};
+
 export type SessionRequest = {
   cacheRead: number;
   cacheReadRatio: number;
@@ -24,6 +33,7 @@ export type SessionRequest = {
   input: number;
   model: string;
   output: number;
+  provider?: string;
   reasoning: number;
   reasoningAvailability: TelemetryAvailability;
   repo: string;
@@ -54,7 +64,7 @@ export type ParsedSession = {
   efforts: Record<string, number>;
   languages: Record<string, number>;
   modelActiveSeconds: Record<string, number>;
-  modelTokens: Record<string, TokenUsage & { billableOutput: number }>;
+  modelTokens: Record<string, ModelTokenUsage>;
   models: Record<string, number>;
   originator?: string;
   path: string;

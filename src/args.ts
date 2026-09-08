@@ -19,7 +19,8 @@ Options:
   (flag mode)     In non-interactive runs, pass --codex, --opencode, --pi, or --claude
   --codex         Include Codex usage from ~/.codex/sessions
   --opencode      Include opencode usage from ~/.local/share/opencode/opencode.db
-  --pi            Include Pi usage from ~/.pi/agent/sessions
+  --pi            Include Pi usage from ~/.pi/agent/sessions, or the directory named
+                  by PI_CODING_AGENT_SESSION_DIR or PI_CODING_AGENT_DIR
   --claude        Include Claude Code usage from ~/.claude/projects
   --scope SCOPE   Use a range without prompting: today, 1d, 7d, 30d
   --full          Show full diagnostic report instead of default summary view

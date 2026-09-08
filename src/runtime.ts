@@ -109,6 +109,8 @@ export async function runCli(
     return 0;
   }
 
+  // The terminal report lets the user widen the range without reparsing, so it ingests the
+  // widest range up front. A one-shot HTML report only ever renders the chosen Scope.
   const ingestScope = options.html ? scope : "30d";
   const sessions = await deps.collectSessions(sources, scopeStart(ingestScope, deps.now()), {
     useCache: !options.noCache,
@@ -397,7 +399,7 @@ function deduplicateWorkflowSessions(sessions: ParsedSession[]): ParsedSession[]
 
 const PARSE_CONCURRENCY = 8;
 
-const SESSION_CACHE_VERSION = 9;
+const SESSION_CACHE_VERSION = 10;
 
 type SessionCacheRecord = {
   mtimeMs: number;

@@ -58,7 +58,7 @@ describe("discoverSessionFiles", () => {
     });
   });
 
-  it("skips files before the scope cutoff", async () => {
+  it("skips files whose contents were last written before the scope cutoff", async () => {
     const roots = await makeDiscoveryRoots();
     await mkdir(join(roots.codexDir, "2026", "06", "12"), { recursive: true });
     await mkdir(join(roots.codexDir, "2026", "06", "14"), { recursive: true });
@@ -67,35 +67,72 @@ describe("discoverSessionFiles", () => {
       recursive: true,
     });
 
-    await writeFile(join(roots.codexDir, "2026", "06", "12", "old.jsonl"), "");
-    await writeFile(join(roots.codexDir, "2026", "06", "14", "new.jsonl"), "");
+    const oldCodexFile = join(roots.codexDir, "2026", "06", "12", "old.jsonl");
+    const newCodexFile = join(roots.codexDir, "2026", "06", "14", "new.jsonl");
     const oldPiFile = join(roots.piDir, "repo", "old-pi.jsonl");
     const newPiFile = join(roots.piDir, "repo", "new-pi.jsonl");
-    await writeFile(oldPiFile, "");
-    await writeFile(newPiFile, "");
     const workflowFile = join(
       roots.piWorkflowsDir,
       "misleading-2020-01-01",
       "runs",
       "in-scope.json",
     );
-    await writeFile(workflowFile, "");
-    await utimes(workflowFile, new Date("2020-01-01T00:00:00Z"), new Date("2020-01-01T00:00:00Z"));
-    await utimes(oldPiFile, new Date("2026-06-12T00:00:00Z"), new Date("2026-06-12T00:00:00Z"));
-    await utimes(newPiFile, new Date("2026-06-14T12:00:00Z"), new Date("2026-06-14T12:00:00Z"));
+    for (const file of [oldCodexFile, newCodexFile, oldPiFile, newPiFile, workflowFile]) {
+      await writeFile(file, "");
+    }
+    await setMtime(workflowFile, "2020-01-01T00:00:00Z");
+    await setMtime(oldCodexFile, "2026-06-12T00:00:00Z");
+    await setMtime(newCodexFile, "2026-06-14T12:00:00Z");
+    await setMtime(oldPiFile, "2026-06-12T00:00:00Z");
+    await setMtime(newPiFile, "2026-06-14T12:00:00Z");
 
     const discovered = await discoverSessionFiles(roots, new Date("2026-06-14T00:00:00Z"));
 
-    expect(discovered.codexFiles.map((file) => file.path)).toEqual([
-      join(roots.codexDir, "2026", "06", "14", "new.jsonl"),
-    ]);
+    expect(discovered.codexFiles.map((file) => file.path)).toEqual([newCodexFile]);
     expect(discovered.piFiles.map((file) => file.path)).toEqual([newPiFile]);
     expect(discovered.piWorkflowFiles.map((file) => file.path)).toEqual([workflowFile]);
   });
+
+  it("keeps resumed sessions whose filename predates the scope cutoff", async () => {
+    const roots = await makeDiscoveryRoots();
+    await mkdir(join(roots.codexDir, "2026", "06", "12"), { recursive: true });
+    await mkdir(join(roots.piDir, "repo"), { recursive: true });
+
+    const codexFile = join(roots.codexDir, "2026", "06", "12", "resumed.jsonl");
+    const piFile = join(roots.piDir, "repo", "2026-06-12T00-00-00-000Z_resumed.jsonl");
+    await writeFile(codexFile, "");
+    await writeFile(piFile, "");
+    await setMtime(codexFile, "2026-06-14T12:00:00Z");
+    await setMtime(piFile, "2026-06-14T12:00:00Z");
+
+    const discovered = await discoverSessionFiles(roots, new Date("2026-06-14T00:00:00Z"));
+
+    expect(discovered.codexFiles.map((file) => file.path)).toEqual([codexFile]);
+    expect(discovered.piFiles.map((file) => file.path)).toEqual([piFile]);
+  });
+
+  it("honours pi session directory environment overrides", async () => {
+    const home = "/home/someone";
+
+    expect(defaultDiscoveryRoots(home, {}).piDir).toBe("/home/someone/.pi/agent/sessions");
+    expect(defaultDiscoveryRoots(home, { PI_CODING_AGENT_DIR: "~/elsewhere" }).piDir).toBe(
+      "/home/someone/elsewhere/sessions",
+    );
+    expect(
+      defaultDiscoveryRoots(home, {
+        PI_CODING_AGENT_DIR: "/opt/pi",
+        PI_CODING_AGENT_SESSION_DIR: "/data/pi-sessions",
+      }).piDir,
+    ).toBe("/data/pi-sessions");
+  });
 });
+
+async function setMtime(path: string, iso: string): Promise<void> {
+  await utimes(path, new Date(iso), new Date(iso));
+}
 
 async function makeDiscoveryRoots(): Promise<ReturnType<typeof defaultDiscoveryRoots>> {
   const home = await mkdtemp(join(tmpdir(), "agent-usage-discovery-"));
   tempDirs.push(home);
-  return defaultDiscoveryRoots(home);
+  return defaultDiscoveryRoots(home, {});
 }
