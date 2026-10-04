@@ -58,20 +58,7 @@ export function buildJsonReport(
       tokens: row.tokens,
     })),
     generatedAt: report.generatedAt.toISOString(),
-    models: Object.entries(stats.modelUsage)
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .map(([model, requests]) => {
-        const tokens = stats.modelTokens[model];
-        const pricingId = resolveModelId(model, pricing, tokens?.provider);
-        return {
-          activeSeconds: stats.modelActiveSeconds[model] ?? 0,
-          cost: tokens ? (estimateCost(model, tokens, pricing) ?? null) : null,
-          model,
-          pricingId: Object.hasOwn(pricing, pricingId) ? pricingId : null,
-          requests,
-          tokens: tokens ?? null,
-        };
-      }),
+    models: jsonModels(report, pricing),
     pricingLoaded: Object.keys(pricing).length > 0,
     scope: report.scope,
     scopeTitle: report.scopeTitle,
@@ -82,6 +69,39 @@ export function buildJsonReport(
     totals: jsonTotals(stats, pricing),
     unpricedModels: unpricedModels(stats.modelTokens, pricing),
   };
+}
+
+function jsonModels(
+  report: BuiltReport,
+  pricing: Record<string, PricingInfo>,
+): JsonReport["models"] {
+  const stats = report.combined.stats;
+  const requests = new Map<string, number>();
+  for (const { model } of report.requestSummary.requests) {
+    requests.set(model, (requests.get(model) ?? 0) + 1);
+  }
+  const models = new Set([
+    ...Object.keys(stats.modelActiveSeconds),
+    ...Object.keys(stats.modelTokens),
+    ...requests.keys(),
+  ]);
+
+  return [...models]
+    .map((model) => {
+      const tokens = stats.modelTokens[model];
+      const pricingId = resolveModelId(model, pricing, tokens?.provider);
+      return {
+        activeSeconds: stats.modelActiveSeconds[model] ?? 0,
+        cost: tokens ? (estimateCost(model, tokens, pricing) ?? null) : null,
+        model,
+        pricingId: Object.hasOwn(pricing, pricingId) ? pricingId : null,
+        requests: requests.get(model) ?? 0,
+        tokens: tokens ?? null,
+      };
+    })
+    .sort(
+      (a, b) => (b.tokens?.total ?? 0) - (a.tokens?.total ?? 0) || a.model.localeCompare(b.model),
+    );
 }
 
 function jsonTotals(stats: ReportStats, pricing: Record<string, PricingInfo>): JsonTotals {

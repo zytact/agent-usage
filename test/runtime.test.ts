@@ -215,6 +215,7 @@ describe("runCli", () => {
   it("prints report data as json without prompting", async () => {
     let stdout = "";
     const session = makeSession({
+      models: { "brand-new-model": 2, "gpt-5": 3 },
       requests: [
         makeRequest({ input: 1_000_000, model: "gpt-5", total: 1_000_000 }),
         makeRequest({ input: 10, model: "brand-new-model", total: 10 }),
@@ -248,9 +249,11 @@ describe("runCli", () => {
     const report = JSON.parse(stdout) as JsonReport;
     expect(code).toBe(0);
     expect(report.totals).toMatchObject({ cost: 1, requests: 2, sessions: 1 });
-    expect(report.models.map(({ model, pricingId }) => ({ model, pricingId }))).toEqual([
-      { model: "brand-new-model", pricingId: null },
-      { model: "gpt-5", pricingId: "openai/gpt-5" },
+    expect(
+      report.models.map(({ model, pricingId, requests }) => ({ model, pricingId, requests })),
+    ).toEqual([
+      { model: "gpt-5", pricingId: "openai/gpt-5", requests: 1 },
+      { model: "brand-new-model", pricingId: null, requests: 1 },
     ]);
     expect(report.unpricedModels).toEqual(["brand-new-model"]);
     expect(report.sources.map((source) => source.title)).toEqual(["Codex"]);
