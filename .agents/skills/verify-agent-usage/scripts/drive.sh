@@ -4,6 +4,7 @@ set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 session_file="$repo/.local/verify-agent-usage/session.env"
 action="${1:-}"
+PLAYWRIGHT_VERSION=1.63.0
 
 if [ ! -f "$session_file" ]; then
   echo "No verification run. Run scripts/launch.sh first." >&2
@@ -25,11 +26,11 @@ case "$action" in
   section-report)
     args=(--codex --scope today --originators --section request-summary,model-breakdown --no-cache)
     ;;
-  html-report)
+  html-report|html-screenshot)
     args=(--codex --scope today --section request-summary,source-share,model-breakdown,token-mix,top-repos,source-sections --html "$evidence_dir/report.html" --no-cache)
     ;;
   *)
-    echo "Usage: drive.sh terminal-summary|full-report|section-report|html-report" >&2
+    echo "Usage: drive.sh terminal-summary|full-report|section-report|html-report|html-screenshot" >&2
     exit 2
     ;;
 esac
@@ -39,7 +40,7 @@ printf ' %q' "${args[@]}" >> "$evidence_dir/command.txt"
 printf '\n' >> "$evidence_dir/command.txt"
 
 set +e
-if [ "$action" = "html-report" ]; then
+if [ "$action" = "html-report" ] || [ "$action" = "html-screenshot" ]; then
   HOME="$AGENT_USAGE_VERIFY_HOME" XDG_CACHE_HOME="$AGENT_USAGE_VERIFY_CACHE" \
     node "$repo/dist/cli.mjs" "${args[@]}" \
     > "$evidence_dir/stdout.txt" 2> "$evidence_dir/stderr.txt"
@@ -76,7 +77,7 @@ case "$action" in
     ! grep -q "  Token mix" "$evidence_dir/stdout.txt"
     ! grep -q "  Top repos" "$evidence_dir/stdout.txt"
     ;;
-  html-report)
+  html-report|html-screenshot)
     test -s "$evidence_dir/report.html"
     grep -q '<h1>Agent usage</h1>' "$evidence_dir/report.html"
     grep -q '<h2>Source share</h2>' "$evidence_dir/report.html"
@@ -84,5 +85,17 @@ case "$action" in
     ! grep -q 'No sessions found in this range' "$evidence_dir/report.html"
     ;;
 esac
+
+if [ "$action" = "html-screenshot" ]; then
+  for scheme in dark light; do
+    if ! vpx "playwright@$PLAYWRIGHT_VERSION" screenshot --full-page --viewport-size=1440,900 \
+      --color-scheme "$scheme" "file://$evidence_dir/report.html" "$evidence_dir/report-$scheme.png" \
+      >> "$evidence_dir/stdout.txt" 2>> "$evidence_dir/stderr.txt"; then
+      echo "Screenshot failed. If Chromium is missing, run: vpx playwright@$PLAYWRIGHT_VERSION install chromium" >&2
+      exit 1
+    fi
+    test -s "$evidence_dir/report-$scheme.png"
+  done
+fi
 
 printf '%s\n' "$evidence_dir"
