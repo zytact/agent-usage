@@ -174,6 +174,31 @@ export function estimateStatsTotalCost(
   return found ? total : undefined;
 }
 
+/** Models with tokens but no catalog price. Every cost total silently leaves these out. */
+export function unpricedModels(
+  modelTokens: Record<string, ModelTokenUsage>,
+  pricing: Record<string, PricingInfo>,
+): string[] {
+  return Object.entries(modelTokens)
+    .filter(([model, tokenInfo]) => estimateCost(model, tokenInfo, pricing) === undefined)
+    .map(([model]) => model)
+    .sort();
+}
+
+/** Explains missing costs, or returns undefined when every model is priced. */
+export function pricingNotice(
+  modelTokens: Record<string, ModelTokenUsage>,
+  pricing: Record<string, PricingInfo>,
+): string | undefined {
+  const missing = unpricedModels(modelTokens, pricing);
+  if (missing.length === 0) {
+    return undefined;
+  }
+  return Object.keys(pricing).length === 0
+    ? `Pricing unavailable: could not load ${MODELS_DEV_URL}.`
+    : `Cost excludes models without a models.dev price: ${missing.join(", ")}.`;
+}
+
 export function estimateRequestCost(
   request: Pick<
     SessionRequest,

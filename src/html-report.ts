@@ -4,7 +4,7 @@ import type { ReportMode } from "./args.js";
 import { REPORT_CSS } from "./html-report-css.js";
 import { effortCostMix, effortMetricCells, modelEffortBreakdownMap } from "./effort-breakdown.js";
 import { compactMetric, formatEffortMetricValue } from "./effort-format.js";
-import { estimateStatsTotalCost, type PricingInfo } from "./pricing.js";
+import { estimateStatsTotalCost, pricingNotice, type PricingInfo } from "./pricing.js";
 import { shouldShowSection } from "./render-shared.js";
 import { calendarDate, compactTokens, humanSeconds } from "./report-core.js";
 import {
@@ -88,6 +88,7 @@ ${REPORT_CSS}
   ${renderHero(view.report, view.mode)}
   ${renderCombinedSummary(view.report, view.pricing)}
   ${renderNoDataNotice(view.report)}
+  ${renderPricingNotice(view.report, view.pricing)}
   ${renderSelectedOverview(view.report, view.pricing, view.activeSections, view.mode === "full")}
   ${renderVisibleSourceSections(view)}
   ${renderFooter(view.report)}
@@ -129,6 +130,11 @@ function renderNoDataNotice(report: BuiltReport): string {
   return report.combined.stats.sessionCount === 0
     ? '<p class="notice">No sessions found in this range.</p>'
     : "";
+}
+
+function renderPricingNotice(report: BuiltReport, pricing: Record<string, PricingInfo>): string {
+  const notice = pricingNotice(report.combined.stats.modelTokens, pricing);
+  return notice ? `<p class="notice">${escapeHtml(notice)}</p>` : "";
 }
 
 function renderVisibleSourceSections(view: HtmlReportView): string {
