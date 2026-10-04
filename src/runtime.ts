@@ -11,6 +11,7 @@ import { DEFAULT_SOURCES, UsageError, type CliOptions } from "./args.js";
 import { defaultDiscoveryRoots, discoverSessionFiles } from "./discovery.js";
 import type { ParsedSession, SourceId } from "./domain.js";
 import { renderHtmlReport, writeHtmlReport } from "./html-report.js";
+import { buildJsonReport } from "./json-report.js";
 import { parseClaudeSessionFile } from "./parsers/claude.js";
 import { parseCodexSessionFile } from "./parsers/codex.js";
 import { parseOpencodeDb } from "./parsers/opencode.js";
@@ -95,6 +96,9 @@ export async function runCli(
   const sources = await chooseSources(options, deps);
   if (!sources?.length) {
     return 0;
+  }
+  if (options.json) {
+    return writeJsonReport(options, deps, scope, sources);
   }
 
   const showOriginators = shouldPromptForOriginators(options)
@@ -181,6 +185,21 @@ async function chooseReportSections(
     return availableSectionsForScope(scope);
   }
   return deps.chooseSections(defaultSectionsForScope(scope), availableSectionsForScope(scope));
+}
+
+async function writeJsonReport(
+  options: CliOptions,
+  deps: RuntimeDeps,
+  scope: Scope,
+  sources: SourceId[],
+): Promise<number> {
+  const sessions = await deps.collectSessions(sources, scopeStart(scope, deps.now()), {
+    useCache: !options.noCache,
+  });
+  const pricing = await deps.loadPricing();
+  const report = buildReport(sessions, scope, sources, deps.now(), pricing);
+  deps.stdout.write(`${JSON.stringify(buildJsonReport(report, pricing), null, 2)}\n`);
+  return 0;
 }
 
 async function renderHtmlOnce(
@@ -352,29 +371,28 @@ type CollectSessionsOptions = {
   useCache?: boolean;
 };
 
-async function collectSessions(
+export async function collectSessions(
   sources: SourceId[],
   start: Date,
   options: CollectSessionsOptions = {},
 ): Promise<ParsedSession[]> {
   const roots = defaultDiscoveryRoots(homedir());
   const discovered = await discoverSessionFiles(roots, start);
-  const cacheDir = await ensureParsedSessionCacheDir();
+  const cacheDir = (options.useCache ?? true) ? await ensureParsedSessionCacheDir() : undefined;
   const selected = new Set(sources);
-  const useCache = options.useCache ?? true;
   const [codexSessions, piSessions, piWorkflowSessions, claudeSessions, opencodeSessions] =
     await Promise.all([
       selected.has("codex")
-        ? parseDiscoveredFiles(discovered.codexFiles, parseCodexSessionFile, cacheDir, useCache)
+        ? parseDiscoveredFiles(discovered.codexFiles, parseCodexSessionFile, cacheDir)
         : [],
       selected.has("pi")
-        ? parseDiscoveredFiles(discovered.piFiles, parsePiSessionFile, cacheDir, useCache)
+        ? parseDiscoveredFiles(discovered.piFiles, parsePiSessionFile, cacheDir)
         : [],
       selected.has("pi")
-        ? parseDiscoveredFiles(discovered.piWorkflowFiles, parsePiWorkflowFile, cacheDir, useCache)
+        ? parseDiscoveredFiles(discovered.piWorkflowFiles, parsePiWorkflowFile, cacheDir)
         : [],
       selected.has("claude")
-        ? parseDiscoveredFiles(discovered.claudeFiles, parseClaudeSessionFile, cacheDir, useCache)
+        ? parseDiscoveredFiles(discovered.claudeFiles, parseClaudeSessionFile, cacheDir)
         : [],
       selected.has("opencode") ? parseOpencodeDb(discovered.opencodeDbPath, start) : [],
     ]);
@@ -412,11 +430,12 @@ type SessionCacheRecord = {
 async function parseDiscoveredFiles(
   files: Awaited<ReturnType<typeof discoverSessionFiles>>["codexFiles"],
   parser: (path: string) => Promise<ParsedSession | undefined>,
-  cacheDir: string,
-  useCache: boolean,
+  cacheDir: string | undefined,
 ): Promise<ParsedSession[]> {
   const parsed = await mapWithConcurrency(files, PARSE_CONCURRENCY, async (file) =>
-    loadOrParseSession(file.path, file.size, file.mtimeMs, cacheDir, parser, useCache),
+    cacheDir
+      ? loadOrParseSession(file.path, file.size, file.mtimeMs, cacheDir, parser)
+      : parser(file.path),
   );
   return parsed.filter((value): value is ParsedSession => value !== undefined);
 }
@@ -427,14 +446,11 @@ async function loadOrParseSession(
   mtimeMs: number,
   cacheDir: string,
   parser: (path: string) => Promise<ParsedSession | undefined>,
-  useCache: boolean,
 ): Promise<ParsedSession | undefined> {
   const cachePath = join(cacheDir, `${hashPath(path)}.json`);
-  if (useCache) {
-    const cached = await readCachedSession(cachePath, size, mtimeMs);
-    if (cached !== undefined) {
-      return cached ?? undefined;
-    }
+  const cached = await readCachedSession(cachePath, size, mtimeMs);
+  if (cached !== undefined) {
+    return cached ?? undefined;
   }
 
   const parsed = await parser(path);

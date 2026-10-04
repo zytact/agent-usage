@@ -16,26 +16,27 @@ The Pi Source includes completed `pi-dynamic-workflows` records with the Origina
 ## Usage
 
 ```
-agent-usage [--codex] [--opencode] [--pi] [--claude] [--scope today|1d|7d|30d] [--full | --section KEY[,KEY...]] [--originators] [--html [FILE]] [--no-cache]
+agent-usage [--codex] [--opencode] [--pi] [--claude] [--scope today|1d|7d|30d] [--full | --section KEY[,KEY...]] [--originators] [--html [FILE] | --json] [--no-cache]
 ```
 
 Run without flags for an interactive terminal report. It will prompt for a time range, then prompt for sources with nothing preselected, then prompt for report sections with the default summary set preselected.
 
 In non-interactive flag mode, pass at least one source flag: `--codex`, `--opencode`, `--pi`, or `--claude`.
 
-| Flag            | Description                                                                                        |
-| --------------- | -------------------------------------------------------------------------------------------------- |
-| `--codex`       | Include Codex sessions                                                                             |
-| `--opencode`    | Include opencode sessions                                                                          |
-| `--pi`          | Include Pi sessions                                                                                |
-| `--claude`      | Include Claude Code sessions                                                                       |
-| `--scope`       | Skip the prompt: `today`, `1d`, `7d`, `30d`                                                        |
-| `--full`        | Show full diagnostic report (per-source sections, distribution tables, daily model breakdown)      |
-| `--section`     | Show only selected sections. Repeatable and accepts comma-separated keys.                          |
-| `--originators` | Show per-originator source sections (for example T3 Code, Desktop, CLI, Subagent)                  |
-| `--html [FILE]` | Write a standalone HTML report. Omit `FILE` to open in browser. Use `--html=-` to print to stdout. |
-| `--no-cache`    | Reparse session files instead of using the parsed-session cache.                                   |
-| `-h, --help`    | Show help                                                                                          |
+| Flag            | Description                                                                                                                   |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `--codex`       | Include Codex sessions                                                                                                        |
+| `--opencode`    | Include opencode sessions                                                                                                     |
+| `--pi`          | Include Pi sessions                                                                                                           |
+| `--claude`      | Include Claude Code sessions                                                                                                  |
+| `--scope`       | Skip the prompt: `today`, `1d`, `7d`, `30d`                                                                                   |
+| `--full`        | Show full diagnostic report (per-source sections, distribution tables, daily model breakdown)                                 |
+| `--section`     | Show only selected sections. Repeatable and accepts comma-separated keys.                                                     |
+| `--originators` | Show per-originator source sections (for example T3 Code, Desktop, CLI, Subagent)                                             |
+| `--html [FILE]` | Write a standalone HTML report. Omit `FILE` to open in browser. Use `--html=-` to print to stdout.                            |
+| `--json`        | Print report data as JSON: totals, per-source, per-model, daily rows, and unpriced models. Needs `--scope` and a source flag. |
+| `--no-cache`    | Reparse session files without reading or writing the parsed-session cache.                                                    |
+| `-h, --help`    | Show help                                                                                                                     |
 
 ## Install
 

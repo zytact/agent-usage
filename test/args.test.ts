@@ -7,6 +7,7 @@ describe("parseArgs", () => {
     expect(parseArgs([])).toEqual({
       html: false,
       help: false,
+      json: false,
       noCache: false,
       reportMode: "summary",
       showOriginators: false,
@@ -30,6 +31,7 @@ describe("parseArgs", () => {
       html: true,
       htmlPath: "report.html",
       help: false,
+      json: false,
       noCache: false,
       reportMode: "full",
       showOriginators: true,
@@ -43,6 +45,7 @@ describe("parseArgs", () => {
       html: true,
       htmlPath: "-",
       help: false,
+      json: false,
       noCache: false,
       reportMode: "summary",
       showOriginators: false,
@@ -53,6 +56,7 @@ describe("parseArgs", () => {
     expect(parseArgs(["--no-cache"])).toEqual({
       html: false,
       help: false,
+      json: false,
       noCache: true,
       reportMode: "summary",
       showOriginators: false,
@@ -73,6 +77,7 @@ describe("parseArgs", () => {
     ).toEqual({
       html: false,
       help: false,
+      json: false,
       noCache: false,
       reportMode: "summary",
       sections: ["request-summary", "daily-usage", "source-sections", "token-mix"],
@@ -84,6 +89,7 @@ describe("parseArgs", () => {
     expect(parseArgs(["--help"])).toEqual({
       html: false,
       help: true,
+      json: false,
       noCache: false,
       reportMode: "summary",
       showOriginators: false,
@@ -115,6 +121,18 @@ describe("parseArgs", () => {
   it("rejects --full with --section", () => {
     expect(() => parseArgs(["--full", "--section", "request-summary"])).toThrowError(
       new UsageError("Cannot use --section with --full"),
+    );
+  });
+
+  it("rejects --json without scope or sources", () => {
+    const error = new UsageError("--json needs --scope and at least one source flag");
+    expect(() => parseArgs(["--json", "--codex"])).toThrowError(error);
+    expect(() => parseArgs(["--json", "--scope", "today"])).toThrowError(error);
+  });
+
+  it("rejects --json with --html", () => {
+    expect(() => parseArgs(["--json", "--html", "--codex", "--scope", "today"])).toThrowError(
+      new UsageError("Cannot use --json with --html"),
     );
   });
 

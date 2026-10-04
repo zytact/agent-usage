@@ -12,7 +12,7 @@ const SOURCE_FLAGS: Record<string, SourceId> = {
   "--pi": "pi",
 };
 
-export const usageText = `Usage: agent-usage [--codex] [--opencode] [--pi] [--claude] [--scope today|1d|7d|30d] [--full | --section KEY[,KEY...]] [--originators] [--html [FILE]] [--no-cache]
+export const usageText = `Usage: agent-usage [--codex] [--opencode] [--pi] [--claude] [--scope today|1d|7d|30d] [--full | --section KEY[,KEY...]] [--originators] [--html [FILE] | --json] [--no-cache]
 
 Options:
   (interactive)   Prompt for range, sources, and sections. No sources preselected.
@@ -28,7 +28,8 @@ Options:
   --originators   Show per-originator breakdowns inside per-source sections
   --html [FILE]   Write a standalone HTML report. Omit FILE to decide later.
                   Use --html=- to print HTML to stdout.
-  --no-cache      Reparse session files instead of using the parsed-session cache
+  --json          Print report data as JSON. Needs --scope and a source flag.
+  --no-cache      Reparse session files without reading or writing the parsed-session cache
   -h, --help      Show this help
 `;
 
@@ -37,6 +38,7 @@ export type CliOptions = {
   html: boolean;
   htmlPath?: string;
   help: boolean;
+  json?: boolean;
   noCache?: boolean;
   reportMode: ReportMode;
   sections?: SectionKey[];
@@ -61,6 +63,7 @@ export function parseArgs(argv: string[]): CliOptions {
     options: {
       html: false,
       help: false,
+      json: false,
       noCache: false,
       reportMode: "summary",
       showOriginators: false,
@@ -84,6 +87,9 @@ const ARG_HANDLERS: Record<string, ArgHandler> = {
     state.options.help = true;
   },
   "--html": parseHtmlFlag,
+  "--json": (_argv, state) => {
+    state.options.json = true;
+  },
   "--no-cache": (_argv, state) => {
     state.options.noCache = true;
   },
@@ -167,6 +173,9 @@ function parseHtmlFlag(argv: string[], state: ArgParseState): void {
 }
 
 function validateOptions(options: CliOptions): void {
+  if (options.json) {
+    validateJsonOptions(options);
+  }
   if (options.scope && options.sections) {
     try {
       validateSectionsForScope(options.scope, options.sections);
@@ -176,6 +185,15 @@ function validateOptions(options: CliOptions): void {
       }
       throw error;
     }
+  }
+}
+
+function validateJsonOptions(options: CliOptions): void {
+  if (options.html) {
+    throw new UsageError("Cannot use --json with --html");
+  }
+  if (!options.scope || !options.sources) {
+    throw new UsageError("--json needs --scope and at least one source flag");
   }
 }
 
