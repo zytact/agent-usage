@@ -8,6 +8,13 @@ import type {
 } from "./domain.js";
 import { narrowProvider, originatorLabel } from "./ingest-shared.js";
 import {
+  estimateCost,
+  estimateRequestCost,
+  resolveModelId,
+  weightedInputEquivalent,
+  type PricingInfo,
+} from "./pricing.js";
+import {
   allocateStateTime,
   calendarDate,
   collapseDayStateSeconds,
@@ -124,34 +131,6 @@ export type RequestSummarySource = {
   distributions?: ReturnType<typeof sessionDistributions>;
 };
 
-export type EffortBreakdownRow = {
-  activeSeconds: number;
-  activeSecondsPerRequest?: number;
-  cachedPerRequest: number;
-  contextPerRequest?: number;
-  costBreakdownPerRequest?: CostBreakdown;
-  costPerActiveMinute?: number;
-  costPerRequest?: number;
-  costPerRequestUplift?: number;
-  costPerActiveMinuteUplift?: number;
-  effort: string;
-  inputPerRequest: number;
-  outputPerRequest: number;
-  outputPerRequestUplift?: number;
-  reasoningAvailability: TelemetryAvailability;
-  reasoningPerRequest?: number;
-  reasoningPerRequestUplift?: number;
-  requests: number;
-  tokensPerRequest: number;
-  tokensPerRequestUplift?: number;
-  contextPerRequestUplift?: number;
-};
-
-export type ModelEffortBreakdown = {
-  effortRows: EffortBreakdownRow[];
-  model: string;
-};
-
 export type WorkflowModelAttribution = {
   agents: number;
   effort: string;
@@ -161,23 +140,6 @@ export type WorkflowModelAttribution = {
 export type MixedWorkflowUsage = {
   activeSeconds: number;
   requests: number;
-  tokenInfo: ModelTokenUsage;
-};
-
-export type EffortMetricCell = {
-  kind: "duration" | "tokens" | "usd";
-  label: string;
-  note: string;
-  value: number | undefined;
-};
-
-type EffortAggregationBucket = {
-  activeSeconds: number;
-  contextCount: number;
-  contextTotal: number;
-  costBreakdown?: CostBreakdown;
-  reasoningRequestCount: number;
-  requestCount: number;
   tokenInfo: ModelTokenUsage;
 };
 
@@ -832,155 +794,6 @@ export function buildRequestSummaryData(
   };
 }
 
-export type PricingInfo = {
-  cacheRead?: number;
-  cacheWrite?: number;
-  cacheWrite1h?: number;
-  completion?: number;
-  prompt?: number;
-};
-
-export type CostBreakdown = {
-  cacheWrite: number;
-  cached: number;
-  input: number;
-  output: number;
-  total: number;
-};
-
-/**
- * Prefers the provider that actually served the request, so subscriptions and gateways are
- * not priced at the model publisher's list rates and two providers offering the same model
- * stay distinguishable. Falls back to the publisher when the provider has no pricing entry.
- */
-export function resolveModelId(
-  modelName: string,
-  pricing: Record<string, PricingInfo>,
-  provider?: string,
-): string {
-  if (provider && Object.hasOwn(pricing, `${provider}/${modelName}`)) {
-    return `${provider}/${modelName}`;
-  }
-  if (Object.hasOwn(pricing, modelName)) {
-    return modelName;
-  }
-
-  const candidates = pricingCandidates(pricing).get(normalizeModelId(modelName)) ?? [];
-  const providerMatch = provider
-    ? candidates.find((candidate) => candidate.startsWith(`${provider}/`))
-    : undefined;
-  const publisher = canonicalPublisher(modelName);
-  const publisherMatch = publisher
-    ? candidates.find((candidate) => candidate.startsWith(`${publisher}/`))
-    : undefined;
-
-  return providerMatch ?? publisherMatch ?? (candidates.length === 1 ? candidates[0] : modelName);
-}
-
-export function estimateCostBreakdown(
-  modelName: string,
-  tokenInfo: ModelTokenUsage | TokenUsage,
-  pricing: Record<string, PricingInfo>,
-  provider?: string,
-): CostBreakdown | undefined {
-  const rates = pricing[resolveModelId(modelName, pricing, provider ?? tokenProvider(tokenInfo))];
-  if (!rates) {
-    return undefined;
-  }
-
-  const prompt = rates.prompt ?? 0;
-  const completion = rates.completion ?? 0;
-  const cacheRead = rates.cacheRead ?? 0;
-  const cacheWrite = rates.cacheWrite ?? prompt;
-  const cacheWrite1h = rates.cacheWrite1h ?? cacheWrite;
-  const billableOutput =
-    "billableOutput" in tokenInfo ? tokenInfo.billableOutput : tokenInfo.output;
-  const input = tokenInfo.input * prompt;
-  const cached = tokenInfo.cached * cacheRead;
-  const oneHourWriteTokens = Math.min(tokenInfo.cacheWrite, tokenInfo.cacheWrite1h);
-  const write =
-    oneHourWriteTokens * cacheWrite1h + (tokenInfo.cacheWrite - oneHourWriteTokens) * cacheWrite;
-  const output = billableOutput * completion;
-
-  return {
-    cacheWrite: write,
-    cached,
-    input,
-    output,
-    total: input + cached + write + output,
-  };
-}
-
-export function estimateCost(
-  modelName: string,
-  tokenInfo: ModelTokenUsage | TokenUsage,
-  pricing: Record<string, PricingInfo>,
-  provider?: string,
-): number | undefined {
-  return estimateCostBreakdown(modelName, tokenInfo, pricing, provider)?.total;
-}
-
-function tokenProvider(tokenInfo: ModelTokenUsage | TokenUsage): string | undefined {
-  return "provider" in tokenInfo ? tokenInfo.provider : undefined;
-}
-
-export function estimateStatsTotalCost(
-  stats: ReportStats,
-  pricing: Record<string, PricingInfo>,
-): number | undefined {
-  let total = 0;
-  let found = false;
-
-  for (const [model, tokenInfo] of Object.entries(stats.modelTokens)) {
-    const value = estimateCost(model, tokenInfo, pricing);
-    if (value === undefined) {
-      continue;
-    }
-    found = true;
-    total += value;
-  }
-
-  return found ? total : undefined;
-}
-
-function estimateRequestCost(
-  request: Pick<
-    SessionRequest,
-    | "cacheRead"
-    | "cacheWrite"
-    | "cacheWrite1h"
-    | "input"
-    | "model"
-    | "output"
-    | "provider"
-    | "reasoning"
-  >,
-  pricing: Record<string, PricingInfo> = {},
-): number {
-  return (
-    estimateCost(
-      request.model,
-      {
-        billableOutput: request.output + request.reasoning,
-        cacheWrite: request.cacheWrite,
-        cacheWrite1h: request.cacheWrite1h,
-        cached: request.cacheRead,
-        input: request.input,
-        output: request.output,
-        provider: request.provider,
-        reasoning: request.reasoning,
-        total:
-          request.input +
-          request.cacheRead +
-          request.cacheWrite +
-          request.output +
-          request.reasoning,
-      },
-      pricing,
-    ) ?? 0
-  );
-}
-
 function isGptModel(model: string): boolean {
   return model.toLowerCase().includes("gpt");
 }
@@ -1024,7 +837,7 @@ function telemetryAvailability(
   return availabilityFromCounts(known, requests.length);
 }
 
-function availabilityFromCounts(known: number, total: number): TelemetryAvailability {
+export function availabilityFromCounts(known: number, total: number): TelemetryAvailability {
   if (known === 0) {
     return "unknown";
   }
@@ -1121,73 +934,6 @@ export function percentRows(
     const pct = (value / total) * 100;
     return { key, label: `${pct.toFixed(0)}%`, pct };
   });
-}
-
-export function effortMetricCells(row: EffortBreakdownRow): EffortMetricCell[] {
-  return [
-    {
-      kind: "usd",
-      label: "Cost/req",
-      note: row.effort === "medium" ? "baseline" : formatUpliftNote(row.costPerRequestUplift),
-      value: row.costPerRequest,
-    },
-    {
-      kind: "usd",
-      label: "Cost/active min",
-      note: row.effort === "medium" ? "baseline" : formatUpliftNote(row.costPerActiveMinuteUplift),
-      value: row.costPerActiveMinute,
-    },
-    {
-      kind: "tokens",
-      label: "Tok/req",
-      note: row.effort === "medium" ? "baseline" : formatUpliftNote(row.tokensPerRequestUplift),
-      value: row.tokensPerRequest,
-    },
-    {
-      kind: "tokens",
-      label: "Out/req",
-      note: row.effort === "medium" ? "baseline" : formatUpliftNote(row.outputPerRequestUplift),
-      value: row.outputPerRequest,
-    },
-    {
-      kind: "tokens",
-      label: "Reason/req",
-      note:
-        row.reasoningAvailability === "known"
-          ? row.effort === "medium"
-            ? "baseline"
-            : formatUpliftNote(row.reasoningPerRequestUplift)
-          : row.reasoningAvailability === "partial"
-            ? "partially reported"
-            : "not separately reported",
-      value: row.reasoningPerRequest,
-    },
-    {
-      kind: "tokens",
-      label: "Ctx/req",
-      note: row.effort === "medium" ? "baseline" : formatUpliftNote(row.contextPerRequestUplift),
-      value: row.contextPerRequest,
-    },
-    { kind: "tokens", label: "Fresh/req", note: "uncached input", value: row.inputPerRequest },
-    { kind: "tokens", label: "Cached/req", note: "cache read", value: row.cachedPerRequest },
-    {
-      kind: "duration",
-      label: "Active/req",
-      note: "inferred",
-      value: row.activeSecondsPerRequest,
-    },
-  ];
-}
-
-export function effortCostMix(
-  row: EffortBreakdownRow,
-): Array<{ label: string; value: number | undefined }> {
-  return [
-    { label: "input", value: row.costBreakdownPerRequest?.input },
-    { label: "cached", value: row.costBreakdownPerRequest?.cached },
-    { label: "write", value: row.costBreakdownPerRequest?.cacheWrite },
-    { label: "output+reason", value: row.costBreakdownPerRequest?.output },
-  ];
 }
 
 export function modelRows(
@@ -1308,83 +1054,7 @@ export function attributedModelTokenTotals(sessions: ParsedSession[]): Record<st
   return totals;
 }
 
-export function modelEffortBreakdownMap(
-  sessions: ParsedSession[],
-  pricing: Record<string, PricingInfo>,
-  limit: number,
-): Map<string, EffortBreakdownRow[]> {
-  return new Map(
-    modelEffortBreakdowns(sessions, pricing, limit).map((row) => [row.model, row.effortRows]),
-  );
-}
-
-export function modelEffortBreakdowns(
-  sessions: ParsedSession[],
-  pricing: Record<string, PricingInfo>,
-  limit: number,
-): ModelEffortBreakdown[] {
-  const topModels = topEntries(aggregateSessions(sessions).modelUsage, limit).map(({ key }) => key);
-  const modelSet = new Set(topModels);
-  const rowsByModel = aggregateEffortBuckets(sessions, pricing, modelSet);
-
-  return topModels.map((model) => ({
-    effortRows: buildModelEffortRows(rowsByModel.get(model) ?? new Map()),
-    model,
-  }));
-}
-
-function aggregateEffortBuckets(
-  sessions: ParsedSession[],
-  pricing: Record<string, PricingInfo>,
-  modelSet: Set<string>,
-): Map<string, Map<string, EffortAggregationBucket>> {
-  const rowsByModel = new Map<string, Map<string, EffortAggregationBucket>>();
-
-  for (const session of sessions) {
-    addStateSeconds(rowsByModel, session, modelSet);
-    addRequestMetrics(rowsByModel, session, pricing, modelSet);
-  }
-
-  return rowsByModel;
-}
-
-function addStateSeconds(
-  rowsByModel: Map<string, Map<string, EffortAggregationBucket>>,
-  session: ParsedSession,
-  modelSet: Set<string>,
-): void {
-  for (const [key, seconds] of Object.entries(session.stateActiveSeconds)) {
-    const { effort, model } = splitStateKey(key);
-    if (!modelSet.has(model)) {
-      continue;
-    }
-    ensureEffortBucket(ensureEffortMap(rowsByModel, model), effort).activeSeconds += seconds;
-  }
-}
-
-function addRequestMetrics(
-  rowsByModel: Map<string, Map<string, EffortAggregationBucket>>,
-  session: ParsedSession,
-  pricing: Record<string, PricingInfo>,
-  modelSet: Set<string>,
-): void {
-  for (const request of session.requests) {
-    if (!modelSet.has(request.model)) {
-      continue;
-    }
-    const bucket = ensureEffortBucket(ensureEffortMap(rowsByModel, request.model), request.effort);
-    bucket.requestCount += 1;
-    bucket.reasoningRequestCount += request.reasoningAvailability === "known" ? 1 : 0;
-    if (request.contextSize > 0) {
-      bucket.contextCount += 1;
-      bucket.contextTotal += request.contextSize;
-    }
-    addRequestTokens(bucket.tokenInfo, request);
-    bucket.costBreakdown = estimateCostBreakdown(request.model, bucket.tokenInfo, pricing);
-  }
-}
-
-function addRequestTokens(tokenInfo: ModelTokenUsage, request: SessionRequest): void {
+export function addRequestTokens(tokenInfo: ModelTokenUsage, request: SessionRequest): void {
   narrowProvider(tokenInfo, request.provider);
   tokenInfo.billableOutput += request.output + request.reasoning;
   tokenInfo.cacheWrite += request.cacheWrite;
@@ -1394,203 +1064,6 @@ function addRequestTokens(tokenInfo: ModelTokenUsage, request: SessionRequest): 
   tokenInfo.output += request.output;
   tokenInfo.reasoning += request.reasoning;
   tokenInfo.total += request.total;
-}
-
-function buildModelEffortRows(
-  effortMap: Map<string, EffortAggregationBucket>,
-): EffortBreakdownRow[] {
-  const baseline = baselineMetrics(effortMap.get("medium"));
-
-  return [...effortMap.entries()]
-    .sort((a, b) => effortRank(a[0]) - effortRank(b[0]) || a[0].localeCompare(b[0]))
-    .map(([effort, bucket]) => buildEffortBreakdownRow(effort, bucket, baseline));
-}
-
-// fallow-ignore-next-line complexity
-function baselineMetrics(baseline: EffortAggregationBucket | undefined) {
-  return {
-    contextPerRequest:
-      baseline && baseline.contextCount > 0
-        ? baseline.contextTotal / baseline.contextCount
-        : undefined,
-    costPerActiveMinute: metricPerMinute(baseline?.costBreakdown?.total, baseline?.activeSeconds),
-    costPerRequest: metricPerRequest(baseline?.costBreakdown?.total, baseline?.requestCount),
-    outputPerRequest: metricPerRequest(baseline?.tokenInfo.output, baseline?.requestCount),
-    reasoningPerRequest: metricPerRequest(
-      baseline?.tokenInfo.reasoning,
-      baseline?.reasoningRequestCount,
-    ),
-    tokensPerRequest: metricPerRequest(baseline?.tokenInfo.total, baseline?.requestCount),
-  };
-}
-
-function buildEffortBreakdownRow(
-  effort: string,
-  bucket: EffortAggregationBucket,
-  baseline: ReturnType<typeof baselineMetrics>,
-): EffortBreakdownRow {
-  const requestCount = bucket.requestCount;
-  const costPerRequest = metricPerRequest(bucket.costBreakdown?.total, requestCount);
-  const costPerActiveMinute = metricPerMinute(bucket.costBreakdown?.total, bucket.activeSeconds);
-  const tokensPerRequest = metricPerRequestOrZero(bucket.tokenInfo.total, requestCount);
-  const outputPerRequest = metricPerRequestOrZero(bucket.tokenInfo.output, requestCount);
-  const reasoningAvailability = availabilityFromCounts(bucket.reasoningRequestCount, requestCount);
-  const reasoningPerRequest = metricPerRequest(
-    bucket.tokenInfo.reasoning,
-    bucket.reasoningRequestCount,
-  );
-  const contextPerRequest =
-    bucket.contextCount > 0 ? bucket.contextTotal / bucket.contextCount : undefined;
-
-  return {
-    activeSeconds: bucket.activeSeconds,
-    activeSecondsPerRequest: metricPerRequest(bucket.activeSeconds, requestCount),
-    cachedPerRequest: metricPerRequestOrZero(bucket.tokenInfo.cached, requestCount),
-    contextPerRequest,
-    contextPerRequestUplift: uplift(contextPerRequest, baseline.contextPerRequest),
-    costBreakdownPerRequest: divideCostBreakdown(bucket.costBreakdown, requestCount),
-    costPerActiveMinute,
-    costPerActiveMinuteUplift: uplift(costPerActiveMinute, baseline.costPerActiveMinute),
-    costPerRequest,
-    costPerRequestUplift: uplift(costPerRequest, baseline.costPerRequest),
-    effort,
-    inputPerRequest: metricPerRequestOrZero(bucket.tokenInfo.input, requestCount),
-    outputPerRequest,
-    outputPerRequestUplift: uplift(outputPerRequest, baseline.outputPerRequest),
-    reasoningAvailability,
-    reasoningPerRequest,
-    reasoningPerRequestUplift: uplift(reasoningPerRequest, baseline.reasoningPerRequest),
-    requests: requestCount,
-    tokensPerRequest,
-    tokensPerRequestUplift: uplift(tokensPerRequest, baseline.tokensPerRequest),
-  };
-}
-
-function ensureEffortMap(
-  rowsByModel: Map<string, Map<string, EffortAggregationBucket>>,
-  model: string,
-) {
-  let effortMap = rowsByModel.get(model);
-  if (!effortMap) {
-    effortMap = new Map();
-    rowsByModel.set(model, effortMap);
-  }
-  return effortMap;
-}
-
-function ensureEffortBucket(effortMap: Map<string, EffortAggregationBucket>, effort: string) {
-  let bucket = effortMap.get(effort);
-  if (!bucket) {
-    bucket = {
-      activeSeconds: 0,
-      contextCount: 0,
-      contextTotal: 0,
-      reasoningRequestCount: 0,
-      requestCount: 0,
-      tokenInfo: {
-        billableOutput: 0,
-        cacheWrite: 0,
-        cacheWrite1h: 0,
-        cached: 0,
-        input: 0,
-        output: 0,
-        reasoning: 0,
-        total: 0,
-      },
-    };
-    effortMap.set(effort, bucket);
-  }
-  return bucket;
-}
-
-function metricPerRequest(
-  value: number | undefined,
-  requestCount: number | undefined,
-): number | undefined {
-  return value !== undefined && requestCount && requestCount > 0 ? value / requestCount : undefined;
-}
-
-function metricPerMinute(
-  value: number | undefined,
-  activeSeconds: number | undefined,
-): number | undefined {
-  return value !== undefined && activeSeconds && activeSeconds > 0
-    ? value / (activeSeconds / 60)
-    : undefined;
-}
-
-function metricPerRequestOrZero(value: number, requestCount: number): number {
-  return requestCount > 0 ? value / requestCount : 0;
-}
-
-function divideCostBreakdown(
-  cost: CostBreakdown | undefined,
-  requestCount: number,
-): CostBreakdown | undefined {
-  return cost && requestCount > 0
-    ? {
-        cacheWrite: cost.cacheWrite / requestCount,
-        cached: cost.cached / requestCount,
-        input: cost.input / requestCount,
-        output: cost.output / requestCount,
-        total: cost.total / requestCount,
-      }
-    : undefined;
-}
-
-function uplift(value: number | undefined, baseline: number | undefined): number | undefined {
-  return value !== undefined && baseline !== undefined && baseline > 0
-    ? value / baseline - 1
-    : undefined;
-}
-
-function formatUpliftNote(value: number | undefined): string {
-  if (value === undefined) {
-    return "vs medium n/a";
-  }
-  const sign = value >= 0 ? "+" : "";
-  return `vs medium ${sign}${(value * 100).toFixed(1)}%`;
-}
-
-function effortRank(effort: string): number {
-  return { low: 0, medium: 1, high: 2, unknown: 98 }[effort] ?? 50;
-}
-
-const PRICING_CANDIDATES = new WeakMap<Record<string, PricingInfo>, Map<string, string[]>>();
-
-function pricingCandidates(pricing: Record<string, PricingInfo>): Map<string, string[]> {
-  const cached = PRICING_CANDIDATES.get(pricing);
-  if (cached) {
-    return cached;
-  }
-
-  const candidates = new Map<string, string[]>();
-  for (const modelId of Object.keys(pricing)) {
-    const separator = modelId.indexOf("/");
-    const unqualifiedId = separator >= 0 ? modelId.slice(separator + 1) : modelId;
-    const normalized = normalizeModelId(unqualifiedId);
-    candidates.set(normalized, [...(candidates.get(normalized) ?? []), modelId]);
-  }
-  PRICING_CANDIDATES.set(pricing, candidates);
-  return candidates;
-}
-
-function normalizeModelId(modelId: string): string {
-  return modelId
-    .toLowerCase()
-    .replaceAll(".", "-")
-    .replace(/:free$/, "-free");
-}
-
-function canonicalPublisher(modelId: string): string | undefined {
-  const unqualifiedId = modelId.slice(modelId.lastIndexOf("/") + 1).toLowerCase();
-  if (unqualifiedId.startsWith("claude-")) {
-    return "anthropic";
-  }
-  if (/^(?:gpt-|o\d)/.test(unqualifiedId)) {
-    return "openai";
-  }
-  return undefined;
 }
 
 function originatorSections(source: SourceId, sessions: ParsedSession[]): SourceSection[] {
@@ -1761,37 +1234,6 @@ function filterStateMap(
 
 function stateKey(model: string, effort: string): string {
   return `${model}::${effort}`;
-}
-
-function weightedInputEquivalent(
-  request: SessionRequest,
-  pricing: Record<string, PricingInfo>,
-): number | undefined {
-  const rates = pricing[resolveModelId(request.model, pricing, request.provider)];
-  if (!rates?.prompt) {
-    return undefined;
-  }
-
-  const prompt = rates.prompt;
-  const cacheReadWeight = rates.cacheRead === undefined ? 1 : rates.cacheRead / prompt;
-  const cacheWriteWeight = rates.cacheWrite === undefined ? 1 : rates.cacheWrite / prompt;
-  const cacheWrite1hWeight =
-    rates.cacheWrite1h === undefined ? cacheWriteWeight : rates.cacheWrite1h / prompt;
-  const oneHourWriteTokens = Math.min(request.cacheWrite, request.cacheWrite1h);
-
-  return (
-    request.input +
-    request.cacheRead * cacheReadWeight +
-    (request.cacheWrite - oneHourWriteTokens) * cacheWriteWeight +
-    oneHourWriteTokens * cacheWrite1hWeight
-  );
-}
-
-export function estimateWeightedInputEquivalent(
-  request: SessionRequest,
-  pricing: Record<string, PricingInfo>,
-): number | undefined {
-  return weightedInputEquivalent(request, pricing);
 }
 
 function compareRows(left: string[], right: string[]): number {

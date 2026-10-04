@@ -1,18 +1,20 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { PricingInfo } from "../src/report-data.js";
 import {
   estimateCost,
   estimateCostBreakdown,
   estimateStatsTotalCost,
-  estimateWeightedInputEquivalent,
+  loadPricingMap,
+  resolveModelId,
+  weightedInputEquivalent,
+  type PricingInfo,
+} from "../src/pricing.js";
+import {
+  aggregateSessions,
   formatUsd,
   formatUsdPerMillion,
-  resolveModelId,
   summarizeRequestCache,
 } from "../src/report-data.js";
-import { loadPricingMap } from "../src/pricing.js";
-import { aggregateSessions } from "../src/report-data.js";
 import { makeRequest, makeSession } from "./fixtures.js";
 
 describe("pricing", () => {
@@ -291,7 +293,7 @@ describe("pricing", () => {
       },
     };
 
-    expect(estimateWeightedInputEquivalent(request, pricing)).toBe(115);
+    expect(weightedInputEquivalent(request, pricing)).toBe(115);
     expect(summarizeRequestCache([request], pricing).weightedInputEqPerRequest).toBe(115);
   });
 

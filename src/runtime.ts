@@ -16,9 +16,9 @@ import { parseCodexSessionFile } from "./parsers/codex.js";
 import { parseOpencodeDb } from "./parsers/opencode.js";
 import { parsePiWorkflowFile, removePersistedWorkflowUsage } from "./parsers/pi-workflow.js";
 import { parsePiSessionFile } from "./parsers/pi.js";
-import { loadPricingMap } from "./pricing.js";
+import { loadPricingMap, type PricingInfo } from "./pricing.js";
 import { scopeStart, type Scope } from "./report-core.js";
-import { buildReport, type PricingInfo } from "./report-data.js";
+import { buildReport } from "./report-data.js";
 import {
   SECTION_LABELS,
   availableSectionsForScope,
