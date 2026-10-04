@@ -38,6 +38,7 @@ Use the helper from the repository root:
 .agents/skills/verify-agent-usage/scripts/drive.sh full-report
 .agents/skills/verify-agent-usage/scripts/drive.sh section-report
 .agents/skills/verify-agent-usage/scripts/drive.sh html-report
+.agents/skills/verify-agent-usage/scripts/drive.sh html-screenshot
 ```
 
 The helper invokes `dist/cli.mjs` with real user-facing flags. Each action validates stable output text and prints its evidence directory. Use the feature map for the path that matches the change.
@@ -53,7 +54,9 @@ Drive the prompts by their visible labels: `Pick a time range`, `Pick sources`, 
 
 ## Evidence
 
-Proof survives under `.local/verify-evidence/agent-usage/<UTC timestamp>-<action>/`. Every drive stores `command.txt`, `stdout.txt`, `stderr.txt`, and `exit-code.txt`. `html-report` also stores `report.html`.
+Proof survives under `.local/verify-evidence/agent-usage/<UTC timestamp>-<action>/`. Every drive stores `command.txt`, `stdout.txt`, `stderr.txt`, and `exit-code.txt`. `html-report` also stores `report.html`. `html-screenshot` adds full-page `report-dark.png` and `report-light.png` through Playwright. Look at both images before using them as proof.
+
+For before and after screenshots on a PR, run `html-screenshot` on the base branch first, then on the change. Upload the PNGs to the PR. Never commit them.
 
 A valid proof exercises the built CLI through public flags or prompts. Capture the action and resulting state, then check the output file as well as visible terminal text. Do not call renderer or parser functions directly. Use the isolated production-format fixture instead of test-only setters. External Source stores need no mocks because verification selects only the isolated Codex Source. If a later proof covers file or network side effects, observe those effects instead of trusting a flag name.
 
