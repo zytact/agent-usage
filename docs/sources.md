@@ -27,7 +27,7 @@ Discovery (`src/discovery.ts`) picks files by modification time. Filenames and d
 - The first line has `type: "session"`. `model_change` and `thinking_level_change` set the current model and effort.
 - Every usage record is a Request. That covers `message` entries, including tool results, and also `compaction` and `branch_summary` entries.
 - `parentSession` marks a fork, clone, or continued Session, not a subagent. A fork copies the parent's entries with their original timestamps. The parser drops entries older than the fork header so copied history is not counted twice.
-- Workflow runs from `pi-dynamic-workflows` live in `~/.pi/workflows/projects/*/runs/*.json` (`src/parsers/pi-workflow.ts`). They only have aggregate accounting, reported under the model `mixed usage`. Scope uses `completedAt`, not file mtime.
+- Workflow runs from `pi-dynamic-workflows` live in `~/.pi/workflows/projects/*/runs/*.json` (`src/parsers/pi-workflow.ts`). They only have aggregate accounting. When every agent in a run used one model, the aggregate keeps that model. Otherwise it is reported under the model `mixed usage`. Scope uses `completedAt`, not file mtime.
 
 ## opencode
 
