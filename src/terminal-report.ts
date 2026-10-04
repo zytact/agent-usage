@@ -1,7 +1,7 @@
 import type { ReportMode } from "./args.js";
 import { effortCostMix, effortMetricCells, modelEffortBreakdownMap } from "./effort-breakdown.js";
 import { formatEffortMetricValue } from "./effort-format.js";
-import { estimateStatsTotalCost, type PricingInfo } from "./pricing.js";
+import { estimateStatsTotalCost, pricingNotice, type PricingInfo } from "./pricing.js";
 import { isPrimarySection, shouldShowSection } from "./render-shared.js";
 import { compactTokens, humanSeconds } from "./report-core.js";
 import { displayCacheWrite, displayPartialCost, displayTelemetry } from "./telemetry-format.js";
@@ -51,6 +51,10 @@ export function renderTerminalReport(
   lines.push(
     `ACTIVE ${humanSeconds(report.combined.stats.activeSeconds)}  SESSIONS ${report.combined.stats.sessionCount}  TOKENS ${compactTokens(report.combined.stats.tokens.total)}  COST ${combinedCost}`,
   );
+  const notice = pricingNotice(report.combined.stats.modelTokens, pricing);
+  if (notice) {
+    lines.push(notice);
+  }
   lines.push("");
 
   if (mode === "full") {

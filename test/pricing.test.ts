@@ -5,6 +5,7 @@ import {
   estimateCostBreakdown,
   estimateStatsTotalCost,
   loadPricingMap,
+  pricingNotice,
   resolveModelId,
   weightedInputEquivalent,
   type PricingInfo,
@@ -295,6 +296,26 @@ describe("pricing", () => {
 
     expect(weightedInputEquivalent(request, pricing)).toBe(115);
     expect(summarizeRequestCache([request], pricing).weightedInputEqPerRequest).toBe(115);
+  });
+
+  it("names models that have tokens but no catalog price", () => {
+    const stats = aggregateSessions([
+      makeSession({
+        requests: [
+          makeRequest({ input: 10, model: "gpt-5", total: 10 }),
+          makeRequest({ input: 10, model: "brand-new-model", total: 10 }),
+        ],
+      }),
+    ]);
+    const pricing = { "openai/gpt-5": { completion: 1, prompt: 1 } };
+
+    expect(pricingNotice(stats.modelTokens, pricing)).toBe(
+      "Cost excludes models without a models.dev price: brand-new-model.",
+    );
+    expect(pricingNotice(stats.modelTokens, {})).toBe(
+      "Pricing unavailable: could not load https://models.dev/catalog.json.",
+    );
+    expect(pricingNotice({ "gpt-5": stats.modelTokens["gpt-5"] }, pricing)).toBeUndefined();
   });
 
   it("formats usd semantics same as old script", () => {

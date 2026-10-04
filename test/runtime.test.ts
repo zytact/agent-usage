@@ -1,14 +1,20 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { UsageError } from "../src/args.js";
-import { runCli, type RuntimeDeps } from "../src/runtime.js";
-import { useTempDirs } from "./fixtures.js";
+import type { JsonReport } from "../src/json-report.js";
+import { collectSessions, runCli, type RuntimeDeps } from "../src/runtime.js";
+import { makeRequest, makeSession, useTempDirs } from "./fixtures.js";
 
 const tempDirs = useTempDirs();
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("runCli", () => {
   it("omits daily-usage from section prompt for today", async () => {
@@ -193,6 +199,64 @@ describe("runCli", () => {
 
     expect(code).toBe(0);
     expect(useCache).toBe(false);
+  });
+
+  it("leaves the parsed-session cache untouched without the cache", async () => {
+    const home = await mkdtemp(join(tmpdir(), "agent-usage-home-"));
+    tempDirs.push(home);
+    vi.stubEnv("HOME", home);
+    vi.stubEnv("XDG_CACHE_HOME", join(home, "cache"));
+
+    await collectSessions(["codex"], new Date(0), { useCache: false });
+
+    expect(existsSync(join(home, "cache"))).toBe(false);
+  });
+
+  it("prints report data as json without prompting", async () => {
+    let stdout = "";
+    const session = makeSession({
+      models: { "brand-new-model": 2, "gpt-5": 3 },
+      requests: [
+        makeRequest({ input: 1_000_000, model: "gpt-5", total: 1_000_000 }),
+        makeRequest({ input: 10, model: "brand-new-model", total: 10 }),
+      ],
+    });
+
+    const code = await runCli(
+      {
+        help: false,
+        html: false,
+        json: true,
+        reportMode: "summary",
+        scope: "7d",
+        showOriginators: false,
+        sources: ["codex"],
+      },
+      testDeps({
+        chooseAction: async () => {
+          throw new Error("should not prompt");
+        },
+        chooseSections: async () => {
+          throw new Error("should not prompt for sections");
+        },
+        collectSessions: async () => [session],
+        loadPricing: async () => ({ "openai/gpt-5": { completion: 0, prompt: 0.000001 } }),
+        now: () => new Date("2026-06-14T18:45:00Z"),
+        stdout: { write: (chunk: string) => ((stdout += chunk), true) },
+      }),
+    );
+
+    const report = JSON.parse(stdout) as JsonReport;
+    expect(code).toBe(0);
+    expect(report.totals).toMatchObject({ cost: 1, requests: 2, sessions: 1 });
+    expect(
+      report.models.map(({ model, pricingId, requests }) => ({ model, pricingId, requests })),
+    ).toEqual([
+      { model: "gpt-5", pricingId: "openai/gpt-5", requests: 1 },
+      { model: "brand-new-model", pricingId: null, requests: 1 },
+    ]);
+    expect(report.unpricedModels).toEqual(["brand-new-model"]);
+    expect(report.sources.map((source) => source.title)).toEqual(["Codex"]);
   });
 
   it("writes html file and exits in file mode", async () => {
